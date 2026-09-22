@@ -23,6 +23,18 @@
 > 200 with an in-page reject block — over-cap is a user state — while a page fetch
 > posting more keys than the cap is the 422. The decisions below are otherwise the live
 > contract.
+>
+> **2026-09-22, #1430 — the URL follows every in-place swap.** Decision 1's "search and
+> sort … with the URL pushed" was true of the pager alone: the search box and the sort
+> headers swapped the region and left the address bar, a bookmark and the filter dialog's
+> hidden sort/dir/search at the page render ([list-export.md](list-export.md), "Filed, not
+> fixed"). The search box now replaces the URL with each swap (one history entry per search
+> box, never one per keystroke) and the sort headers push it, as the pager does; the chrome
+> outside the swapped region that carries the list's state — the dialog's carried block
+> `#<id>-filters-state` and the condition bar `#<id>-filterbar` — is refreshed out of band by
+> every in-place swap through `hx-select-oob` on the list section, inherited by each request
+> inside it, so Apply after a typed search or a sort click keeps them and removing a chip no
+> longer reverts a typed search. Both ids and the attribute are part of the markup contract.
 
 Implementation design for the target state of `recipe: list`: the declarative list view
 becomes an operational grid page of the quality a commercial SaaS back office ships, and

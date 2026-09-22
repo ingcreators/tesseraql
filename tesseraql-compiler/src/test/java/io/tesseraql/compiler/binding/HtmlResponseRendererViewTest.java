@@ -807,6 +807,60 @@ class HtmlResponseRendererViewTest {
         assertThat(tweaked.getBody(String.class)).contains(">Modified<");
     }
 
+    /**
+     * Every list state stays a bookmarkable address (docs/list-surface.md decision 1, kept
+     * for the pager alone until docs/list-export.md's filed quirk): the search box replaces
+     * the URL with each swap, a sort header pushes it, and the chrome outside the swapped
+     * region that carries the state — the dialog's hidden sort/dir/search and the condition
+     * chips — is named so the same swaps refresh it out of band through the section's
+     * inherited {@code hx-select-oob}. A list with no filters has nothing outside the region
+     * to refresh and carries no selector.
+     */
+    @Test
+    void inPlaceSearchAndSortKeepTheUrlAndTheDialogsCarriedState(@TempDir Path dir)
+            throws Exception {
+        HtmlResponseRenderer renderer = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                search: q
+                filters:
+                  - status
+                columns:
+                  - { name: id, sortable: true }
+                """, actionRoute());
+        Exchange exchange = new Exchange(Beans.NONE);
+        exchange.setProperty(TesseraqlProperties.CONTEXT, Map.of(
+                "main", Map.of("rows", List.of(Map.of("id", 1))),
+                "params", Map.of("status", "OPEN", "q", "bolt", "sort", "-id")));
+        exchange.request().uri("/items?status=OPEN&q=bolt&sort=-id");
+        renderer.process(exchange);
+        String html = exchange.getBody(String.class);
+        assertThat(html)
+                .contains("hx-select-oob=\"#page-filters-state,#page-filterbar\"")
+                .containsSubsequence("id=\"page-search\"", "hx-replace-url=\"true\"")
+                .containsSubsequence("hc-datagrid__headcell", "sort=", "hx-push-url=\"true\"")
+                .contains("id=\"page-filterbar\"")
+                // The dialog's carried state: what a typed search and a sort click must keep.
+                .containsSubsequence("id=\"page-filters-state\"",
+                        "name=\"sort\" value=\"-id\"", "name=\"q\" value=\"bolt\"",
+                        "hc-dialog__header");
+        // The chips' remove links carry the search and sort of this render — the reason the
+        // bar is refreshed with every swap.
+        assertThat(html).contains("hc-filterbar__remove")
+                .contains("href=\"/items?sort=-id&amp;q=bolt\"");
+
+        HtmlResponseRenderer plain = renderer(dir, """
+                version: tesseraql/v1
+                kind: view
+                recipe: list
+                search: q
+                """);
+        // The attribute, not the template's own comments, which name it.
+        assertThat(render(plain, Map.of("main", Map.of("rows", List.of()))))
+                .doesNotContain("hx-select-oob=\"").contains("hx-replace-url=\"true\"");
+    }
+
     @Test
     void anAppliedMultiSortRendersTheToolbarReadout(@TempDir Path dir) throws Exception {
         // docs/list-surface.md decision 7: the grid page's toolbar says what the sort set is.

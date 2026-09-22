@@ -25,9 +25,12 @@
                 th:attr="aria-label=#{tql.bulk.numberColumn}">#</th>
             <th class="hc-datagrid__headcell" th:each="c : ${columns}"
                 th:attr="data-sortable=${c.sortable != null ? 'true' : null},data-col=${c.sortable != null ? c.name : null},aria-sort=${c.ariaSort}">
+              <!-- A sort is a destination like a page: the swap pushes the URL (the list-surface
+                   record's decision 1), and the section's hx-select-oob refreshes the filter
+                   dialog's carried sort and the chips' links with it. -->
               <a th:if="${c.sortable != null}" th:href="${c.sortHref}"
                  th:attr="hx-get=${c.sortHref},hx-target=|#${tableId}|,hx-select=|#${tableId}|,hx-include=|[type='search'], #${tableId}-filters input|"
-                 hx-swap="outerHTML"
+                 hx-swap="outerHTML" hx-push-url="true"
                  th:text="${c.label}">Column</a>
               <span th:if="${c.sortable == null}" th:text="${c.label}">Column</span>
             </th>

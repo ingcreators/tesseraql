@@ -88,6 +88,32 @@ class ListExportIntegrationTest {
                 .isLessThan(html.indexOf("class=\"tql-list-page__form\""));
     }
 
+    /**
+     * What an in-place search or sort swaps in refreshes the chrome it left behind
+     * (docs/list-export.md, "Filed, not fixed" → closed): the htmx answer to the question
+     * carries the dialog's carried state and the condition bar with the question's own
+     * values, under the ids the section's {@code hx-select-oob} names, so Apply and the
+     * chips' remove links agree with the address bar the swap replaced.
+     */
+    @Test
+    void anInPlaceSwapCarriesTheDialogsStateAndTheChipsForTheQuestionItAnswers()
+            throws Exception {
+        HttpResponse<String> region = get("/tickets?q=printer&status=open&sort=-subject",
+                "text/html", true);
+
+        assertThat(region.statusCode()).as(region.body()).isEqualTo(200);
+        String html = region.body();
+        assertThat(html)
+                .contains("hx-select-oob=\"#tickets-filters-state,#tickets-filterbar\"")
+                .containsSubsequence("id=\"tickets-filters-state\"",
+                        "name=\"sort\" value=\"-subject\"",
+                        "name=\"q\" value=\"printer\"")
+                .containsSubsequence("id=\"tickets-filterbar\"", "hc-filterbar__remove",
+                        "href=\"/tickets?sort=-subject&amp;q=printer\"")
+                .containsSubsequence("id=\"tickets-search\"", "hx-replace-url=\"true\"")
+                .containsSubsequence("data-col=\"subject\"", "hx-push-url=\"true\"");
+    }
+
     @Test
     void theLinkDownloadsEveryMatchingRowInTheSortedOrder() throws Exception {
         HttpResponse<String> csv = get("/tickets/export?" + QUESTION, "*/*");

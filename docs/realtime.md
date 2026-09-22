@@ -60,10 +60,10 @@ re-fetch their own view of the data.
   streams under `tesseraql.http.maxEventStreams`, so the registry's own caps are reached only
   where that number is the larger of the two ([deployment](deployment.md#request-threads)).
 - **The refetch carries the live client state**: the typed search term and the current
-  sort ride along, read from the DOM (the search box swaps the region without navigating,
-  so the render-time URL can be stale) — and because the search box sits outside the
-  swapped region, a live refresh never clobbers in-progress typing. A paginated list
-  live-refreshes to its first page.
+  sort ride along, read from the DOM (the search box replaces the URL only after its
+  debounce, so a term still being typed is ahead of it) — and because the search box sits
+  outside the swapped region, a live refresh never clobbers in-progress typing. A paginated
+  list live-refreshes to its first page.
 - **Graceful without JavaScript**: the page renders complete server-side; the stream only
   freshens it, so without the extension the list simply updates on the next reload.
 

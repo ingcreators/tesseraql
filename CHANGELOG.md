@@ -249,6 +249,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Markup contract: the grid page names the chrome its swaps refresh.** The list section
+  carries `hx-select-oob="#<id>-filters-state,#<id>-filterbar"` when filters are declared
+  (inherited by every request inside it), the condition bar is `id="<id>-filterbar"`, the
+  filter dialog's carried sort/dir/search sit in `id="<id>-filters-state"` as the form's first
+  child, the search input carries `hx-replace-url="true"` and the sort headers' links
+  `hx-push-url="true"`.
+
 - `tql_file_transfer` gains `emit_json`, `invalidates_json` and `emit_tenant_id`
   (`V16__transfer_announcement.sql`, three vendors, applied by the bootstrap too): what an
   export's follow-up announces, recorded at start. `ExportRequest` carries `emit`,
@@ -332,6 +339,15 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **The in-place search and sort keep the address bar and the filter dialog honest.** The grid
+  page's search box replaces the URL with each swap (one history entry per search box, never
+  one per keystroke) and the sort headers push it, as the pager already did — the list-surface
+  record promised every list state a bookmarkable address, and the template had kept it for the
+  pager alone (`docs/list-export.md`, "Filed, not fixed"). The chrome outside the swapped region
+  that carries the list's state — the filter dialog's hidden sort, dir and search, the condition
+  chips' remove links — is refreshed out of band by the same swaps, so Apply after a typed
+  search or a sort click keeps them and removing a chip no longer reverts a typed search.
 
 - **A `file-export`'s `after:` statement announces its commit.** `emit:` and `invalidates:` on
   a `file-export` route take effect: an extraction-timed follow-up announces the route's

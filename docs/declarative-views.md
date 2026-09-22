@@ -137,8 +137,10 @@ preserving the search, sort and size state ([pagination](pagination.md)).
 
 Every list renders as the operational grid page (docs/list-surface.md, the flip): the
 chrome — title, presets, search bar, condition chips, status line, pager — stays put, and
-only the grid scrolls. Page links swap the table region in place and push the URL, so
-every page state stays a bookmarkable address. On a counted route the status line shows
+only the grid scrolls. Page and sort links swap the table region in place and push the
+URL, the search box swaps it and replaces the URL, so every list state stays a bookmarkable
+address; the condition chips and the filter dialog follow each swap. On a counted route the
+status line shows
 the absolute window ("21–40 of 56"). Below the desktop breakpoint the frame falls back to
 normal page scrolling, and printing renders every fetched row. Regions render only when
 the contract declares them, so a minimal list is still a quiet page; apps override the
