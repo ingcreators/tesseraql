@@ -381,6 +381,9 @@ public final class JdbcFileTransferService implements FileTransferService {
             io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
                     JdbcFileTransferService.class,
                     "/tesseraql/db/migration/operations/V16__transfer_announcement.sql");
+            io.tesseraql.core.util.SqlScripts.applyForVendor(dataSource,
+                    JdbcFileTransferService.class,
+                    "/tesseraql/db/migration/operations/V17__transfer_subject.sql");
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to create file transfer schema: " + ex.getMessage(), ex);
@@ -413,7 +416,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 null);
         insertTransfer(transferId, request.routeId(), request.appName(), "IMPORT",
                 request.format(), null, null, null, Map.of(), expectedRows,
-                request.pool().tenantId(), List.of(), List.of(), null);
+                request.pool().tenantId(), List.of(), List.of(), null, request.subject());
         executor.submit(guarded(transferId, () -> {
             try {
                 runImport(transferId, request, codec, upload, expectedRejects);
@@ -464,7 +467,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // (docs/list-export.md): a download-timed statement runs on a later request
                 // — the route's file leg or the operations console's — which need know no
                 // route to announce what this one declared.
-                request.emit(), request.invalidates(), request.tenantId());
+                request.emit(), request.invalidates(), request.tenantId(), request.subject());
         executor.submit(guarded(transferId, () -> runExport(transferId, request, codec, filename)));
         return transferId;
     }
@@ -747,7 +750,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // A completed export with no spool left: retention reclaimed it — the same
                 // reading the console's summary makes (docs/list-export.md decision 5).
                 "EXPORT".equals(transfer.direction()) && "COMPLETED".equals(executionStatus)
-                        && transfer.spoolUri() == null));
+                        && transfer.spoolUri() == null,
+                transfer.createdAt() == null ? null : transfer.createdAt().toInstant()));
     }
 
     /** The connected vendor (for label normalization and the row-limit clause), detected once. */
@@ -796,7 +800,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                             "EXPORT".equals(rs.getString("direction"))
                                     && "COMPLETED".equals(rs.getString("execution_status"))
                                     && rs.getString("spool_uri") == null,
-                            rs.getTimestamp("created_at").toInstant()));
+                            rs.getTimestamp("created_at").toInstant(),
+                            rs.getString("subject")));
                 }
             }
         } catch (SQLException ex) {
@@ -804,6 +809,101 @@ public final class JdbcFileTransferService implements FileTransferService {
                     "Failed to list file transfers: " + ex.getMessage(), ex);
         }
         return summaries;
+    }
+
+    @Override
+    public List<TransferStatus> mine(String appName, String subject, String tenantId,
+            int limit) {
+        if (subject == null || subject.isBlank()) {
+            return List.of();
+        }
+        return owned("t.app_name = ? and t.subject = ?" + tenantClause(tenantId), statement -> {
+            statement.setString(1, appName);
+            statement.setString(2, subject);
+            int next = 3;
+            if (tenantId != null) {
+                statement.setString(next++, tenantId);
+            }
+            statement.setInt(next, limit);
+        });
+    }
+
+    @Override
+    public List<TransferStatus> pending(String appName, String routeId, String subject,
+            String tenantId, int limit) {
+        if (subject == null || subject.isBlank()) {
+            return List.of();
+        }
+        // What still needs its owner (docs/job-inbox.md decision 8): a run to watch or stop, or
+        // a finished file nobody has fetched. A fetched, failed, stopped or reclaimed export has
+        // been dealt with and lives on the page that lists everything.
+        return owned("t.app_name = ? and t.route_id = ? and t.subject = ?"
+                + tenantClause(tenantId) + " and t.direction = 'EXPORT'"
+                + " and (e.status = 'RUNNING' or (e.status = 'COMPLETED'"
+                + " and t.downloaded_at is null and t.spool_uri is not null))", statement -> {
+                    statement.setString(1, appName);
+                    statement.setString(2, routeId);
+                    statement.setString(3, subject);
+                    int next = 4;
+                    if (tenantId != null) {
+                        statement.setString(next++, tenantId);
+                    }
+                    statement.setInt(next, limit);
+                });
+    }
+
+    /**
+     * The tenant half of "own", as the route's subtree reads it ({@code TransferScope}): the
+     * same tenant, or none on both sides. A row recorded under a tenant is invisible to a
+     * caller with none, and the other way round.
+     */
+    private static String tenantClause(String tenantId) {
+        return tenantId == null ? " and t.tenant_id is null" : " and t.tenant_id = ?";
+    }
+
+    /** One subject's rows under {@code where}, newest first, as the status face reads them. */
+    private List<TransferStatus> owned(String where, SqlBindings bindings) {
+        List<TransferStatus> statuses = new ArrayList<>();
+        try (Connection connection = dataSource.getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "select t.*, e.status as execution_status, e.exit_message"
+                                + " from tql_file_transfer t"
+                                + " left join tql_job_execution e"
+                                + " on e.job_execution_id = t.transfer_id"
+                                + " where " + where
+                                + " order by t.created_at desc " + fetchClause())) {
+            applyTimeout(statement);
+            bindings.bind(statement);
+            try (ResultSet rs = statement.executeQuery()) {
+                while (rs.next()) {
+                    statuses.add(statusOf(rs));
+                }
+            }
+        } catch (SQLException ex) {
+            throw new TqlException(TRANSFER_ERROR,
+                    "Failed to list file transfers: " + ex.getMessage(), ex);
+        }
+        return statuses;
+    }
+
+    /**
+     * One joined row as {@link #status} would answer it — the execution's verdict beside the
+     * transfer's detail, {@code UNKNOWN} where no execution row exists.
+     */
+    private TransferStatus statusOf(ResultSet rs) throws SQLException {
+        String executionStatus = rs.getString("execution_status") == null
+                ? "UNKNOWN"
+                : rs.getString("execution_status");
+        String direction = rs.getString("direction");
+        Timestamp createdAt = rs.getTimestamp("created_at");
+        return new TransferStatus(rs.getString("transfer_id"), rs.getString("route_id"),
+                rs.getString("app_name"), direction, executionStatus, rs.getLong("row_count"),
+                expectedRows(rs), fromJsonErrors(rs.getString("error_json")),
+                rs.getString("filename"), rs.getTimestamp("downloaded_at") != null,
+                rs.getString("exit_message"), rs.getString("tenant_id"),
+                "EXPORT".equals(direction) && "COMPLETED".equals(executionStatus)
+                        && rs.getString("spool_uri") == null,
+                createdAt == null ? null : createdAt.toInstant());
     }
 
     @Override
@@ -1494,7 +1594,10 @@ public final class JdbcFileTransferService implements FileTransferService {
                 contract(batch.contractJson(), request.contract()))
                 .announcing(request.emit(), request.tenantId())
                 .invalidating(request.invalidates())
-                .on(request.pool());
+                .on(request.pool())
+                // And who confirmed it (docs/job-inbox.md decision 1): the subject this commit
+                // checked against the batch is the owner the transfer records.
+                .by(request.subject());
         String transferId = launchImport(frozen, codec, upload, batch.rejected(),
                 batch.rowCount());
         linkTransfer(batchId, transferId);
@@ -2110,14 +2213,16 @@ public final class JdbcFileTransferService implements FileTransferService {
             String filename, String spoolUri, long rowCount, Long expectedRows,
             List<RowError> errors, String afterTiming, String afterSqlFile,
             Map<String, Object> params, Timestamp downloadedAt, String tenantId,
-            List<String> emit, List<String> invalidates, String emitTenantId) {
+            List<String> emit, List<String> invalidates, String emitTenantId, String subject,
+            Timestamp createdAt) {
     }
 
+    /** A transfer nobody started — a job step's export — records no owner. */
     private void insertTransfer(String transferId, String routeId, String appName,
             String direction, String format, String filename, String afterTiming,
             String afterSqlFile, Map<String, Object> params) {
         insertTransfer(transferId, routeId, appName, direction, format, filename, afterTiming,
-                afterSqlFile, params, null, null, List.of(), List.of(), null);
+                afterSqlFile, params, null, null, List.of(), List.of(), null, null);
     }
 
     /**
@@ -2128,20 +2233,23 @@ public final class JdbcFileTransferService implements FileTransferService {
      * @param emit         what a download-timed follow-up announces, with {@code invalidates}
      *                     and {@code emitTenantId} (docs/list-export.md); an empty list is
      *                     stored as null, so an import's row says nothing rather than {@code []}
+     * @param subject      who started it (docs/job-inbox.md decision 1), the owner the listing
+     *                     surfaces read; null for a transfer nobody started — never the empty
+     *                     string, which the batch uses as an equality key and this column does not
      */
     private void insertTransfer(String transferId, String routeId, String appName,
             String direction, String format, String filename, String afterTiming,
             String afterSqlFile, Map<String, Object> params, Long expectedRows,
             String tenantId, List<String> emit, List<String> invalidates,
-            String emitTenantId) {
+            String emitTenantId, String subject) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement("""
                         insert into tql_file_transfer
                           (transfer_id, route_id, app_name, direction, format, filename,
                            after_timing, after_sql_file, params_json, row_count, created_at,
                            expected_rows, tenant_id, emit_json, invalidates_json,
-                           emit_tenant_id)
-                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)""")) {
+                           emit_tenant_id, subject)
+                        values (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)""")) {
             applyTimeout(statement);
             statement.setString(1, transferId);
             statement.setString(2, routeId);
@@ -2162,6 +2270,7 @@ public final class JdbcFileTransferService implements FileTransferService {
             statement.setString(13, emit.isEmpty() ? null : toJson(emit));
             statement.setString(14, invalidates.isEmpty() ? null : toJson(invalidates));
             statement.setString(15, emitTenantId);
+            statement.setString(16, subject == null || subject.isBlank() ? null : subject);
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,
@@ -2285,7 +2394,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                         rs.getString("tenant_id"),
                         fromJsonNames(rs.getString("emit_json")),
                         fromJsonNames(rs.getString("invalidates_json")),
-                        rs.getString("emit_tenant_id")));
+                        rs.getString("emit_tenant_id"),
+                        rs.getString("subject"),
+                        rs.getTimestamp("created_at")));
             }
         } catch (SQLException ex) {
             throw new TqlException(TRANSFER_ERROR,

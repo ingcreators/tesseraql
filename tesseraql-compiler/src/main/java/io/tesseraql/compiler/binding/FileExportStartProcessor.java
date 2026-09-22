@@ -113,6 +113,9 @@ public final class FileExportStartProcessor implements Step {
                 // announced from the transfer row, which records them at start.
                 .announcing(emit, TransferTopics.tenant(exchange))
                 .invalidating(invalidates)
+                // And whose it is (docs/job-inbox.md decision 1): the owner a surface lists
+                // by, read here because the run has no principal to read it from later.
+                .by(TransferOwner.of(exchange))
                 .on(TransferPools.of(exchange)));
         // An htmx kick-off gets the running card, a browser's form post lands on the transfer's
         // page (docs/list-export.md decision 4); scripted callers keep the JSON 202 this recipe

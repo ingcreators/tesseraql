@@ -83,6 +83,10 @@ public final class FileTransferStatusProcessor implements Step {
         // rowCount, not rows: `rows` is a list of records everywhere else on the wire
         // (docs/contract-bugfixes.md track D).
         body.put("rowCount", status.rows());
+        // When it started (docs/job-inbox.md decision 3), ISO-8601 like every timestamp here.
+        if (status.createdAt() != null) {
+            body.put("createdAt", status.createdAt().toString());
+        }
         if (status.expectedRows() != null) {
             body.put("expectedRows", status.expectedRows());
         }

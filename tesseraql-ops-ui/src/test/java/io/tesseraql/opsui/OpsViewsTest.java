@@ -67,6 +67,29 @@ class OpsViewsTest {
         assertThat(rows.get(0).get("params")).isEqualTo("-");
     }
 
+    /**
+     * The transfers page says who started a transfer (docs/job-inbox.md decision 7): the
+     * recorded subject, or a dash for a transfer nobody started — the same rows the shell's
+     * delegated page and the {@code ops.data.transfers} JSON carry.
+     */
+    @Test
+    void transfersModelSaysWhoStartedEachTransfer() {
+        java.time.Instant started = java.time.Instant.parse("2026-09-22T10:00:00Z");
+        Map<String, Object> model = OpsViews.transfers(List.of(
+                new io.tesseraql.core.files.FileTransferService.TransferSummary("t-1",
+                        "tickets.export", "helpdesk-app", "EXPORT", "csv", "COMPLETED", 56,
+                        "tickets.csv", false, false, started, "u-42"),
+                new io.tesseraql.core.files.FileTransferService.TransferSummary("t-2",
+                        "nightly.export", "helpdesk-app", "EXPORT", "csv", "COMPLETED", 9,
+                        "nightly.csv", false, false, started, null)));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rows = (List<Map<String, Object>>) model.get("rows");
+        assertThat(rows.get(0).get("by")).isEqualTo("u-42");
+        assertThat(rows.get(1).get("by")).isEqualTo("-");
+        assertThat(rows.get(0).get("downloadHref"))
+                .isEqualTo("/_tesseraql/ops/console/transfers/t-1/file");
+    }
+
     @Test
     void overviewBuildsTemplateReadyModel() {
         Map<String, Integer> byStatus = new LinkedHashMap<>();

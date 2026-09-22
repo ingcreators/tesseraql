@@ -82,9 +82,10 @@ the reader's scope, because they describe the runtime, not one application.
 
 ## Transfers
 
-Every asynchronous file transfer: its route, direction, format, status, row count, the
-produced file, whether it has been downloaded, and when it started. Produced files are
-downloadable from this page.
+Every asynchronous file transfer: its route, who started it (the requesting principal's
+subject, a dash for a transfer nobody started — a polled import, a job step's export, a public
+route's caller), direction, format, status, row count, the produced file, whether it has been
+downloaded, and when it started. Produced files are downloadable from this page.
 
 File transfers are declared as routes ([file-transfers.md](file-transfers.md)); this page
 is where their runs are watched.

@@ -791,6 +791,7 @@ tql:
     error2: "エラー"
     fileTransfers: "ファイル転送"
     noFileTransfersRecorded: "ファイル転送は記録されていません。"
+    by: "開始者"
     transfer: "転送"
     direction: "方向"
     format: "形式"

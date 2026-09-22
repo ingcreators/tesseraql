@@ -136,6 +136,9 @@ class FileTransferIntegrationTest {
         JsonNode status = awaitTerminal("/api/orders/export/" + transferId);
         assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
         assertThat(status.get("fileUrl").asText()).endsWith(transferId + "/file");
+        // When it started (docs/job-inbox.md decision 3), an ISO-8601 instant like the rest.
+        assertThat(java.time.Instant.parse(status.get("createdAt").asText()))
+                .isBeforeOrEqualTo(java.time.Instant.now());
 
         // The extract-timed follow-up already marked the rows, before any download happened.
         assertThat(extractedCount()).isEqualTo(2);

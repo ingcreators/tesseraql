@@ -147,6 +147,8 @@ public final class OpsViews {
             row.put("id", transfer.transferId());
             row.put("route", transfer.routeId());
             row.put("app", dash(transfer.appName()));
+            // Who started it (docs/job-inbox.md decision 7); a dash for a transfer nobody did.
+            row.put("by", dash(transfer.subject()));
             row.put("direction", transfer.direction());
             row.put("format", transfer.format());
             row.put("status", dash(transfer.status()));
