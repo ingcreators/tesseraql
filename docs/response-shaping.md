@@ -452,7 +452,9 @@ invalidates: [products]
   seconds through the same per-table version row ([code-catalogs.md](code-catalogs.md),
   "Keeping a catalog fresh"). Every writer with a commit declares it: a command, a webhook,
   a queue consumer, a `file-import` route (dropped when the import's transaction commits,
-  after the response) and a job (after its run — [jobs.md](jobs.md#what-a-run-made-stale)).
+  after the response), a `file-export` route (when its `after:` statement commits, with the
+  extraction or on the first fetch) and a job (after its run —
+  [jobs.md](jobs.md#what-a-run-made-stale)).
   Underneath sits `maxAge`: a write nothing declares — another system's — shows when the
   hold expires.
 - **Where it is legal**: a `sql: { file: … }` source in mode `query` of a `query-json`,

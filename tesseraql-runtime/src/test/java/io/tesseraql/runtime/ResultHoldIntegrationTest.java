@@ -52,7 +52,7 @@ class ResultHoldIntegrationTest {
                 var statement = connection.createStatement()) {
             statement.execute("create table items (id serial primary key,"
                     + " tenant_id varchar(16) not null, note varchar(32) not null,"
-                    + " stock integer not null)");
+                    + " stock integer not null, extracted boolean not null default false)");
             statement.execute("insert into items (tenant_id, note, stock) values"
                     + " ('alpha', 'alpha-one', 5), ('alpha', 'alpha-two', 7),"
                     + " ('beta', 'beta-one', 9)");
@@ -275,6 +275,58 @@ class ResultHoldIntegrationTest {
         assertThat(statements(marker)).isEqualTo(2);
     }
 
+    /**
+     * The fifth writer (docs/list-export.md, the {@code after:} commit): a file export whose
+     * follow-up marks the rows it extracted commits a write the hold must follow. The
+     * extraction-timed statement commits with the run, after the 202 — the export used to
+     * complete, mark every row, and leave the held read serving the unmarked ones.
+     */
+    @Test
+    void anExportsExtractionTimedFollowUpDropsTheHoldWhenItsRunCommits() throws Exception {
+        String marker = "hold-export";
+        get(runtime, "/items?tag=" + marker, "alpha");
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(1);
+
+        JsonNode done = awaitTerminal(runtime, "/items/export/" + startExport(runtime,
+                "/items/export"));
+        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
+                .as("the follow-up's mark reaches the next read").contains("\"extracted\":true");
+        assertThat(statements(marker)).isEqualTo(2);
+    }
+
+    /**
+     * A {@code download}-timed follow-up writes nothing until the file is fetched, so the hold
+     * stands through the run's completion and drops with the first fetch — the fetch is where
+     * the statement commits, and the fetching request carries the route's declaration to it.
+     */
+    @Test
+    void anExportsDownloadTimedFollowUpDropsTheHoldOnTheFirstFetch() throws Exception {
+        String marker = "hold-export-fetch";
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(1);
+
+        String transferId = startExport(runtime, "/items/export-on-download");
+        JsonNode done = awaitTerminal(runtime, "/items/export-on-download/" + transferId);
+        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).as("completed, nothing fetched: nothing written")
+                .isEqualTo(1);
+
+        HttpResponse<String> file = get(runtime,
+                "/items/export-on-download/" + transferId + "/file", "alpha");
+        assertThat(file.statusCode()).as(file.body()).isEqualTo(200);
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(2);
+
+        // A second fetch streams the file and runs nothing, so it drops nothing.
+        assertThat(get(runtime, "/items/export-on-download/" + transferId + "/file", "alpha")
+                .statusCode()).isEqualTo(200);
+        get(runtime, "/items?tag=" + marker, "alpha");
+        assertThat(statements(marker)).isEqualTo(2);
+    }
+
     /** A source with no cache: runs its statement every time, hold or no hold. */
     @Test
     void aPlainSourceStillRunsEveryTime() throws Exception {
@@ -334,6 +386,18 @@ class ResultHoldIntegrationTest {
                 .header("X-Tenant-Id", "alpha")
                 .POST(HttpRequest.BodyPublishers.ofString(csv)).build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Starts a file export as tenant alpha; the route binds nothing from the body. */
+    private static String startExport(TesseraqlRuntime target, String path) throws Exception {
+        HttpResponse<String> accepted = HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + target.port() + path))
+                .header("Content-Type", "text/csv")
+                .header("X-Tenant-Id", "alpha")
+                .POST(HttpRequest.BodyPublishers.ofString("")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(202);
+        return MAPPER.readTree(accepted.body()).get("transferId").asText();
     }
 
     /** The confirm leg of a reviewed import: an empty POST to the batch's commit address. */
@@ -434,7 +498,7 @@ class ResultHoldIntegrationTest {
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
         // Every statement carries the request's tag in a literal-free way (a bind), so the
         // container log tells the requests of one test from another's.
-        String itemsSql = "select id, note, stock, /* tag */'t' as tag from items"
+        String itemsSql = "select id, note, stock, extracted, /* tag */'t' as tag from items"
                 + " where tenant_id = /* tenant_id */'alpha' order by id\n";
         writeRoute(target, "items", "items.list", """
                 input:
@@ -569,6 +633,40 @@ class ResultHoldIntegrationTest {
                     invalidates: [items]
                     """.formatted(shape, "reviewed".equals(shape) ? "bearer" : "public",
                     "reviewed".equals(shape) ? "  review: required\n" : ""));
+        }
+        // The fifth writer (docs/list-export.md): a file export whose after: statement marks the
+        // rows it extracted, one route per timing — the extraction's commit and the first
+        // fetch's — each naming the table the held read reads.
+        String markSql = "update items set extracted = true where tenant_id ="
+                + " /* tenant_id */'alpha' and not extracted\n";
+        String exportSql = "select id, note, stock from items where tenant_id ="
+                + " /* tenant_id */'alpha' order by id\n";
+        for (String timing : new String[]{"extract", "download"}) {
+            Path dir = Files.createDirectories(target.resolve("web/items/export"
+                    + ("download".equals(timing) ? "-on-download" : "")));
+            Files.writeString(dir.resolve("items-export.sql"), exportSql);
+            Files.writeString(dir.resolve("mark-extracted.sql"), markSql);
+            Files.writeString(dir.resolve("post.yml"), """
+                    version: tesseraql/v1
+                    id: items.export%s
+                    kind: route
+                    recipe: file-export
+                    security:
+                      auth: public
+                    export:
+                      format: csv
+                      after:
+                        timing: %s
+                        sql:
+                          file: mark-extracted.sql
+                    sources:
+                      main:
+                        sql:
+                          file: items-export.sql
+                          params:
+                            tenant_id: tenant.id
+                    invalidates: [items]
+                    """.formatted("download".equals(timing) ? "OnDownload" : "", timing));
         }
         return target;
     }

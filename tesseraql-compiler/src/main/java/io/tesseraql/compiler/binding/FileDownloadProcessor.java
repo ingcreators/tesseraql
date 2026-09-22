@@ -24,11 +24,23 @@ public final class FileDownloadProcessor implements Step {
 
     private final String appName;
     private final String routeId;
+    /** The route's {@code emit:} topics, announced when a download-timed follow-up commits. */
+    private final java.util.List<String> emit;
+    /** The route's {@code invalidates:} tables, dropped at the same commit. */
+    private final java.util.List<String> invalidates;
 
-    /** Serves this application's {@code routeId}'s own files, no other ({@link TransferScope}). */
-    public FileDownloadProcessor(String appName, String routeId) {
+    /**
+     * Serves this application's {@code routeId}'s own files, no other ({@link TransferScope}),
+     * and carries the route's declaration to the follow-up the first fetch runs
+     * (docs/list-export.md): the statement runs on this request, so this request is where the
+     * route's topics and tables are known — the shape a reviewed import's confirm leg has.
+     */
+    public FileDownloadProcessor(String appName, String routeId, java.util.List<String> emit,
+            java.util.List<String> invalidates) {
         this.appName = appName;
         this.routeId = routeId;
+        this.emit = java.util.List.copyOf(emit);
+        this.invalidates = java.util.List.copyOf(invalidates);
     }
 
     @Override
@@ -43,7 +55,8 @@ public final class FileDownloadProcessor implements Step {
         boolean head = "HEAD".equals(exchange.request().method());
         FileTransferService.Download download = (head
                 ? transfers.inspect(transferId)
-                : transfers.download(transferId))
+                : transfers.download(transferId, new FileTransferService.Announcement(emit,
+                        invalidates, TransferTopics.tenant(exchange))))
                 .orElseThrow(() -> new TqlException(NOT_READY,
                         "Transfer " + transferId + " has no downloadable file (not an export,"
                                 + " still running, stopped, or failed)"));

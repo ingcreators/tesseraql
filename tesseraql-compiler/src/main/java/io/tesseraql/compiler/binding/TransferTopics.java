@@ -5,16 +5,18 @@ import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 
 /**
- * The tenant an import's completion signal is scoped to (docs/csv-import.md decision 6).
+ * The tenant a transfer's signal is scoped to: an import's completion (docs/csv-import.md
+ * decision 6), an export's {@code after:} commit (docs/list-export.md).
  *
  * <p>Read here, on the request, and carried with the run — because the run outlives the request.
  * A live-view signal is scoped to the emitting principal's tenant the way
  * {@link TopicEmitProcessor} scopes a command's, and the background thread that finishes the
- * import has no principal to read it from.
+ * transfer has no principal to read it from. The {@code download}-timed follow-up reads it on
+ * the request that fetches the file, for the same reason.
  */
-final class ImportTopics {
+final class TransferTopics {
 
-    private ImportTopics() {
+    private TransferTopics() {
     }
 
     /** The requesting principal's tenant, or null when the request has none. */

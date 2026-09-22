@@ -130,7 +130,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private java.util.function.Supplier<io.tesseraql.core.cache.Invalidations> invalidations;
     /**
      * The tenant's pool by id, for the {@code after:} statement a first download fires on a
-     * later request than the export's (docs/multi-tenancy.md); {@code null} until a per-tenant
+     * later request than the export's (docs/multi-tenancy.md); {@code null} unless a per-tenant
      * mode wires one, and then it refuses an unknown tenant as every other executor does.
      */
     private java.util.function.Function<String, DataSource> tenantPools;
@@ -156,7 +156,9 @@ public final class JdbcFileTransferService implements FileTransferService {
     /**
      * The per-tenant pools (a per-tenant isolation mode's resolver), consulted by tenant id when
      * a recorded transfer's {@code after:} statement runs on first download — the one transfer
-     * statement that runs outside the request that resolved the tenant.
+     * statement that runs outside the request that resolved the tenant. Wired only in a
+     * per-tenant mode: a shared-schema deployment records the tenant on every transfer too, and
+     * its statement belongs on the shared pool, where the request that started the export ran.
      */
     public JdbcFileTransferService tenantPools(
             java.util.function.Function<String, DataSource> tenantPools) {
@@ -170,15 +172,19 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     /**
-     * The pool a recorded transfer's tenant maps to today. A tenant recorded on the transfer with
-     * no pool to resolve it — the mode was per-tenant when the export ran — is a refusal, not the
-     * shared pool: the fail-closed rule every executor follows (docs/multi-tenancy.md).
+     * The pool a recorded transfer's tenant maps to today. Under a per-tenant mode, a tenant
+     * recorded on the transfer with no pool to resolve it is a refusal, not the shared pool: the
+     * fail-closed rule every executor follows (docs/multi-tenancy.md). With no per-tenant pools
+     * wired — shared-schema, or no isolation — the tenant is recorded all the same and its pool
+     * is the shared one, as it was for the request that started the export. Until 0.19.0 the
+     * two were one case: a shared-schema deployment's first fetch of a download-timed export
+     * answered {@code TQL-LD-2810} for a tenant it had recorded itself.
      */
     private DataSource poolOf(String tenantId) {
-        if (tenantId == null || tenantId.isBlank()) {
+        if (tenantId == null || tenantId.isBlank() || tenantPools == null) {
             return dataSource;
         }
-        DataSource pool = tenantPools == null ? null : tenantPools.apply(tenantId);
+        DataSource pool = tenantPools.apply(tenantId);
         if (pool == null) {
             throw new TqlException(TRANSFER_ERROR, "Transfer was recorded for tenant '" + tenantId
                     + "' but no per-tenant datasource resolves it; its after: statement"
@@ -793,13 +799,13 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     @Override
-    public Optional<Download> download(String transferId) {
-        return open(transferId, true);
+    public Optional<Download> download(String transferId, Announcement announcement) {
+        return open(transferId, true, announcement);
     }
 
     @Override
     public Optional<Download> inspect(String transferId) {
-        return open(transferId, false);
+        return open(transferId, false, Announcement.NONE);
     }
 
     /**
@@ -810,7 +816,8 @@ public final class JdbcFileTransferService implements FileTransferService {
      * recorded as the download and fired the follow-up whose documented meaning is "the bytes
      * were fetched".
      */
-    private Optional<Download> open(String transferId, boolean claim) {
+    private Optional<Download> open(String transferId, boolean claim,
+            Announcement announcement) {
         TransferRow transfer = findTransfer(transferId).orElse(null);
         if (transfer == null || !"EXPORT".equals(transfer.direction())
                 || transfer.spoolUri() == null
@@ -848,7 +855,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         // as if it had.
         if (claim) {
             try {
-                claimAndFollowUp(transferId, transfer);
+                claimAndFollowUp(transferId, transfer, announcement);
             } catch (RuntimeException ex) {
                 closeQuietly(content);
                 throw ex;
@@ -872,14 +879,21 @@ public final class JdbcFileTransferService implements FileTransferService {
      * one. The order is the statement first, then the claim, so a failure between the two leaves
      * a statement that ran and a claim not recorded, and the next fetch runs the statement again:
      * the same shape the extraction's own bookkeeping accepts, named at WARNING when it happens.
+     *
+     * <p>Once the claim and the statement are committed, the fetch announces what the route
+     * declared (docs/list-export.md): the statement is the one write a {@code download}-timed
+     * export ever makes, so its topics and its tables are announced here and nowhere else — the
+     * completion of the run announced nothing, correctly, because nothing had been written.
      */
-    private void claimAndFollowUp(String transferId, TransferRow transfer) {
+    private void claimAndFollowUp(String transferId, TransferRow transfer,
+            Announcement announcement) {
         boolean followUp = AFTER_DOWNLOAD.equals(transfer.afterTiming())
                 && transfer.afterSqlFile() != null;
         // The tenant's pool is resolved before the claim, so a tenant that no longer resolves
         // refuses without spending it.
         DataSource pool = followUp ? poolOf(transfer.tenantId()) : dataSource;
         boolean[] statementCommitted = {false};
+        boolean[] statementRan = {false};
         try (Connection record = dataSource.getConnection()) {
             Transactions.run(record, "first download of " + transferId, main -> {
                 if (!claimFirstDownload(main, transferId) || !followUp) {
@@ -889,12 +903,14 @@ public final class JdbcFileTransferService implements FileTransferService {
                         transfer.params());
                 if (pool == dataSource) {
                     executeUpdate(main, statement);
+                    statementRan[0] = true;
                     return;
                 }
                 try (Connection work = pool.getConnection()) {
                     Transactions.run(work, "download follow-up of " + transferId,
                             tenant -> executeUpdate(tenant, statement));
                     statementCommitted[0] = true;
+                    statementRan[0] = true;
                 }
             });
         } catch (SQLException ex) {
@@ -905,6 +921,10 @@ public final class JdbcFileTransferService implements FileTransferService {
             }
             throw new TqlException(TRANSFER_ERROR,
                     "Post-download statement failed: " + ex.getMessage(), ex);
+        }
+        if (statementRan[0]) {
+            announce("Export " + transfer.routeId() + " (first download of " + transferId + ")",
+                    announcement.emit(), announcement.tenantId(), announcement.invalidates());
         }
     }
 
@@ -1169,8 +1189,8 @@ public final class JdbcFileTransferService implements FileTransferService {
                 // refetch the rows this run has not written yet. Rolled back means nothing
                 // changed, so nothing is announced.
                 if (!rollbackAll) {
-                    emit(request);
-                    invalidate(request);
+                    announce("Import " + request.routeId(), request.emit(), request.tenantId(),
+                            request.invalidates());
                 }
             } catch (Throwable failure) {
                 // The bracket had no catch at all, so ANY failure — not only an Error — reached
@@ -1257,28 +1277,33 @@ public final class JdbcFileTransferService implements FileTransferService {
     }
 
     /**
-     * Announces a finished import on the route's declared topics. The bus is looked up rather
-     * than injected because it is bound after this service is constructed, and only when the
-     * application declares topics at all; without one this is a no-op, as it is for a command.
+     * Announces a committed transfer on the route's declared topics and drops what it made
+     * stale: a finished import (docs/csv-import.md decision 6), an export's {@code after:}
+     * statement with the extraction, and a {@code download}-timed one with the first-download
+     * claim (docs/list-export.md) — one placement for the three, after the commit and never on
+     * a rollback, because a rolled-back transfer changed nothing.
+     *
+     * <p>The bus and the invalidations are looked up rather than injected because both are
+     * bound after this service is constructed, and only when the application declares topics,
+     * a catalog or a held source at all; without them this is a no-op, as it is for a command.
+     * Neither half may fail the transfer: the rows are committed by now, and a signal or an
+     * invalidation is a hint under the hold's expiry, so a failure here is logged and is nobody's
+     * verdict.
      */
-    private void emit(ImportRequest request) {
-        io.tesseraql.core.events.TopicBus bus = topicBus == null ? null : topicBus.get();
-        if (bus == null || request.emit().isEmpty()) {
-            return;
+    private void announce(String what, List<String> topics, String tenantId,
+            List<String> tables) {
+        try {
+            io.tesseraql.core.events.TopicBus bus = topicBus == null ? null : topicBus.get();
+            if (bus != null) {
+                for (String topic : topics) {
+                    bus.emit(tenantId, topic);
+                }
+            }
+        } catch (RuntimeException ex) {
+            LOG.warn("{} committed; its emit: {} was not announced: {}", what, topics,
+                    ex.getMessage());
         }
-        for (String topic : request.emit()) {
-            bus.emit(request.tenantId(), topic);
-        }
-    }
-
-    /**
-     * Drops what a committed import made stale (docs/caching.md): the same placement as the
-     * announcement, for the same reason — a rolled-back import changed nothing. The
-     * invalidation is a hint under the hold's expiry, so a failure here is logged and is never
-     * the import's; the rows are committed by now.
-     */
-    private void invalidate(ImportRequest request) {
-        if (request.invalidates().isEmpty()) {
+        if (tables.isEmpty()) {
             return;
         }
         io.tesseraql.core.cache.Invalidations target = invalidations == null
@@ -1288,10 +1313,10 @@ public final class JdbcFileTransferService implements FileTransferService {
             return;
         }
         try {
-            target.invalidate(request.invalidates());
+            target.invalidate(tables);
         } catch (RuntimeException ex) {
-            LOG.warn("Import {} committed; its invalidates: {} was not applied: {}",
-                    request.routeId(), request.invalidates(), ex.getMessage());
+            LOG.warn("{} committed; its invalidates: {} was not applied: {}", what, tables,
+                    ex.getMessage());
         }
     }
 
@@ -1806,8 +1831,9 @@ public final class JdbcFileTransferService implements FileTransferService {
                             observed.count(), reason);
                     return;
                 }
-                if (AFTER_EXTRACT.equals(request.afterTiming())
-                        && request.afterSqlFile() != null) {
+                boolean followedUp = AFTER_EXTRACT.equals(request.afterTiming())
+                        && request.afterSqlFile() != null;
+                if (followedUp) {
                     executeFollowUp(connection,
                             SqlRenderer.render(parse(request.afterSqlFile()), request.params()));
                 }
@@ -1828,6 +1854,15 @@ public final class JdbcFileTransferService implements FileTransferService {
                 }
                 books.commit("export " + transferId);
                 span.attribute("rowCount", rows);
+                // The follow-up's write is announced where it committed (docs/list-export.md):
+                // the route's topics and tables ride the request the way an import's do, because
+                // this run outlives the response that started it. An export with no follow-up
+                // wrote nothing, so it announces nothing — a live list over the extracted rows
+                // has nothing to refetch, and a hold over them nothing to drop.
+                if (followedUp) {
+                    announce("Export " + request.routeId(), request.emit(), request.tenantId(),
+                            request.invalidates());
+                }
             } catch (Throwable ex) {
                 // Everything, not Exception: restoring autocommit below COMMITS an open
                 // transaction (docs/two-way-sql-parser.md decision 17). These bodies return a

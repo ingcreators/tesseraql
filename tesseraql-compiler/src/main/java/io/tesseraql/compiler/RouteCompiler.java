@@ -1805,7 +1805,12 @@ public final class RouteCompiler {
                 spec.filename(), querySql, afterTiming, afterSql,
                 declaredExportRowCap(spec, format),
                 exportQueries(definition, routeDir), httpSourceNames(definition),
-                enrichProcessors(routeDir, definition), appHome, i18n.defaultTag()));
+                enrichProcessors(routeDir, definition), appHome, i18n.defaultTag(),
+                // What the after: statement's commit announces (docs/list-export.md): the
+                // topics and the tables ride the request as an import's do, because the run
+                // outlives the response. `emit:` and `invalidates:` on this recipe used to
+                // lint as unsupported and, had they compiled, would have announced nothing.
+                definition.emit(), definition.invalidates()));
         applyIdempotencyComplete(exportStep, definition);
         mountTransferStatus(context, appHome, routeFile, routeId);
 
@@ -1819,8 +1824,10 @@ public final class RouteCompiler {
         // (docs/audit-low-leads.md G31).
         applyCommonGovernance(fileRoute, routeId + ".file", "GET",
                 routeFile.urlPath() + "/{transferId}/file", definition);
+        // The download-timed follow-up runs on the fetch, so the fetch carries the same
+        // declaration to the claim it commits with (docs/list-export.md).
         fileRoute.process(new io.tesseraql.compiler.binding.FileDownloadProcessor(appName,
-                routeId));
+                routeId, definition.emit(), definition.invalidates()));
     }
 
     /**

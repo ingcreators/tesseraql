@@ -44,7 +44,7 @@ class LiveViewIntegrationTest {
                 POSTGRES.getUsername(), POSTGRES.getPassword());
                 var statement = connection.createStatement()) {
             statement.execute("create table orders (id serial primary key, "
-                    + "status varchar(32) not null)");
+                    + "status varchar(32) not null, exported boolean not null default false)");
             statement.execute("insert into orders (status) values ('PENDING')");
         }
         runtime = TesseraqlRuntime.start(appHome, 0);
@@ -168,6 +168,71 @@ class LiveViewIntegrationTest {
         }
     }
 
+    /**
+     * A file export's {@code after:} statement announces its commit (docs/list-export.md): the
+     * extraction-timed one lands on the stream when the run commits, after the 202 — a
+     * products list with {@code refreshOn:} used to never learn its rows were marked
+     * extracted, because the recipe carried no topics at all.
+     */
+    @Test
+    void anExportsExtractionTimedFollowUpEmitsWhenItsRunCommits() throws Exception {
+        HttpResponse<java.io.InputStream> stream = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/events?topics=orders.changed"))
+                        .header("Cookie", sessionCookie).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(stream.statusCode()).isEqualTo(200);
+        try (var frames = new java.io.BufferedReader(new java.io.InputStreamReader(
+                stream.body(), java.nio.charset.StandardCharsets.UTF_8))) {
+            assertThat(frames.readLine()).startsWith("retry:");
+            assertThat(frames.readLine()).isEmpty();
+
+            HttpResponse<String> accepted = startExport("/orders/export");
+            assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(202);
+
+            // The run commits on its own thread; the signal is its, not the 202's.
+            assertThat(frames.readLine()).isEqualTo("event: orders.changed");
+            assertThat(frames.readLine()).isEqualTo("data: ");
+        }
+    }
+
+    /**
+     * A {@code download}-timed follow-up writes nothing until the file is fetched: the run's
+     * completion puts no frame on the stream, the first fetch does — the fetching request
+     * carries the route's topics to the statement it runs.
+     */
+    @Test
+    void anExportsDownloadTimedFollowUpEmitsOnTheFirstFetch() throws Exception {
+        HttpResponse<java.io.InputStream> stream = HttpClient.newHttpClient().send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
+                        + "/_tesseraql/events?topics=orders.changed"))
+                        .header("Cookie", sessionCookie).build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(stream.statusCode()).isEqualTo(200);
+        try (var frames = new java.io.BufferedReader(new java.io.InputStreamReader(
+                stream.body(), java.nio.charset.StandardCharsets.UTF_8))) {
+            assertThat(frames.readLine()).startsWith("retry:");
+            assertThat(frames.readLine()).isEmpty();
+
+            HttpResponse<String> accepted = startExport("/orders/export-on-download");
+            assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(202);
+            String transferId = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(accepted.body()).get("transferId").asText();
+            String path = "/orders/export-on-download/" + transferId;
+            awaitCompleted(path);
+            // Completed and unfetched: nothing was written, so nothing arrived. The heartbeat
+            // is twenty-five seconds away, so a frame within this window could only be the
+            // topic, wrongly emitted by the completion.
+            Thread.sleep(500);
+            assertThat(frames.ready()).as("a frame before the file was fetched").isFalse();
+
+            HttpResponse<String> file = get(path + "/file");
+            assertThat(file.statusCode()).as(file.body()).isEqualTo(200);
+            assertThat(frames.readLine()).isEqualTo("event: orders.changed");
+            assertThat(frames.readLine()).isEqualTo("data: ");
+        }
+    }
+
     /** A rolled-back command (validation failure) emits nothing. */
     @Test
     void aFailedCommandEmitsNothing() throws Exception {
@@ -225,6 +290,37 @@ class LiveViewIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + path))
                 .header("Cookie", sessionCookie).build(),
                 HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Kicks off a file export as the signed-in user; the route binds nothing from the body. */
+    private static HttpResponse<String> startExport(String path) throws Exception {
+        SessionStore sessions = runtime.context().lookup(
+                TesseraqlProperties.SESSION_STORE_BEAN, SessionStore.class);
+        return HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Cookie", sessionCookie)
+                .header("X-CSRF-Token", sessions.csrfTokenFromCookie(sessionCookie))
+                .header("Content-Type", "text/csv")
+                .POST(HttpRequest.BodyPublishers.ofString("")).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** Polls a transfer's status until it leaves RUNNING: the export runs on its own thread. */
+    private static void awaitCompleted(String statusPath) throws Exception {
+        long deadline = System.currentTimeMillis() + 20_000;
+        while (true) {
+            HttpResponse<String> polled = get(statusPath);
+            assertThat(polled.statusCode()).as(polled.body()).isEqualTo(200);
+            String status = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(polled.body()).path("status").asText();
+            if ("COMPLETED".equals(status)) {
+                return;
+            }
+            assertThat(status).as(polled.body()).isIn("RUNNING", "STARTED");
+            assertThat(System.currentTimeMillis()).as("the export finishes: " + polled.body())
+                    .isLessThan(deadline);
+            Thread.sleep(100);
+        }
     }
 
     private static HttpResponse<String> postCommand(String form) throws Exception {
@@ -399,6 +495,50 @@ class LiveViewIntegrationTest {
                     body:
                       affected: steps.main.affectedRows
                 """);
+        // The fifth emitting writer (docs/list-export.md): a file export whose after:
+        // statement marks the orders it extracted, one route per timing.
+        for (String timing : new String[]{"extract", "download"}) {
+            Path export = target.resolve("web/orders/export"
+                    + ("download".equals(timing) ? "-on-download" : ""));
+            Files.createDirectories(export);
+            Files.writeString(export.resolve("export-orders.sql"), """
+                    select
+                      o.id,
+                      o.status
+                    from
+                      orders o
+                    order by
+                      o.id
+                    """);
+            Files.writeString(export.resolve("mark-exported.sql"), """
+                    update
+                      orders
+                    set
+                      exported = true
+                    where
+                      not exported
+                    """);
+            Files.writeString(export.resolve("post.yml"), """
+                    version: tesseraql/v1
+                    id: orders.export%s
+                    kind: route
+                    recipe: file-export
+                    emit: orders.changed
+                    security:
+                      auth: browser
+                      csrf: true
+                    export:
+                      format: csv
+                      after:
+                        timing: %s
+                        sql:
+                          file: mark-exported.sql
+                    sources:
+                      main:
+                        sql:
+                          file: export-orders.sql
+                    """.formatted("download".equals(timing) ? "OnDownload" : "", timing));
+        }
         return target;
     }
 }

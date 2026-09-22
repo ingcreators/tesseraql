@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Live-view lints (docs/realtime.md): {@code emit:} is a command-json key with slug-shaped
- * topics, {@code refreshOn:} is a list-view key, and a topic no route emits is flagged.
+ * Live-view lints (docs/realtime.md): {@code emit:} belongs to a route with a commit to
+ * announce — a command, a file import, a file export with an {@code after:} statement — with
+ * slug-shaped topics, {@code refreshOn:} is a list-view key, and a topic no route emits is
+ * flagged.
  */
 class AppLinterLiveViewTest {
 
@@ -159,5 +161,45 @@ class AppLinterLiveViewTest {
                 """);
         assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
                 && "TQL-YAML-1038".equals(finding.code()));
+    }
+
+    /**
+     * A file export announces its {@code after:} statement's commit (docs/list-export.md): with
+     * the statement declared the key lints clean, without it the route never commits and the
+     * declaration is refused the way a read's is — the export used to be refused outright,
+     * while its follow-up marked rows a live list never learned about.
+     */
+    @Test
+    void emitOnAFileExportNeedsItsFollowUp(@TempDir Path dir) throws Exception {
+        writeApp(dir, "", "list", "refreshOn: orders.changed");
+        Path export = Files.createDirectories(dir.resolve("web/orders/export"));
+        Files.writeString(export.resolve("mark.sql"),
+                "update orders set exported = true where not exported\n");
+        String route = """
+                version: tesseraql/v1
+                id: orders.export
+                kind: route
+                recipe: file-export
+                emit: orders.changed
+                export:
+                  format: csv
+                %s
+                sources:
+                  main:
+                    sql:
+                      file: ../orders.sql
+                """;
+        Files.writeString(export.resolve("post.yml"), route.formatted("""
+                  after:
+                    sql:
+                      file: mark.sql
+                """));
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(finding -> "TQL-YAML-1038".equals(finding.code()));
+
+        Files.writeString(export.resolve("post.yml"), route.formatted(""));
+        assertThat(new AppLinter().lint(dir)).anyMatch(finding -> finding.isError()
+                && "TQL-YAML-1038".equals(finding.code())
+                && finding.message().contains("declares no export.after"));
     }
 }

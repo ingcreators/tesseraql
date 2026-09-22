@@ -38,6 +38,10 @@ public final class FileExportStartProcessor implements Step {
     /** The application home and default locale the browser's card renders against. */
     private final Path appHome;
     private final String defaultLocaleTag;
+    /** The route's {@code emit:} topics, announced when the {@code after:} statement commits. */
+    private final java.util.List<String> emit;
+    /** The route's {@code invalidates:} tables, dropped when the {@code after:} statement commits. */
+    private final java.util.List<String> invalidates;
 
     public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
             FileWriteSpec writeSpec, FormatDeclaration locale,
@@ -46,10 +50,13 @@ public final class FileExportStartProcessor implements Step {
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
             java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments,
-            Path appHome, String defaultLocaleTag) {
+            Path appHome, String defaultLocaleTag, java.util.List<String> emit,
+            java.util.List<String> invalidates) {
         this.enrichments = java.util.List.copyOf(enrichments);
         this.appHome = appHome;
         this.defaultLocaleTag = defaultLocaleTag;
+        this.emit = java.util.List.copyOf(emit);
+        this.invalidates = java.util.List.copyOf(invalidates);
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -99,6 +106,13 @@ public final class FileExportStartProcessor implements Step {
                 rowCap, resolvedQueries, ExportSources.values(exchange, httpSources),
                 ExportEnrichment.enricher(exchange, enrichments),
                 ExportEnrichment.window(enrichments))
+                // The route's topics and tables travel with the request because the run
+                // outlives it: an extraction-timed follow-up announces itself when its
+                // transaction commits on the background thread, not when this response goes
+                // out (docs/list-export.md, the after: commit). The download-timed one is
+                // carried by the fetch that runs it, in FileDownloadProcessor.
+                .announcing(emit, TransferTopics.tenant(exchange))
+                .invalidating(invalidates)
                 .on(TransferPools.of(exchange)));
         // An htmx kick-off gets the running card, a browser's form post lands on the transfer's
         // page (docs/list-export.md decision 4); scripted callers keep the JSON 202 this recipe
