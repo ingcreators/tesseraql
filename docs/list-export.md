@@ -22,7 +22,11 @@
 > **S2** — the card on the page: the htmx kick-off answers 202 and the running card into its
 > own region, one shared kick-off answer for imports and exports, `_idempotency` on the
 > kick-off form and the idempotency pair on `file-export`, a reclaimed export's card says
-> expired, the hypermedia-ui page and the ledger row.
+> expired, the hypermedia-ui page and the ledger row: **shipped, #1427** (every decision as
+> recommended). One measured correction: a reclaimed spool takes the download's empty path, so
+> the file leg answers the not-ready **409** — the 410 of `TQL-LD-2868` is a spool the node
+> cannot *open*, a different case; row 4, decision 5 and "What this breaks" say so now. The
+> campaign is complete: the hc recipe ledger's async-job row is closed by the list surface.
 
 A list page shows one question's answer twenty rows at a time. The rows the user wants in a
 spreadsheet are the answer to the *same* question — every page, in the sorted order, under the
@@ -55,7 +59,7 @@ application.
 | 1 | The trigger as written (`docs/hc-recipe-alignment.md:221-241`, and the row at `:72`) | async-job is **Adopted (#1127–#1133)** on the import commit leg; the section keeps its trigger sentence for the list surface and says why: "until then there is nothing for the card to render" on an export. `docs/csv-import.md:606-616` (decision 8): `mountTransferStatus` is shared by `buildFileImport` and `buildFileExport`, the card's done state is direction-aware from the start, "an asynchronous Excel export therefore becomes: kick off, get the card, watch it, download from the done card." Only the kick-off is missing. |
 | 2 | What kicks an export off today (`FileExportStartProcessor.java:65-98`) | Binds the request (`RequestBinder`), resolves the filename, calls `startExport`, and answers `respondAccepted` (`FileImportProcessor.java:266-289`): **202, `Location`, JSON `{transferId, statusUrl, fileUrl}` — for every caller.** No `Negotiation.prefersHtml` branch, unlike the import commit leg (`ImportCommitProcessor.java:124-128`, `:161-207`): an htmx confirm gets 202 and the running card, a plain form post gets 303 to `{path}/{transferId}`, where `ImportPages.renderCard` (`:48-56`) renders the same card inside the app's chrome. A browser posting a file-export form today lands on a JSON document. |
 | 3 | The card (`tql/view/job-card.html`, `JobCards.java`) | Five states from the transfer's status (`:92-99`): running carries `hx-get` + `hx-trigger="load, every 2s"` (`:27`), backed off to `every 10s` past 5,000 rows (`:33-34`); a terminal card carries no trigger (`:48-50`); `data-hc-job`, `data-state`, `hx-target="this"`, `hx-swap="outerHTML"`; the done state of an **EXPORT** is the `Download` link to `statusUrl + "/file"` (`:60-63`); failed is the catalog's sentence for the recorded code, `tql.job.reason.<code>` (`:126-147`); the tombstone is `data-state="expired"`, 200, no trigger (`:77-88`). The card carries its own Cancel `<form>` (`job-card.html:34-41`). Pinned by `ImportPageIntegrationTest` (`:205-287`: done without trigger, tombstone, the page in chrome, cancel). |
-| 4 | What the status face knows about a reclaimed export (`FileTransferService.java:221-223`, `:271-276`; `JdbcFileTransferService.java:777-780`, `:920-948`) | `expireTransfersOlderThan` sets `spool_uri` to null and keeps the row; the **console's** `TransferSummary` derives `expired` from "completed with no spool left"; the **status's** `TransferStatus` has no such component, so `JobCards.state` reads `COMPLETED` and renders **Done with a Download link that answers 410** (`TQL-LD-2868`, `docs/file-transfers.md:375-377`). The csv-import table promised "expired: an unknown *or swept* transfer id" (`:499`); the swept half is unbuilt on the card. |
+| 4 | What the status face knows about a reclaimed export (`FileTransferService.java:221-223`, `:271-276`; `JdbcFileTransferService.java:777-780`, `:920-948`) | `expireTransfersOlderThan` sets `spool_uri` to null and keeps the row; the **console's** `TransferSummary` derives `expired` from "completed with no spool left"; the **status's** `TransferStatus` has no such component, so `JobCards.state` reads `COMPLETED` and renders **Done with a Download link the file leg refuses** — a reclaimed spool takes `open()`'s empty path (`JdbcFileTransferService.java:813-820`), the not-ready 409; the 410 of `TQL-LD-2868` (`docs/file-transfers.md:375-377`) is a spool the node cannot *open*, a different case (measured in S2). The csv-import table promised "expired: an unknown *or swept* transfer id" (`:499`); the swept half is unbuilt on the card. |
 | 5 | The grid page's regions (`tql/view/list.html`) | The search box sits **outside** the grid form (`:34-46`), `hx-get` on the page path with `hx-include` of the region's hidden inputs and no `hx-push-url`; the applied filters and `sort`/`dir` are hidden inputs **inside** the swapped region `#<id>-table` (`:106-116`); the status line, both result-cap surfaces and the pager are inside it too (`:117-174`); one `<form method="post">` wraps the region, the selection bar and the snapshot `keys` (`:72-82`), and its `_csrf` renders only when `actions:` or a snapshot is declared (`:73-75`); each bulk action is a submit button with its own `formaction` (`:99-101`). The filter dialog carries hidden `sort`/`dir`/search rendered at page render, outside the region (`:191-194`). |
 | 6 | The list's state as a value (`ViewBinding.java`) | `state(params)` (`:1332`) = `chromeState` (`sort`, `dir`, `size`, the `search:` term, `:1507-1521`) + `filterState` (every declared filter with a value, `:1524-1536`); `returnBase` (`:1253-1264`) prepends `page` and is the `_return` every row link carries; chips, clear-all and presets all build from the same pieces through `href(pagePath, state)` (`:1540`). `params` is the route's **coerced declared inputs** (`:1552`). The count: `page.totalRows` on a counted offset page and on a snapshot (`:1017-1037`, `:1432`); mode A hedges it as `{max}+` (`:1009-1015`); mode B withholds it (`:986-992`). |
 | 7 | How a POST route reads its question (`Request.java:90-95`, `RequestBinder.java:349-361`, `:231-246`, `:39-56`) | "The one merged parameter view: path, then query, then form — first value." A declared input sourced from the query string binds on a POST route exactly as on a GET; a form field of the same name does not listify against it (listification is a form's repeated field, `:238-243`). Reserved, never mass assignment: `_csrf`, `_idempotency`, `_return`, the lock pair, `keys`, `page`, `size`, `ids`. The gallery's list SQL binds its conditions as `params: { q: query.q, status: query.status }` (`examples/helpdesk-app/web/tickets/get.yml`) — **the query spelling, not `params.*`**. |
@@ -251,10 +255,10 @@ upstream's own rule that retry is a new kick-off.
 
 **One card change: a reclaimed export is expired.** Row 4 measured the gap the csv-import table
 promised away — after the retention sweep a completed export's card says Done and its link
-answers 410. `TransferStatus` gains what `TransferSummary` already derives, `fileReclaimed`
+answers the not-ready 409. `TransferStatus` gains what `TransferSummary` already derives, `fileReclaimed`
 (completed, direction EXPORT, `spool_uri` null), `JobCards.state` maps it to `expired`, and the
 tombstone's body says the file is gone rather than the job. The JSON status face gains the same
-boolean as `expired`, so an API poller learns it without a 410 round trip. A bookmarked status
+boolean as `expired`, so an API poller learns it without a refused download. A bookmarked status
 page and a long-open tab therefore agree with the console.
 
 **Without JavaScript** the kick-off is a form post, the answer is the transfer page, and every
@@ -425,8 +429,8 @@ takes effect; a reclaimed export's card and status say expired).
   `hx-*` forms — and the JSON contract is unchanged for every caller that names it or names
   nothing (`Negotiation.prefersHtml`, row 2).
 - **A reclaimed export's status says `expired: true`** and its card says expired where it said
-  done with a dead link (decision 5). Additive on the JSON; a change on the card; the 410 on
-  the file leg stands for a caller that ignores both.
+  done with a dead link (decision 5). Additive on the JSON; a change on the card; the not-ready
+  409 on the file leg stands for a caller that ignores both.
 - **`idempotency:` on a `file-export` route does something.** It compiled and claimed nothing
   before; a route that declared it will now answer a replayed key with the stored response.
   No gallery route declares it.

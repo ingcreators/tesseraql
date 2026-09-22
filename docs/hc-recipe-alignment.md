@@ -34,10 +34,10 @@
 >   behaviors" — two adopted, two deferred with their triggers named.
 > - **hc 0.4.2 swept 2026-09-21**: no recipe or template changed between v0.4.1 and v0.4.2
 >   (a behavior, its tests and the *Browser support* page); nothing to adopt beyond the bump.
-> - **async-job's list-surface trigger fired 2026-09-22**: [list-export.md](list-export.md)
->   designs "export this filtered set" — `exports:` on a list view, the question as the
->   export route's query string, the shipped card in its own region on the grid page — in
->   two slices, the user naming each.
+> - **async-job's list-surface trigger fired and shipped 2026-09-22**: [list-export.md](list-export.md)
+>   (#1425) designed "export this filtered set" — `exports:` on a list view, the question as
+>   the export route's query string, the shipped card in its own region on the grid page —
+>   and S1 (#1426) and S2 (#1427) shipped it the same day. The row is closed.
 >
 > hypermedia-components 0.4.0 shipped nine new recipe contracts (#1081 adopted the
 > bump). Two were settled the same week: network-retry became the shell host (#1083)
@@ -62,7 +62,7 @@ any, should grow the rendering?
 | workflow-actions | **Adopt — its own design campaign** | `workflow:` + detail views |
 | reference-lookup | **Adopt — its own design campaign** | `input:` fields |
 | line-items | **Defer**, trigger named | `items.fields:` |
-| async-job | **Adopted (#1127–#1133)** — [csv-import.md](csv-import.md); the list surface's kick-off designed — [list-export.md](list-export.md) | the import commit leg; `exports:` on a list view |
+| async-job | **Adopted (#1127–#1133, and #1426–#1427)** — [csv-import.md](csv-import.md), [list-export.md](list-export.md) | the import commit leg; `exports:` on a list view |
 
 ## Already settled
 
@@ -213,15 +213,16 @@ campaign's trap).
 
 ## async-job — designed, as the import commit leg
 
-> **The trigger fired 2026-09-22: [list-export.md](list-export.md).** `exports:` on a list
-> view names `query-export` or `file-export` routes; the grid page renders one control per
-> entry beside the count, carrying the list's search, filters and sort as the route's query
-> string; a `file-export` target is the kick-off form, and its htmx answer is 202 and the
-> card the import commit leg already renders, in a region of the page outside the grid's
-> own swaps. Twelve decisions there settle what this paragraph left to the trigger: the
-> state handoff is the URL, the card is the shipped card plus one mapping (a reclaimed
-> export is expired, not done with a dead link), the readers of a transfer stay the
-> route's, and the result cap and the export's bound stay two instruments.
+> **The trigger fired and the slices shipped 2026-09-22: [list-export.md](list-export.md)
+> (#1425), S1 #1426, S2 #1427.** `exports:` on a list view names `query-export` or
+> `file-export` routes; the grid page renders one control per entry beside the count,
+> carrying the list's search, filters and sort as the route's query string; a `file-export`
+> target is the kick-off form, and its htmx answer is 202 and the card the import commit leg
+> already renders, in a region of the page outside the grid's own swaps. Twelve decisions
+> there settle what this paragraph left to the trigger: the state handoff is the URL, the
+> card is the shipped card plus one mapping (a reclaimed export is expired, not done with a
+> dead link), the readers of a transfer stay the route's, and the result cap and the
+> export's bound stay two instruments. This row is closed.
 >
 > **Designed: [csv-import.md](csv-import.md) decision 6.** The trigger below named the
 > list surface's "export this filtered set" as the most plausible first kick-off; the
