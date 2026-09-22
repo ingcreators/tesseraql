@@ -361,4 +361,7 @@ export const EXCLUDED = [
   // The procurement demo finished: three printable documents and the EDI companion -
   // designed 2026-09-21.
   'procurement-documents-and-edi.md',
+  // Export this filtered set: exports: on a list view names the export routes, the grid page
+  // carries the list's question to them, and the async-job card lands on the page - designed 2026-09-22.
+  'list-export.md',
 ];
