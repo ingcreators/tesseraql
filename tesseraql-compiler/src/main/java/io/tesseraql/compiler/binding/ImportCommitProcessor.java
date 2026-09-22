@@ -104,7 +104,7 @@ public final class ImportCommitProcessor implements Step {
                     // would be false on the very leg that repeats the parse.
                     new FileTransferService.ImportRequest(routeId, appName, format, readSpec,
                             rowSqlFile, onError, null)
-                            .announcing(emit, ImportTopics.tenant(exchange))
+                            .announcing(emit, TransferTopics.tenant(exchange))
                             .invalidating(invalidates)
                             .on(TransferPools.of(exchange)));
         } catch (TqlException refusal) {

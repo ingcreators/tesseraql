@@ -103,6 +103,27 @@ public interface FileTransferService {
     }
 
     /**
+     * What a committed follow-up announces (docs/list-export.md, the {@code after:} commit): the
+     * route's {@code emit:} topics, the tenant they are scoped to, and the tables its
+     * {@code invalidates:} names. A {@code download}-timed statement runs on the request that
+     * fetches the file — a later request than the export's — so that request carries the
+     * route's declaration to the claim, the way a reviewed import's confirm carries its route's
+     * to the commit leg. {@link #NONE} is a fetch with no route behind it: the operations
+     * console's, which claims and runs the statement as any first fetch does and announces
+     * nothing, because the console knows no route.
+     */
+    record Announcement(List<String> emit, List<String> invalidates, String tenantId) {
+
+        /** Nothing to announce and nothing to drop. */
+        public static final Announcement NONE = new Announcement(List.of(), List.of(), null);
+
+        public Announcement {
+            emit = emit == null ? List.of() : List.copyOf(emit);
+            invalidates = invalidates == null ? List.of() : List.copyOf(invalidates);
+        }
+    }
+
+    /**
      * An export to generate: the query streams into the file; {@code afterSqlFile} optional.
      *
      * @param rowCap  the ceiling a buffering codec's export runs under, unbounded for a streaming
@@ -111,12 +132,32 @@ public interface FileTransferService {
      *                results a template composes around the rows (decision 2)
      * @param values  results already resolved by the caller — an export's {@code http:} sources are
      *                called at submission, so no network call happens while a cursor is held
+     * @param emit    the route's live-view topics (docs/realtime.md), announced when the
+     *                {@code after:} statement commits with the extraction; an export with no
+     *                follow-up writes nothing and announces nothing
+     * @param invalidates the tables the route's {@code invalidates:} names (docs/caching.md),
+     *                dropped from the catalogs and the hold at the same commit, never on a
+     *                rollback
+     * @param tenantId the tenant the announcement is scoped to — the requesting principal's,
+     *                read on the request because the run outlives it
      */
     record ExportRequest(String routeId, String appName, String format, FileWriteSpec writeSpec,
             String filename, Path querySqlFile, Map<String, Object> params,
             String afterTiming, Path afterSqlFile, ExportRowCap rowCap,
             List<ExportQuery> queries, Map<String, Object> values,
-            RowEnricher enricher, int enrichWindow, TransferPool pool) {
+            RowEnricher enricher, int enrichWindow, List<String> emit,
+            List<String> invalidates, String tenantId, TransferPool pool) {
+
+        /** The shape before an export's follow-up announced itself (docs/list-export.md). */
+        public ExportRequest(String routeId, String appName, String format,
+                FileWriteSpec writeSpec, String filename, Path querySqlFile,
+                Map<String, Object> params, String afterTiming, Path afterSqlFile,
+                ExportRowCap rowCap, List<ExportQuery> queries, Map<String, Object> values,
+                RowEnricher enricher, int enrichWindow, TransferPool pool) {
+            this(routeId, appName, format, writeSpec, filename, querySqlFile, params, afterTiming,
+                    afterSqlFile, rowCap, queries, values, enricher, enrichWindow, List.of(),
+                    List.of(), null, pool);
+        }
 
         /** The shape before an export carried its pool (docs/multi-tenancy.md). */
         public ExportRequest(String routeId, String appName, String format,
@@ -141,6 +182,8 @@ public interface FileTransferService {
             rowCap = rowCap == null ? ExportRowCap.unbounded() : rowCap;
             queries = queries == null ? List.of() : List.copyOf(queries);
             values = values == null ? Map.of() : OrderedCopies.map(values);
+            emit = emit == null ? List.of() : List.copyOf(emit);
+            invalidates = invalidates == null ? List.of() : List.copyOf(invalidates);
             pool = pool == null ? TransferPool.MAIN : pool;
         }
 
@@ -148,7 +191,28 @@ public interface FileTransferService {
         public ExportRequest on(TransferPool pool) {
             return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
                     params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
-                    enrichWindow, pool);
+                    enrichWindow, emit, invalidates, tenantId, pool);
+        }
+
+        /**
+         * This request with the route's live-view topics and the caller's tenant attached: what
+         * the {@code after:} statement's commit announces (docs/list-export.md), the placement
+         * an import's completion signal has.
+         */
+        public ExportRequest announcing(List<String> topics, String tenant) {
+            return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
+                    params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
+                    enrichWindow, topics, invalidates, tenant, pool);
+        }
+
+        /**
+         * This request with the tables its follow-up makes stale attached (docs/caching.md):
+         * dropped from the catalogs and the hold when the {@code after:} statement commits.
+         */
+        public ExportRequest invalidating(List<String> tables) {
+            return new ExportRequest(routeId, appName, format, writeSpec, filename, querySqlFile,
+                    params, afterTiming, afterSqlFile, rowCap, queries, values, enricher,
+                    enrichWindow, emit, tables, tenantId, pool);
         }
     }
 
@@ -416,8 +480,22 @@ public interface FileTransferService {
      * takes the first-download claim: the first call that opened the bytes records the transfer
      * as downloaded and runs the {@code download}-timed follow-up statement, in one transaction
      * — a follow-up that fails releases the claim, so the next fetch tries again.
+     *
+     * <p>{@code announcement} is what that follow-up announces once it committed
+     * (docs/list-export.md): the route's live-view topics and the tables it made stale, carried
+     * by the fetching request because the route is known there. A fetch that took no claim, or
+     * whose transfer runs no download-timed statement, announces nothing.
      */
-    Optional<Download> download(String transferId);
+    Optional<Download> download(String transferId, Announcement announcement);
+
+    /**
+     * {@link #download(String, Announcement)} for a fetch with no route behind it — the
+     * operations console's: the claim and the statement as on any first fetch, and nothing
+     * announced.
+     */
+    default Optional<Download> download(String transferId) {
+        return download(transferId, Announcement.NONE);
+    }
 
     /**
      * Opens the generated file exactly as {@link #download} would — the same refusals, the same

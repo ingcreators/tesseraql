@@ -27,6 +27,22 @@
 > the file leg answers the not-ready **409** — the 410 of `TQL-LD-2868` is a spool the node
 > cannot *open*, a different case; row 4, decision 5 and "What this breaks" say so now. The
 > campaign is complete: the hc recipe ledger's async-job row is closed by the list surface.
+>
+> **The `after:` commit** — the first item under "Filed, not fixed" (row 15): **closed
+> 2026-09-22, #1428**, in the shape the entry recorded. `ExportRequest` carries `emit:`,
+> `invalidates:` and the announcement's tenant (`announcing`/`invalidating`, the
+> `ImportRequest` shape); the transfer service announces them where the extraction-timed
+> statement commits, through the one placement the import's completion already had; the
+> download-timed statement runs on the fetch, so `FileDownloadProcessor` carries the route's
+> declaration to the claim it commits with (`FileTransferService.Announcement`, the reviewed
+> import's confirm-leg shape). `TQL-YAML-1038` and `TQL-FIELD-4620` admit the recipe when it
+> declares `export.after` and refuse the keys when it does not — an export with no follow-up
+> writes nothing. What stays filed is one fetch: the operations console's, below. One defect
+> found on the way: a download-timed export's first fetch answered `500` under
+> `shared-schema` tenancy since 0.18.0 — the transfer records its tenant in every mode, and the
+> fetch resolved it through the per-tenant resolver that only a per-tenant mode binds, reading
+> its own tenant as unknown (`JdbcFileTransferService.poolOf`; the pools are wired only when
+> they exist now, and the download-timed row of `ResultHoldIntegrationTest` is the guard).
 
 A list page shows one question's answer twenty rows at a time. The rows the user wants in a
 spreadsheet are the answer to the *same* question — every page, in the sorted order, under the
@@ -70,7 +86,7 @@ application.
 | 12 | Idempotency on the file recipes (`RouteCompiler.java:1749-1812`, `:882`, `:1986`, `:2059`, `:2250`; `docs/idempotency-key.md`) | `applyIdempotencyBegin/Complete` ride the json, transactional-command, template-page and MCP builders; **`buildFileExport` carries neither**, so a `file-export` route declaring `idempotency:` claims nothing. `_idempotency` is minted per HTML render and published to every view model; `form.html` renders it as a hidden field. The upstream async-job contract: "Kick-off POSTs compose with idempotency-key — a double-clicked Export should yield one job, and the replayed 202 points both clicks at the same card." |
 | 13 | The upstream shapes | `recipes/async-job/contract.md`: a kick-off form, POST, `hx-target="#job"`, `innerHTML`, `hx-disabled-elt="this"`, a real `action`; the 202 carries the running card; expired is 200 and no trigger; Failed offers Retry as **a new kick-off**. The `data-grid-page` template (`apps/docs/…/templates/data-grid-page.mdx`): Export sits in the toolbar under "acts on the **data**", and "**Export carries the query.** The button says *Export 5,000 rows* and its href holds the same conditions and columns — a download means this question, not the rows on screen." The `result-cap` contract's mode A banner: "Narrow the filters to see the rest, or export the full set to CSV" — "exports run under their own, much larger, usually asynchronous limit." `hc.min.css` 0.4.2 ships `hc-empty__actions`. |
 | 14 | The gallery | Eight declarative lists. `helpdesk-app` tickets declare `search: q`, `filters: [status, priority]`, two presets, sortable columns, a `type: sort` input (`web/tickets/`); `inventory-app` products declare `search: q` and `refreshOn: prices.imported` beside the reviewed price import (`web/products/`); `purchase-request-app` requests are the snapshot queue (`cap: 500`). Two tabular exports exist, both `query-export` CSV, neither reachable from a list: `users.export` (`user-admin-app`, whose users page is hand-written) and `api.shipments.export` (`procurement-app`, `bom: true`); the other `query-export` routes are the procurement demo's printable documents, linked from detail pages. **No gallery route declares `recipe: file-export`.** |
-| 15 | The `after:` commit and the live list (`FileExportStartProcessor.java:90-96`, `docs/caching.md` S3) | An `ExportRequest` carries no topics and no tables: a `file-export` whose `after:` statement marks rows as extracted commits a write that neither `emit:` nor `invalidates:` can name. A products list with `refreshOn:` never learns its rows were marked. |
+| 15 | The `after:` commit and the live list (`FileExportStartProcessor.java:90-96`, `docs/caching.md` S3) | An `ExportRequest` carries no topics and no tables: a `file-export` whose `after:` statement marks rows as extracted commits a write that neither `emit:` nor `invalidates:` can name. A products list with `refreshOn:` never learns its rows were marked. **Closed after the campaign (#1428; the status block).** |
 | 16 | The CSRF token on the two kick-off legs (`AuthStep.java:428-430`) | "The token comes from the `X-CSRF-Token` header (the `installCsrfHeader` htmx convention) or, for a no-JS plain form post, the hidden `_csrf` field." Both faces of one kick-off can carry the field, and neither leg needs the other's transport. |
 
 ## The mechanism
@@ -439,12 +455,15 @@ takes effect; a reclaimed export's card and status say expired).
 
 ## Filed, not fixed
 
-- **A `file-export`'s `after:` commit announces nothing** (row 15). A products list with
-  `refreshOn:` never learns its rows were marked extracted, and a held source that read them
-  is not dropped. The fix is `announcing`/`invalidating` on `ExportRequest` for the `after:`
-  leg — the caching record's S3 shape, applied where the export commits. *Trigger: the first
-  `after:` export beside a live list or a held source.* Not this record's: no `after:` export
-  exists in the gallery, and the export this action kicks off marks nothing.
+- **A `file-export`'s `after:` commit announces nothing** (row 15) — **closed, #1428** (the
+  status block): `announcing`/`invalidating` on `ExportRequest` for the extraction-timed leg,
+  the fetch carrying the route's declaration for the download-timed one, the lints admitting
+  the recipe with a follow-up. What stays filed: **a fetch through the operations console
+  announces nothing.** The console's transfers page serves every application's transfers and
+  knows no route, so its first fetch of a download-timed export claims and runs the statement
+  and tells no list and no hold. *Trigger: a console fetch of a download-timed export beside a
+  live list or a held read; the fix is the declaration recorded on the transfer row at start,
+  which every fetch can then read.*
 - **The in-place search does not push the URL** (`list.html:34-41` has no `hx-push-url`), so the
   address bar, the filter dialog's hidden search (`:193-194`) and a bookmark fall behind a typed
   search until the next navigation. The export control is inside the region and is not affected;

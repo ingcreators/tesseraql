@@ -52,6 +52,16 @@
 > (`JdbcFileTransferService.commitImport`; the copy carries them now, and the reviewed row of
 > `ResultHoldIntegrationTest` is the first guard to reach the commit leg with anything
 > attached).
+>
+> **The fifth writer** — S3's "every writer with a commit" missed one: a `file-export`'s
+> `after:` statement committed a write that neither `emit:` nor `invalidates:` could name
+> (`ExportRequest` carried neither; found by [list-export.md](list-export.md) row 15).
+> Closed 2026-09-22, #1428: the request carries the topics and the tables as an import's
+> does and the transfer service announces them where the extraction-timed statement commits;
+> the fetch that runs a download-timed one carries the route's declaration to the claim
+> (`FileTransferService.Announcement`); the two lints admit the recipe when it declares a
+> follow-up and refuse the keys when it does not. The export rows of
+> `ResultHoldIntegrationTest` and `LiveViewIntegrationTest` are the guards.
 
 A query route can tell a browser how long to keep its response and answer a revalidation with
 `304`. It cannot tell the runtime to keep the rows: every request renders from a statement

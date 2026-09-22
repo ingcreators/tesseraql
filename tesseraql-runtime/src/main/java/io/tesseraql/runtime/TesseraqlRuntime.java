@@ -1057,6 +1057,11 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     io.tesseraql.core.util.Durations.parse(manifest.config()
                             .getString("tesseraql.batch.heartbeat.interval").orElse("30s")));
             context.bind(TesseraqlProperties.EXECUTION_HEARTBEATS_BEAN, executionHeartbeats);
+            // Bound by RuntimePools only in a per-tenant mode; absent, every tenant's transfer
+            // SQL runs on the shared pool (docs/multi-tenancy.md).
+            io.tesseraql.pipeline.tenant.TenantDataSourceResolver tenantPools = context.lookup(
+                    TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
+                    io.tesseraql.pipeline.tenant.TenantDataSourceResolver.class);
             io.tesseraql.operations.files.JdbcFileTransferService fileTransfers = new io.tesseraql.operations.files.JdbcFileTransferService(
                     jobRepository, executionHeartbeats,
                     tempStore, dataSource, modules.codecs(), modules.functions());
@@ -1077,13 +1082,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             io.tesseraql.core.cache.Invalidations.class))
                     // The tenant pools, for the after: statement a first download fires on a
                     // later request than the export's (docs/multi-tenancy.md): the resolver
-                    // is bound only in a per-tenant mode, and refuses an unknown tenant.
-                    .tenantPools(tenantId -> {
-                        io.tesseraql.pipeline.tenant.TenantDataSourceResolver resolver = context
-                                .lookup(TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
-                                        io.tesseraql.pipeline.tenant.TenantDataSourceResolver.class);
-                        return resolver == null ? null : resolver.resolve(tenantId);
-                    });
+                    // is bound only in a per-tenant mode (RuntimePools, above), and refuses an
+                    // unknown tenant. Wired only when it exists: a shared-schema deployment
+                    // records the tenant on the transfer too, and looking it up through an
+                    // absent resolver read as "unknown tenant" — the first fetch of a
+                    // download-timed export answered 500 for every tenant.
+                    .tenantPools(tenantPools == null ? null : tenantPools::resolve);
             // How long a reviewed upload waits for its confirm (docs/csv-import.md decision 2).
             long reviewTtlMillis = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                     .getString("tesseraql.transfers.reviewTtl").orElse("30m"));

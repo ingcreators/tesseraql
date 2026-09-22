@@ -69,10 +69,13 @@ re-fetch their own view of the data.
 
 ## Semantics and limits
 
-- `emit:` belongs to a route whose write has a moment to announce — `command-json` at its
-  commit, and `file-import` when the background import's transaction commits, which is
-  later than the response that started it ([csv-import.md](csv-import.md) decision 6) — and
-  takes one topic or a list. Topic names are lowercase dot/dash-separated segments —
+- `emit:` belongs to a route whose write has a moment to announce, and takes one topic or
+  a list. A `command-json` announces at its commit. A `file-import` announces when the
+  background import's transaction commits, which is later than the response that started it
+  ([csv-import.md](csv-import.md) decision 6). A `file-export` announces when its `after:`
+  statement commits — with the extraction, or on the first fetch of a download-timed one
+  ([file-transfers.md](file-transfers.md#asynchronous-export-file-export)). Topic names are
+  lowercase dot/dash-separated segments —
   `orders.changed`, `stock.low` — checked by lint (`TQL-YAML-1038`/`TQL-YAML-1039`).
 - `refreshOn:` works on **list, detail, and dashboard** views — a list refreshes its
   table region, a detail its fields and children, a dashboard its whole panel grid. Forms

@@ -30,7 +30,7 @@ final class LiveViewRules {
 
     /** The recipes whose writes have a moment the framework can announce them at. */
     private static final java.util.Set<String> EMITTING_RECIPES = new java.util.TreeSet<>(
-            java.util.List.of("command-json", "file-import"));
+            java.util.List.of("command-json", "file-export", "file-import"));
 
     /**
      * Live-view emit lints (docs/realtime.md): emit: belongs to a route whose write the
@@ -49,11 +49,21 @@ final class LiveViewRules {
         // A route may emit when it writes and the framework knows when the write landed. A
         // command knows at its commit; a file-import knows when its background transaction
         // commits, which is later than the request and is exactly why an import announces
-        // itself from the run rather than from the response (docs/csv-import.md decision 6).
+        // itself from the run rather than from the response (docs/csv-import.md decision 6);
+        // a file-export knows when its after: statement commits — with the extraction, or on
+        // the first fetch of the file (docs/list-export.md).
         if (!EMITTING_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding(LintCodes.EMIT_UNSUPPORTED, ERROR, source,
                     "emit: is only supported on " + EMITTING_RECIPES + " routes, not '"
                             + definition.recipe() + "'"));
+        } else if (DocumentRules.exportWithoutFollowUp(definition)) {
+            // An export writes nothing of its own: the after: statement is the one write it
+            // makes, and without one the declaration would sit on a route that never commits
+            // — the same silence as on a read, refused the same way.
+            findings.add(new LintFinding(LintCodes.EMIT_UNSUPPORTED, ERROR, source,
+                    "emit: on a file-export announces its after: statement's commit, and this"
+                            + " route declares no export.after — there is no write to"
+                            + " announce"));
         }
         for (String topic : definition.emit()) {
             if (topic == null || !TOPIC_NAME.matcher(topic).matches()) {

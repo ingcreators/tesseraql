@@ -409,6 +409,27 @@ The `after:` follow-up statement runs once, at one of two timings:
   again. Later fetches stream the file without re-running it. Use this when "handed over" means
   "a client fetched the file" — a GET that was cut off after the first byte counts.
 
+What the follow-up made stale is declared on the route as on any other writer: `emit:` names
+the live-view topics ([realtime.md](realtime.md)) and `invalidates:` the tables whose catalogs
+and held results ([response-shaping.md](response-shaping.md#holding-a-result)) the statement
+changed. Both fire when the `after:` statement commits — with the extraction under `extract`,
+with the first-download claim under `download` — and never on a rollback, a stopped run, a HEAD
+or a later fetch, which run nothing. A `file-export` with no `after:` writes nothing and cannot
+declare either (`TQL-YAML-1038`, `TQL-FIELD-4620`): a list with `refreshOn:` over the exported
+rows would have nothing to refetch. One fetch announces nothing: the operations console's
+transfers page takes the claim and runs the statement like any first fetch, but the console
+serves every application's transfers and knows no route's declaration.
+
+```yaml
+export:
+  format: csv
+  after:
+    sql:
+      file: mark-extracted.sql   # update orders set extracted = true where ...
+emit: orders.changed             # the orders list refreshes when the mark lands
+invalidates: [orders]            # and a held read over orders is dropped
+```
+
 ## Asynchronous import: file-import
 
 ```yaml

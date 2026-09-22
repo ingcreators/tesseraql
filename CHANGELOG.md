@@ -249,6 +249,11 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- `FileTransferService.download` takes the fetching route's `Announcement` (the one-argument
+  form announces nothing, for the operations console); `ExportRequest` carries `emit`,
+  `invalidates` and the announcement's tenant; `ImportTopics` is `TransferTopics`. Internal,
+  pre-1.0.
+
 - **Markup contract: the grid page carries the export controls.** `tql/view/list.html`'s
   navigation strip (the status line and pager cluster, which now renders when a list declares
   `exports:` even without pagination) and both result-cap surfaces render the export controls,
@@ -326,6 +331,28 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **A `file-export`'s `after:` statement announces its commit.** `emit:` and `invalidates:` on
+  a `file-export` route take effect: an extraction-timed follow-up announces the route's
+  live-view topics and drops the catalogs and held results that read the tables it names when
+  its transaction commits, after the 202; a download-timed one does so with the first fetch
+  that runs it — the fetching request carries the route's declaration to the claim — and
+  never on a rollback, a stopped run, a HEAD or a later fetch. Both keys used to lint as
+  unsupported on the recipe, and had they compiled they would have announced nothing: a list
+  with `refreshOn:` over the exported rows never learned they were marked, and a held read kept
+  serving the unmarked ones (`docs/list-export.md`, "Filed, not fixed"). The two lints admit the
+  recipe when it declares `export.after` and refuse the keys when it does not
+  (`TQL-YAML-1038`, `TQL-FIELD-4620`). A fetch through the operations console still announces
+  nothing: the console knows no route.
+
+- **A download-timed export's first fetch works under shared-schema tenancy.** The transfer
+  records the request's tenant in every mode, and the first fetch resolved that tenant as a
+  per-tenant pool — through a resolver that shared-schema never binds — so the fetch read its
+  own tenant as unknown and answered `500` (`TQL-LD-2810`, "no per-tenant datasource resolves
+  it") for every tenant since 0.18.0. The per-tenant pools are wired to the transfer service
+  only in a per-tenant mode; without them the follow-up runs on the shared pool, where the
+  request that started the export ran. Found by the download-timed row of
+  `ResultHoldIntegrationTest`, the first to fetch such an export under `shared-schema`.
 
 - **A route's permits return before its response ends.** A request's completions — the audit
   row, the route's `maxInFlight` permit, its lane permit, the telemetry span, a streamed body's

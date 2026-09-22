@@ -714,7 +714,7 @@
       "additionalProperties": true
     },
     "emit": {
-      "description": "Topic(s) broadcast to live views after this route's write commits (docs/realtime.md): a command-json command at its commit, a file-import when its background import's transaction commits. A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
+      "description": "Topic(s) broadcast to live views after this route's write commits (docs/realtime.md): a command-json command at its commit, a file-import when its background import's transaction commits, a file-export when its after: statement commits - with the extraction, or on the first fetch of the file for a download-timed one; an export with no after: has no write to announce. A name is lowercase dot/dash-separated segments; the event carries the topic name only, never data.",
       "oneOf": [
         {
           "type": "string"
@@ -728,7 +728,7 @@
       ]
     },
     "invalidates": {
-      "description": "Source table(s) this route's write makes stale: the code catalogs and the held results (a source's `cache:`) that read them are dropped after the commit, on this node at once and on every other within the stamp interval, so a rollback invalidates nothing. Legal on the recipes that commit - command-json, webhook, queue-consume, and file-import, where the drop happens when the import's transaction commits, after the response. Named by table, not by catalog: a maintenance screen for a shared code master writes a row whose kind is request data, so which catalog is affected is not known until the write happens. Documented in code-catalogs.md and response-shaping.md.",
+      "description": "Source table(s) this route's write makes stale: the code catalogs and the held results (a source's `cache:`) that read them are dropped after the commit, on this node at once and on every other within the stamp interval, so a rollback invalidates nothing. Legal on the recipes that commit - command-json, webhook, queue-consume, file-import, where the drop happens when the import's transaction commits, after the response, and file-export, where it happens when the after: statement commits (with the extraction, or on the first fetch of a download-timed one); an export with no after: has no commit to follow. Named by table, not by catalog: a maintenance screen for a shared code master writes a row whose kind is request data, so which catalog is affected is not known until the write happens. Documented in code-catalogs.md and response-shaping.md.",
       "oneOf": [
         {
           "type": "string"

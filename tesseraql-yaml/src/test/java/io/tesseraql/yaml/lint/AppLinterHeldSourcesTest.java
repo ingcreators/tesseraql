@@ -417,6 +417,65 @@ class AppLinterHeldSourcesTest {
         });
     }
 
+    /**
+     * The fifth writer (docs/list-export.md, the {@code after:} commit): a file export whose
+     * follow-up marks the rows it extracted names the held table and lints clean; the same
+     * route with no follow-up commits nothing, and the declaration is refused as a read's is.
+     */
+    @Test
+    void aFileExportMayInvalidateThroughItsFollowUpAndNotWithoutOne(@TempDir Path dir)
+            throws Exception {
+        writeRoute(dir, "orders", "query-json", """
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                    cache:
+                      maxAge: 30s
+                      tables: [orders]
+                response:
+                  json:
+                    body:
+                      rows: main.rows
+                """);
+        Path export = Files.createDirectories(dir.resolve("web/orders/export"));
+        Files.writeString(export.resolve("orders.sql"), "select 1 as id\n");
+        Files.writeString(export.resolve("mark.sql"), "update orders set n = 1\n");
+        String route = """
+                version: tesseraql/v1
+                id: orders.export
+                kind: route
+                recipe: file-export
+                security:
+                  auth: public
+                export:
+                  format: csv
+                %s
+                sources:
+                  main:
+                    sql:
+                      file: orders.sql
+                invalidates: [orders]
+                """;
+        Files.writeString(export.resolve("post.yml"), route.formatted("""
+                  after:
+                    timing: download
+                    sql:
+                      file: mark.sql
+                """));
+        assertThat(new AppLinter().lint(dir))
+                .noneMatch(f -> "TQL-FIELD-4620".equals(f.code()));
+
+        Files.writeString(export.resolve("post.yml"), route.formatted(""));
+        List<LintFinding> findings = new AppLinter().lint(dir).stream()
+                .filter(f -> "TQL-FIELD-4620".equals(f.code())).toList();
+        assertThat(findings).singleElement().satisfies(f -> {
+            assertThat(f.isError()).isTrue();
+            assertThat(f.source()).isEqualTo("web/orders/export/post.yml");
+            assertThat(f.message()).contains("declares no export.after");
+        });
+    }
+
     @Test
     void aReadToolMayHoldAndAWritingToolMayNot(@TempDir Path dir) throws Exception {
         Files.createDirectories(dir.resolve("config"));

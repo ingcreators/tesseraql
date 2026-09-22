@@ -75,11 +75,24 @@ final class DocumentRules {
 
     /**
      * The route recipes with a commit for {@code invalidates:} to run after (docs/caching.md):
-     * the three transactional ones, and the file import, whose transaction commits on the run
-     * rather than the request — the placement its {@code emit:} already has.
+     * the three transactional ones, the file import, whose transaction commits on the run
+     * rather than the request — the placement its {@code emit:} already has — and the file
+     * export, whose {@code after:} statement commits with the extraction or on the first fetch
+     * of the file (docs/list-export.md); an export with no follow-up commits nothing.
      */
     static final Set<String> INVALIDATING_RECIPES = Set.of("command-json", "webhook",
-            "queue-consume", "file-import");
+            "queue-consume", "file-import", "file-export");
+
+    /**
+     * A {@code file-export} that declares no {@code export.after}: the one write the recipe
+     * ever makes is the follow-up statement, so without one there is no commit for
+     * {@code emit:} or {@code invalidates:} to follow. Judged here for both lints, so the two
+     * keys are refused for one reason in one place.
+     */
+    static boolean exportWithoutFollowUp(RouteDefinition definition) {
+        return "file-export".equals(definition.recipe())
+                && (definition.fileExport() == null || definition.fileExport().after() == null);
+    }
 
     /**
      * {@code invalidates:} lints (docs/lookups.md decision 13, docs/caching.md decision 5).
@@ -103,9 +116,16 @@ final class DocumentRules {
         if (!INVALIDATING_RECIPES.contains(definition.recipe())) {
             findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
                     "invalidates: is only supported on a recipe that commits (command-json,"
-                            + " webhook, queue-consume, file-import), not '"
+                            + " webhook, queue-consume, file-import, file-export), not '"
                             + definition.recipe() + "' — there is no commit to invalidate"
                             + " catalogs or held results after"));
+            return;
+        }
+        if (exportWithoutFollowUp(definition)) {
+            findings.add(new LintFinding(INVALID_INVALIDATES, ERROR, source,
+                    "invalidates: on a file-export drops what its after: statement made stale,"
+                            + " and this route declares no export.after — there is no commit"
+                            + " to invalidate catalogs or held results after"));
             return;
         }
         lintInvalidatedTables(context, definition.invalidates(), source, findings);
