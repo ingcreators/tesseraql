@@ -58,9 +58,12 @@ final class JobCards {
         card.put("max", status.expectedRows());
         card.put("value", status.rows());
         boolean export = "EXPORT".equals(status.direction());
+        // A reclaimed file is no file (docs/list-export.md decision 5): the card says expired
+        // rather than offering a Download the file leg refuses.
         card.put("file", export && "COMPLETED".equals(status.status())
-                ? statusUrl + "/file"
-                : null);
+                && !status.fileReclaimed()
+                        ? statusUrl + "/file"
+                        : null);
         card.put("report", export || status.errors().isEmpty()
                 ? null
                 : ImportReports.ofTransfer("tql-job-" + status.transferId(), status, locate,
@@ -90,6 +93,11 @@ final class JobCards {
 
     /** The contract's dialect-neutral state name, which is also this card's message key stem. */
     private static String state(FileTransferService.TransferStatus status) {
+        if (status.fileReclaimed()) {
+            // The swept half of the expired state (docs/csv-import.md decision 6's table): the
+            // row outlived its bytes, and a card that said Done would offer a dead link.
+            return "expired";
+        }
         return switch (status.status()) {
             case "COMPLETED" -> "done";
             case "FAILED" -> "failed";
@@ -146,9 +154,16 @@ final class JobCards {
                 : ViewMessages.text(catalog, locale, "tql.job.reason." + code, generic);
     }
 
-    /** "12 of 30 rows" while the total is known, "12 rows" while it is not. */
+    /**
+     * "12 of 30 rows" while the total is known, "12 rows" while it is not — and, for an export
+     * whose file the sweep reclaimed, the sentence that says so in the tombstone's place.
+     */
     private static String progress(FileTransferService.TransferStatus status,
             MessageCatalog catalog, Locale locale) {
+        if (status.fileReclaimed()) {
+            return ViewMessages.text(catalog, locale, "tql.job.reclaimedBody",
+                    "The file is no longer available.");
+        }
         if (status.expectedRows() != null) {
             return ViewMessages.text(catalog, locale, "tql.job.progressOf",
                     "{rows} of {total} rows",

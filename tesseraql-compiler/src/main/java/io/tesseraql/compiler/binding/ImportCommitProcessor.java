@@ -9,8 +9,6 @@ import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.nio.file.Path;
-import java.util.Locale;
-import java.util.Map;
 
 /**
  * Spends a reviewed import batch (docs/csv-import.md decision 5): the confirm leg of an
@@ -176,27 +174,9 @@ public final class ImportCommitProcessor implements Step {
      */
     private void respondBrowser(Exchange exchange, String transferId,
             FileTransferService transfers) {
-        String target = io.tesseraql.pipeline.BasePath.url(exchange, urlPath + "/" + transferId);
-        if (!"true".equals(exchange.request().header("HX-Request"))) {
-            // The no-JS leg is the export start leg's too (docs/list-export.md decision 4).
-            TransferKickoff.redirectToTransfer(exchange, urlPath, transferId);
-            return;
-        }
-        FileTransferService.TransferStatus status = transfers.status(transferId).orElse(null);
-        Locale locale = Locale.forLanguageTag(exchange.getProperty(TesseraqlProperties.LOCALE,
-                defaultLocaleTag, String.class));
-        io.tesseraql.yaml.i18n.MessageCatalog catalog = ImportPages.catalog(appHome);
-        Map<String, Object> card = status == null
-                ? JobCards.tombstone(transferId, catalog, locale)
-                : JobCards.of(status, target, target + "/cancel",
-                        row -> transfers.locate(format, readSpec, row), catalog, locale);
-        exchange.response().header(io.tesseraql.pipeline.Headers.CONTENT_TYPE,
-                "text/html; charset=utf-8");
-        exchange.setBody(ImportPages.render(exchange, appHome, card, locale,
-                "tql/view/job-card"));
-        // 202, not 200: the import was accepted and is running, and the card is how the caller
-        // watches it. This is the one place the framework answers the async-job contract's own
-        // status code, because it is the one place it kicks a job off from a page.
-        exchange.response().status(202);
+        // Both legs are the export start leg's too (docs/list-export.md decision 4): one
+        // shared answer, so the two kick-offs cannot drift on what a browser is told.
+        TransferKickoff.respondBrowser(exchange, urlPath, transferId, appHome, defaultLocaleTag,
+                transfers, row -> transfers.locate(format, readSpec, row));
     }
 }

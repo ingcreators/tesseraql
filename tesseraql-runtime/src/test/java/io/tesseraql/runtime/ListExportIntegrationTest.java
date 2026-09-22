@@ -124,6 +124,82 @@ class ListExportIntegrationTest {
     }
 
     @Test
+    void anHtmxKickoffAnswersTheRunningCardWhichStopsWhenTheRunDoes() throws Exception {
+        // Decision 4: 202 and the card the status poll will answer with; decision 5: a terminal
+        // card carries no trigger, and an export's done state is the file.
+        HttpResponse<String> kickoff = postHtmx("/tickets/export-async?" + QUESTION,
+                "_idempotency=k-htmx");
+
+        assertThat(kickoff.statusCode()).isEqualTo(202);
+        assertThat(kickoff.headers().firstValue("content-type").orElse(""))
+                .contains("text/html");
+        String card = kickoff.body();
+        assertThat(card).contains("data-hc-job").contains("hx-target=\"this\"")
+                .contains("hx-swap=\"outerHTML\"").doesNotContain("<html");
+        String statusPath = pollTarget(card);
+        assertThat(statusPath).startsWith("/tickets/export-async/");
+        String done = awaitTerminalCard(statusPath);
+        assertThat(done).contains("data-state=\"done\"").doesNotContain("hx-trigger=")
+                .contains(statusPath + "/file\"");
+        assertRows(get(statusPath + "/file", "*/*").body());
+    }
+
+    @Test
+    void theJobRegionSitsOutsideTheGridFormAndTheSwappedRegion() throws Exception {
+        String html = get("/tickets?" + QUESTION, "text/html").body();
+
+        assertThat(html).contains("<div id=\"tickets-export-job\"></div>")
+                .contains(
+                        "hx-post=\"/tickets/export-async?q=vpn&amp;status=open&amp;sort=-created_at\"")
+                .contains("hx-params=\"_csrf,_idempotency\"")
+                .contains("hx-target=\"#tickets-export-job\"");
+        // Closed where it opens, before the kick-off form, the grid form and the table region:
+        // nothing the pager swaps can contain it.
+        int region = html.indexOf("id=\"tickets-export-job\"");
+        assertThat(region).isLessThan(html.indexOf("id=\"tickets-export\" method"))
+                .isLessThan(html.indexOf("class=\"tql-list-page__form\""))
+                .isLessThan(html.indexOf("id=\"tickets-table\""));
+    }
+
+    @Test
+    void aReclaimedExportIsExpiredToTheCardAndTheStatus() throws Exception {
+        // Decision 5: after the retention sweep reclaims the file, the card says expired with no
+        // trigger and no Download, the status says expired, and the file leg has no file to
+        // answer with (the not-ready 409, as for a run that never produced one).
+        HttpResponse<String> kickoff = postForm("/tickets/export-async?" + QUESTION, "",
+                "application/json");
+        String statusPath = MAPPER.readTree(kickoff.body()).get("statusUrl").asText();
+        assertThat(awaitTerminal(statusPath).get("status").asText()).isEqualTo("COMPLETED");
+        String transferId = statusPath.substring(statusPath.lastIndexOf('/') + 1);
+        reclaimSpool(transferId);
+
+        String card = get(statusPath, "text/html", true).body();
+        assertThat(card).contains("data-state=\"expired\"").doesNotContain("hx-trigger=")
+                .doesNotContain("/file\"").contains("The file is no longer available.");
+        JsonNode status = MAPPER.readTree(get(statusPath, "application/json").body());
+        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("expired").asBoolean()).isTrue();
+        assertThat(get(statusPath + "/file", "*/*").statusCode()).isEqualTo(409);
+    }
+
+    @Test
+    void aReplayedKeyStartsOneTransferWhereTheRouteDeclaresIdempotency() throws Exception {
+        // Decision 10: the same _idempotency on a route with idempotency: replays the 202 and the
+        // same card; a route without it starts a transfer per post.
+        String first = pollTarget(postHtmx("/tickets/export-idem?" + QUESTION,
+                "_idempotency=k-replay").body());
+        String second = pollTarget(postHtmx("/tickets/export-idem?" + QUESTION,
+                "_idempotency=k-replay").body());
+        assertThat(second).isEqualTo(first);
+
+        String third = pollTarget(postHtmx("/tickets/export-async?" + QUESTION,
+                "_idempotency=k-plain").body());
+        String fourth = pollTarget(postHtmx("/tickets/export-async?" + QUESTION,
+                "_idempotency=k-plain").body());
+        assertThat(fourth).isNotEqualTo(third);
+    }
+
+    @Test
     void aScriptedKickoffKeepsTheJson202() throws Exception {
         HttpResponse<String> kickoff = postForm("/tickets/export-async?" + QUESTION, "",
                 "application/json");
@@ -147,9 +223,61 @@ class ListExportIntegrationTest {
     }
 
     private static HttpResponse<String> get(String path, String accept) throws Exception {
+        return get(path, accept, false);
+    }
+
+    private static HttpResponse<String> get(String path, String accept, boolean htmx)
+            throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + path))
+                .header("Accept", accept);
+        if (htmx) {
+            request.header("HX-Request", "true");
+        }
+        return HTTP.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** An htmx kick-off: the form's fields in the body, the question in the URL. */
+    private static HttpResponse<String> postHtmx(String path, String body) throws Exception {
         return HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + path))
-                .header("Accept", accept).build(), HttpResponse.BodyHandlers.ofString());
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("HX-Request", "true")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** The status URL a running card polls: its {@code hx-get}. */
+    private static String pollTarget(String card) {
+        java.util.regex.Matcher poll = java.util.regex.Pattern
+                .compile("hx-get=\"([^\"]+)\"").matcher(card);
+        assertThat(poll.find()).as("a running card carries hx-get: %s", card).isTrue();
+        return poll.group(1);
+    }
+
+    /** Polls the card until it carries no trigger, and returns that terminal card. */
+    private static String awaitTerminalCard(String statusPath) throws Exception {
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
+        while (true) {
+            String card = get(statusPath, "text/html", true).body();
+            if (!card.contains("hx-trigger=")) {
+                return card;
+            }
+            if (Instant.now().isAfter(deadline)) {
+                throw new AssertionError("Card did not settle: " + card);
+            }
+            Thread.sleep(100);
+        }
+    }
+
+    /** What the retention sweep leaves: the row, without its spool. */
+    private static void reclaimSpool(String transferId) throws Exception {
+        try (Connection connection = DriverManager.getConnection(
+                POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+                Statement statement = connection.createStatement()) {
+            statement.execute("update tql_file_transfer set spool_uri = null where transfer_id = '"
+                    + transferId + "'");
+        }
     }
 
     private static HttpResponse<String> postForm(String path, String body, String accept)
@@ -309,6 +437,26 @@ class ListExportIntegrationTest {
                 id: tickets.exportAsync
                 kind: route
                 recipe: file-export
+                %s
+                export:
+                  format: csv
+                  filename: tickets.csv
+                sources:
+                  main:
+                    sql:
+                      file: ../tickets.sql
+                %s
+                """.formatted(INPUTS.stripTrailing(), PARAMS.stripTrailing()));
+        // The same export with a declared idempotency: (docs/list-export.md decision 10).
+        Path idempotent = home.resolve("web/tickets/export-idem");
+        Files.createDirectories(idempotent);
+        Files.writeString(idempotent.resolve("post.yml"), """
+                version: tesseraql/v1
+                id: tickets.exportIdempotent
+                kind: route
+                recipe: file-export
+                idempotency:
+                  required: false
                 %s
                 export:
                   format: csv

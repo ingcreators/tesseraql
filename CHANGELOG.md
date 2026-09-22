@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The export kick-off answers the job card.** An htmx kick-off of a `file-export` from the
+  grid page answers `202` and the self-polling job card, swapped into the page's own job region —
+  outside the grid form and outside the swapped table region, so paging, sorting and searching
+  leave a running card standing — and the card stops by carrying no trigger; the export start
+  leg and the import commit leg now answer a browser through one shared kick-off. `idempotency:`
+  on a `file-export` route takes effect: a replayed key answers the stored 202 and the same
+  card, so a double-clicked or retried Export starts one transfer. A completed export whose file
+  the retention sweep has reclaimed says so: the status JSON carries `expired`, and the card
+  renders the expired state instead of a Download with no file behind it. `docs/hypermedia-ui.md`
+  "Exporting a list"; the hc recipe ledger's async-job row is closed by the list surface.
+
 - **A list view exports its filtered set.** `exports:` on a list view names `query-export` or
   `file-export` routes (a bare path, or `{ action, label }`); the grid page renders one control
   per entry in the navigation strip beside the count — a download link for the synchronous

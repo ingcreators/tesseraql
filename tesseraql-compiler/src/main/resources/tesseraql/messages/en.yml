@@ -140,6 +140,7 @@ tql:
     exportFailedBody: "{reason} ({code})"
     cancelledBody: Cancelled before it finished; nothing was written.
     expiredBody: This job is no longer available.
+    reclaimedBody: The file is no longer available.
     reason:
       other: The export failed.
       TQL-LD-2802: The document could not be written after the query ran.

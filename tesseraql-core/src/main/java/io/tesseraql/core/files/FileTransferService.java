@@ -214,13 +214,25 @@ public interface FileTransferService {
      *
      * @param rows         rows written so far — published while the run is still going, not only
      *                     at the end (docs/csv-import.md decision 6)
-     * @param expectedRows how many rows the run will attempt, when that was knowable before it
-     *                     started; null otherwise, and a progress surface then counts up with no
-     *                     total rather than showing a guessed one
+     * @param expectedRows  how many rows the run will attempt, when that was knowable before it
+     *                      started; null otherwise, and a progress surface then counts up with
+     *                      no total rather than showing a guessed one
+     * @param fileReclaimed whether a completed export's file has been reclaimed by the retention
+     *                      sweep (docs/list-export.md decision 5): the row stays as history, the
+     *                      bytes are gone, and a surface that would offer the file says expired
+     *                      instead of done with a dead link
      */
     record TransferStatus(String transferId, String routeId, String appName, String direction,
             String status, long rows, Long expectedRows, List<RowError> errors, String filename,
-            boolean downloaded, String exitMessage, String tenantId) {
+            boolean downloaded, String exitMessage, String tenantId, boolean fileReclaimed) {
+
+        /** The shape before a transfer knew its file had been reclaimed. */
+        public TransferStatus(String transferId, String routeId, String appName, String direction,
+                String status, long rows, Long expectedRows, List<RowError> errors, String filename,
+                boolean downloaded, String exitMessage, String tenantId) {
+            this(transferId, routeId, appName, direction, status, rows, expectedRows, errors,
+                    filename, downloaded, exitMessage, tenantId, false);
+        }
 
         /** The shape before a transfer carried the tenant it was resolved for. */
         public TransferStatus(String transferId, String routeId, String appName, String direction,

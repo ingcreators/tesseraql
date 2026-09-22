@@ -35,6 +35,9 @@ public final class FileExportStartProcessor implements Step {
     private final java.util.Set<String> httpSources;
 
     private final java.util.List<EnrichProcessor> enrichments;
+    /** The application home and default locale the browser's card renders against. */
+    private final Path appHome;
+    private final String defaultLocaleTag;
 
     public FileExportStartProcessor(String routeId, String urlPath, String appName, String format,
             FileWriteSpec writeSpec, FormatDeclaration locale,
@@ -42,8 +45,11 @@ public final class FileExportStartProcessor implements Step {
             String afterTiming, Path afterSqlFile,
             io.tesseraql.core.files.ExportRowCap rowCap,
             java.util.List<io.tesseraql.core.files.ExportQuery> queries,
-            java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments) {
+            java.util.Set<String> httpSources, java.util.List<EnrichProcessor> enrichments,
+            Path appHome, String defaultLocaleTag) {
         this.enrichments = java.util.List.copyOf(enrichments);
+        this.appHome = appHome;
+        this.defaultLocaleTag = defaultLocaleTag;
         this.routeId = routeId;
         this.urlPath = urlPath;
         this.appName = appName;
@@ -94,8 +100,10 @@ public final class FileExportStartProcessor implements Step {
                 ExportEnrichment.enricher(exchange, enrichments),
                 ExportEnrichment.window(enrichments))
                 .on(TransferPools.of(exchange)));
-        // A browser's form post lands on the transfer's page (docs/list-export.md decision 4);
-        // scripted callers keep the JSON 202 this recipe has always answered.
-        TransferKickoff.respondExportStarted(exchange, urlPath, transferId);
+        // An htmx kick-off gets the running card, a browser's form post lands on the transfer's
+        // page (docs/list-export.md decision 4); scripted callers keep the JSON 202 this recipe
+        // has always answered.
+        TransferKickoff.respondExportStarted(exchange, urlPath, transferId, appHome,
+                defaultLocaleTag, transfers);
     }
 }

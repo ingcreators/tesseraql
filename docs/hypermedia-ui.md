@@ -479,6 +479,39 @@ a file with nothing importable and the `409` of a spent token carry `data-tql-im
 and an over-cap upload's `413` carries the field-errors marker every other refusal uses. Without
 a marker htmx discards a `4xx` body, which is why each fragment kind states itself.
 
+## Exporting a list
+
+A declarative list names its export routes under `exports:`
+([declarative views](declarative-views.md)), and the grid page renders the controls the kit's
+`async-job` recipe expects. A `query-export` is a plain link, and the click downloads. A
+`file-export` is a submit button of a small kick-off form that precedes the grid form — `_csrf`
+and `_idempotency`, nothing else, because the question travels in the button's own URL — and
+the button's htmx face posts the same URL into the page's job region:
+
+```html
+<div id="tickets-export-job"></div>
+<form id="tickets-export" method="post">
+  <input type="hidden" name="_csrf" value="…">
+  <input type="hidden" name="_idempotency" value="…">
+</form>
+…
+<button type="submit" class="hc-button" data-variant="ghost" data-size="sm"
+        form="tickets-export" formaction="/tickets/export?status=open&amp;sort=-created_at"
+        hx-post="/tickets/export?status=open&amp;sort=-created_at" hx-include="#tickets-export"
+        hx-params="_csrf,_idempotency" hx-target="#tickets-export-job" hx-swap="innerHTML"
+        hx-disabled-elt="this">Export 56 rows</button>
+```
+
+The htmx answer is `202` and the running job card — the card an import's confirm answers, with
+the export's done state a `Download` link. It polls itself on the cadence the server wrote and
+stops by rendering without a trigger. The region sits outside the grid form, because the card
+carries its own Cancel form, and outside the swapped table region, so paging, sorting and
+searching leave a running card standing; a second kick-off replaces it. A plain form post lands
+on the transfer's own page with the same card. A `file-export` route that declares
+`idempotency:` answers a replayed key with the same card, so a double-clicked or retried Export
+starts one transfer. Once the retention sweep has reclaimed a finished export's file, its card
+and its status say expired rather than done with a dead link.
+
 ## Opening a dialog
 
 A dialog that is already in the page — the list page's filter form, the Studio command
