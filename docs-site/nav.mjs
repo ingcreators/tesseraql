@@ -364,4 +364,8 @@ export const EXCLUDED = [
   // Export this filtered set: exports: on a list view names the export routes, the grid page
   // carries the list's question to them, and the async-job card lands on the page - designed 2026-09-22.
   'list-export.md',
+  // The job inbox: the transfer row records who started it, a bundled "My exports" page lists the
+  // signed-in user's exports of the application, the grid page's job region remembers - designed
+  // 2026-09-22.
+  'job-inbox.md',
 ];

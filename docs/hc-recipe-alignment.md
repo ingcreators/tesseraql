@@ -38,6 +38,11 @@
 >   (#1425) designed "export this filtered set" — `exports:` on a list view, the question as
 >   the export route's query string, the shipped card in its own region on the grid page —
 >   and S1 (#1426) and S2 (#1427) shipped it the same day. The row is closed.
+> - **The job inbox designed 2026-09-22**: [job-inbox.md](job-inbox.md) — the upstream's own
+>   definition ("this recipe applied per row"), on list-export's precondition: the transfer
+>   row records who started it, a bundled "My exports" page mounted with the application
+>   renders the shipped card per row, and the grid page's job region is filled from the store
+>   at render. Three slices; the user names each.
 >
 > hypermedia-components 0.4.0 shipped nine new recipe contracts (#1081 adopted the
 > bump). Two were settled the same week: network-retry became the shell host (#1083)
@@ -213,6 +218,18 @@ campaign's trap).
 
 ## async-job — designed, as the import commit leg
 
+> **The job inbox — designed 2026-09-22: [job-inbox.md](job-inbox.md).** The contract's
+> "list of my recent jobs is this recipe applied per row" waited on a transfer that knows its
+> subject; the record starts from that column (`tql_file_transfer.subject`, the principal's
+> stable subject, carried on the request records), then a bundled `exports` app at
+> `/_tesseraql/exports` — mounted with the application whose transfers it lists, a hosted
+> member included, because the transfer table is the application's — renders the shipped card
+> per row over the caller's own exports, each polling the route's own subtree; and the grid
+> page's job region is filled at render with the caller's exports of that route that still
+> need them, a kick-off adding a card. The `data-region` half is recorded, not adopted:
+> nothing on the page fires an event the list would answer. E0 stands; the column is an owner,
+> not a reader gate. Three slices; the user names each.
+>
 > **The trigger fired and the slices shipped 2026-09-22: [list-export.md](list-export.md)
 > (#1425), S1 #1426, S2 #1427.** `exports:` on a list view names `query-export` or
 > `file-export` routes; the grid page renders one control per entry beside the count,

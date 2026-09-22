@@ -411,6 +411,8 @@ route unchanged.
   `data-region` — needs a transfer that knows its subject, and `tql_file_transfer` records none
   (row 9). *Trigger: the first gallery flow in which an export outlives the page that started
   it*; the snapshot pager's whole-document POST (decision 5) is where that will first be felt.
+  **Designed 2026-09-22: [job-inbox.md](job-inbox.md)** — the column first, then a bundled
+  "My exports" page mounted with the application, then the grid page's region remembering.
 - **Server push.** The card polls; the completion signal for a *write* rides `emit:`/`refreshOn:`
   and an export writes nothing a list watches — except an `after:` statement, filed below.
 - **Mail delivery of the finished file.** A job's `push:` and the notification channels exist
@@ -478,7 +480,9 @@ takes effect; a reclaimed export's card and status say expired).
   `file-export`, whose card says it. Recorded so it is not reported as a defect.
 - **A second kick-off hides the first card** (decision 5). The run continues and its status
   page is reachable by URL, but the page shows one card. The job inbox (decision 11) is the
-  answer, when triggered.
+  answer, when triggered — **designed: [job-inbox.md](job-inbox.md) decision 8** closes this
+  entry and the snapshot pager's (decision 5) on the grid page itself: the region is filled
+  from the transfer store at render and a kick-off adds a card.
 - **Two lists exporting through one route** is fine and unjudged: the lint judges each view
   against the route; a route serving two lists must declare the union of their inputs, which
   the input arm says per view.
