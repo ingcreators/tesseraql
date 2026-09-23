@@ -1,7 +1,7 @@
 # Host development: mise pins the toolchain, parallel sessions share nothing they can collide on, and the Dev Container retires
 
 > **Status: designed 2026-09-23, measured against main `ddcc38cd7` (0.19.0-SNAPSHOT); S1
-> shipped the same day (#S1PR).** The direction is the maintainer's, given in conversation: develop on the WSL 2
+> shipped the same day (#1445).** The direction is the maintainer's, given in conversation: develop on the WSL 2
 > host with the toolchain pinned by [mise](https://mise.jdx.dev/); run several Claude Code
 > sessions side by side under [herdr](https://github.com/ogulcancelik/herdr), each in its own
 > worktree; retire the Dev Container rather than keep it as a second path; lose none of the
@@ -11,7 +11,7 @@
 > **S1** — ports: `dev --port 0` binds before the members boot and records the origin it got;
 > the tests that pick a port and bind it later stop doing so where they can and retry where
 > they cannot; the kind proof holds a machine-wide lock. It helps inside the container too, so
-> it goes first: **shipped, #S1PR** (as recommended, with three findings of the slice's own:
+> it goes first: **shipped, #1445** (as recommended, with three findings of the slice's own:
 > the kind proof's lock is a lease, not a flock — each phase is its own process and the
 > cluster outlives it, decision 10; `NotificationIntegrationTest` needed no retry — one
 > GreenMail for the class on its own socket's port replaces the extension that re-bound a
