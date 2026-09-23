@@ -1,5 +1,10 @@
 # Development environment
 
+> **Designed:** the Dev Container retires in favour of the host, with the toolchain pinned by
+> `mise.toml` and rules that let several agent sessions run side by side without colliding —
+> [host-development.md](host-development.md). Until its last slice ships, the setup below
+> stands.
+
 ## Standard setup
 
 Use:
