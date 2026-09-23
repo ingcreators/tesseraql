@@ -1,7 +1,7 @@
 # Host development: mise pins the toolchain, parallel sessions share nothing they can collide on, and the Dev Container retires
 
 > **Status: designed 2026-09-23, measured against main `ddcc38cd7` (0.19.0-SNAPSHOT); S1
-> shipped the same day (#1445).** The direction is the maintainer's, given in conversation: develop on the WSL 2
+> and S2 shipped the same day (#1445, #1446).** The direction is the maintainer's, given in conversation: develop on the WSL 2
 > host with the toolchain pinned by [mise](https://mise.jdx.dev/); run several Claude Code
 > sessions side by side under [herdr](https://github.com/ogulcancelik/herdr), each in its own
 > worktree; retire the Dev Container rather than keep it as a second path; lose none of the
@@ -23,7 +23,16 @@
 > `mise.toml` — the tools and the OS packages the host needs — and a ledger that holds it to
 > CI, one local Maven repository per worktree, one full verify at a time, the credential rule
 > restated for a host, the setup page rewritten host-first. The container keeps working
-> throughout. **The cutover** — not a pull request: the container's
+> throughout: **shipped, #1446** (as recommended; measured with mise 2026.9.12 in an isolated
+> data directory: `trusted_config_paths` belongs under `[settings]` — at the top level mise
+> ignores it — and then trusts a new worktree under the checkout; `mise install` resolves
+> Temurin 25.0.4 and Node 22.23; a non-interactive shell on shims alone runs both and corepack's
+> pnpm 11.8.0; `mise bootstrap packages status` reads the three apt packages; `scripts/mavenrc`
+> moves a checkout's local repository into `.mvn/local-repo`, leaves every other directory
+> alone, and `MAVEN_SKIP_RC=1` bypasses it. Two findings: the CLI's own module resolver does not
+> read the tail (decision 5, and filed below); and the Bash sandbox and the IDE's JDK cannot be
+> measured inside the Dev Container, whose seccomp profile refuses the user namespaces
+> bubblewrap needs — both move to the cutover's check, decision 12 step 7). **The cutover** — not a pull request: the container's
 > state is backed up, restored on the host, re-keyed to the host's paths and checked, while the
 > volumes stay untouched. **S3** — the Dev Container is deleted, from a session on the host,
 > whose own pre-push ritual is the proof that the host builds.
@@ -128,7 +137,8 @@ mise in CI.*
 ### 3 — Shells find the tools through shims, and every worktree is trusted through its checkout
 
 `~/.bashrc`, above the interactive guard: `eval "$(mise activate bash --shims)"`.
-`~/.config/mise/config.toml`: `trusted_config_paths = ["<host checkout>"]`. Claude Code's Bash
+`~/.config/mise/config.toml`: `trusted_config_paths = ["<host checkout>"]` under `[settings]`
+(measured: at the top level mise ignores it as an unknown field). Claude Code's Bash
 tool, a herdr pane's non-interactive command and the IDE run no prompt hook (row 8), and each
 worktree is a new path whose copy of `mise.toml` would otherwise be untrusted. With no `[env]`
 (decision 2), shims lose nothing. An interactive shell may add `mise activate bash` on top.
@@ -159,11 +169,12 @@ nothing; S2 looks at what it writes.
 **`dev` in a worktree resolves modules from that worktree's head:** `--repo .mvn/local-repo`,
 the flag that already sets `maven.repo.local` for the CLI's resolver. The cutover leaves
 `io/tesseraql/` out of the shared repository (decision 12, step 5), so a `dev` that forgets the
-flag fails to resolve its module rather than running another worktree's build. S2 measures
-whether the CLI's resolver also honours the tail, which would let an offline `dev` find the
-third-party jars; online, they download into the head once. The shared repository is
-refreshed by one command the setup page names; S2 measures it (an explicit
-`-Dmaven.repo.local=$HOME/.m2/repository` on the command line comes after `MAVEN_ARGS`).
+flag fails to resolve its module rather than running another worktree's build. *Measured
+(S2):* the CLI's resolver does not read the tail — an offline resolve with an empty head and
+the shared repository as the tail fails exactly as with no tail, while the shared repository as
+the head resolves — so the first `dev` in a worktree downloads the modules' third-party jars
+into the head, online. The shared repository is refreshed with `MAVEN_SKIP_RC=1`, which skips
+`~/.mavenrc` altogether: `MAVEN_SKIP_RC=1 ./mvnw -B -ntp -DskipTests verify`, never `install`.
 
 *Why not `.mvn/maven.config`*, which row 7 measured to work: CI reads the file too, and the ten
 `setup-java` caches of `~/.m2/repository` would stop growing while every run downloaded into
@@ -261,9 +272,11 @@ than a second channel's.
 needs the Docker socket, `docker` is incompatible with the sandbox, and the socket let through
 is host access (row 10), so `./mvnw` and `docker` go in `excludedCommands` — the build is the
 repository's own code, run the same way it runs today — and every other command a session runs
-is confined. S2 measures that pnpm (the npm registry) and `gh` (the GitHub API) work inside
-with their hosts allowed, and whether the optional seccomp filter is worth installing
-(`npm:@anthropic-ai/sandbox-runtime`, a mise tool); if the sandbox cannot hold for the rest,
+is confined. The cutover measures that pnpm (the npm registry) and `gh` (the GitHub API) work
+inside with their hosts allowed, and whether the optional seccomp filter is worth installing
+(`npm:@anthropic-ai/sandbox-runtime`, a mise tool) — the sandbox cannot start inside the Dev
+Container, whose seccomp profile refuses the user namespaces bubblewrap needs, so S2 could not;
+if the sandbox cannot hold for the rest,
 permission deny rules on the credential paths are the fallback, and the record says which was
 adopted. `SECURITY.md` "Development secrets" and `security-hardening.md:264` follow. `GH_TOKEN`
 moves out of `devcontainer.local.env` into the user's own environment, or `gh auth login`
@@ -287,12 +300,16 @@ non-alphanumeric character turned into `-` (row 3).
    `docker run --rm -v <volume>:/from:ro -v "$HOME/devcontainer-state:/to" alpine tar -C /from -czf /to/<name>.tgz .`
    — copies that no longer depend on the volumes.
 2. **Claude Code:** move any existing `~/.claude` and `~/.claude.json` aside; extract
-   `claude.tgz` into `~/.claude`; export `CLAUDE_CONFIG_DIR="$HOME/.claude"` from the shell
-   profile, so `.claude.json` stays inside the directory as it was in the container.
+   `claude.tgz` into `~/.claude`, then move its `.claude.json` up to `~/.claude.json` — Claude
+   Code's default layout. The container kept the file inside the directory because it set
+   `CLAUDE_CONFIG_DIR`; the default needs no variable to reach VS Code, herdr panes or anything
+   else that starts `claude`, so the host sets none.
 3. **Re-key:** rename every `~/.claude/projects/-workspace-tesseraql*` so its
-   `-workspace-tesseraql` prefix becomes `<key>`; rename the `.claude.json` project entry
-   `/workspace/tesseraql` to `<host checkout>` (`jq`); rewrite `/home/vscode` to `$HOME` in
-   `plugins/known_marketplaces.json`. Transcripts and memory bodies stay as they were written.
+   `-workspace-tesseraql` prefix becomes `<key>`; in `~/.claude.json`, rewrite every string that
+   starts with `/workspace/tesseraql` to start with `<host checkout>` — the project entry,
+   `githubRepoPaths`, a live session's worktree — and check the file still parses (`jq`);
+   rewrite `/home/vscode` to `$HOME` in `plugins/known_marketplaces.json`. Transcripts and memory
+   bodies stay as they were written.
 4. **Codex and gh:** extract `codex.tgz` into `~/.codex` (it holds no path, row 3) and
    `gh.tgz` into `~/.config/gh`, or run `gh auth login` instead.
 5. **Maven:** extract the `repository/` of `m2.tgz` into `~/.m2/repository` **without
@@ -305,7 +322,9 @@ non-alphanumeric character turned into `-` (row 3).
 7. **Check:** `claude` started in `<host checkout>` loads its memory index, and
    `ls ~/.claude/projects` shows no new key beside the renamed ones; `claude --resume` lists
    the container's sessions; `gh auth status` passes; `mise bootstrap packages status` lists
-   nothing missing; `/sandbox` shows no Dependencies tab; `bash scripts/verify-dev-env.sh` passes;
+   nothing missing; `/sandbox` shows no Dependencies tab, and inside the sandbox `pnpm install`
+   and `gh auth status` reach their hosts; the IDE's Java extension finds the JDK (decision 3);
+   `bash scripts/verify-dev-env.sh` passes;
    two herdr panes started with `claude --worktree a` and `claude --worktree b` each run
    `dev --port 0 --embedded-db` on an example at the same time; `scripts/verify.sh` is green.
 
@@ -351,6 +370,10 @@ slice, under Unreleased — see "Docs and CHANGELOG" below.
 
 ## Filed, not fixed
 
+- **The CLI's module resolver does not read `maven.repo.local.tail`** (measured in S2,
+  decision 5). A worktree's first `dev` downloads the declared modules' third-party jars into
+  its own repository instead of reading them from the shared one, and an offline `dev` in a
+  fresh worktree cannot resolve them. *Trigger: an offline `dev` in a worktree.*
 - **The VS Code extension's server URL defaults to `http://localhost:8080`**
   (`vscode-extension/package.json:44`). A session on `--port 0` sets the extension's URL from
   `work/dev.origin` by hand. *Trigger: the extension reading the marker itself.*

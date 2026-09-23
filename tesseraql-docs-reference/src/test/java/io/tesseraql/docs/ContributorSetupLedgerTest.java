@@ -23,8 +23,8 @@ class ContributorSetupLedgerTest {
     private static final Path REPO = Path.of("..");
 
     private static final List<String> SETUP_FILES = List.of(".vscode/settings.json",
-            ".devcontainer/devcontainer.json", "docs/build.md", "CONTRIBUTING.md", "AGENTS.md",
-            "docs/development-environment.md");
+            ".devcontainer/devcontainer.json", "mise.toml", "docs/build.md", "CONTRIBUTING.md",
+            "AGENTS.md", "docs/development-environment.md");
 
     @Test
     void noContributorSetupFileReasonsInCamelsTerms() throws IOException {

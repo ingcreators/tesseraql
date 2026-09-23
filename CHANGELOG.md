@@ -288,6 +288,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The framework's toolchain is pinned by `mise.toml`** — Temurin 25, CI's distribution where
+  the Dev Container carried Microsoft's build; Node 22, with pnpm from each `package.json`'s
+  `packageManager` through corepack; and, under `[bootstrap.packages]`, the OS packages a host
+  needs: `unzip`, without which the wrapper fetches the `.tar.gz` distribution and fails its
+  pinned checksum, and `bubblewrap` and `socat` for Claude Code's Bash sandbox.
+  `ToolchainLedgerTest` holds it to `maven.compiler.release` and to every `setup-java` and
+  `setup-node` step. For contributors running agent sessions side by side:
+  `scripts/mavenrc`, sourced from `~/.mavenrc`, gives each checkout its own local Maven
+  repository over the shared `~/.m2` as a read-only tail, so two worktrees never install over
+  each other's snapshots; `scripts/verify.sh` runs one full verify per machine at a time;
+  `docs/development-environment.md` is rewritten host-first. The Dev Container still works.
+  `docs/host-development.md` decisions 2-6 and 11.
+
 - **`dev` binds its port first.** The front door listens before the applications boot, so a
   taken port is refused before anything starts, and a request that arrives while they boot is
   answered `503` with `Retry-After: 1` instead of a refused connection. `host` keeps its order:
