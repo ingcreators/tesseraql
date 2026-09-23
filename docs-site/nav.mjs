@@ -368,4 +368,8 @@ export const EXCLUDED = [
   // signed-in user's exports of the application, the grid page's job region remembers - designed
   // 2026-09-22.
   'job-inbox.md',
+  // Host development: mise pins the toolchain, parallel sessions share nothing they can collide
+  // on (ports, the local Maven repository, a full verify), the Dev Container retires with its
+  // agent state carried out - designed 2026-09-23.
+  'host-development.md',
 ];
