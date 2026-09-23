@@ -71,7 +71,7 @@ moves.
 
 Do not commit secrets.
 
-Do not bind-mount broad host secret directories into the Dev Container, such as:
+Do not hand a coding agent your credential directories, such as:
 
 - `~/.ssh`
 - `~/.aws`
@@ -79,11 +79,14 @@ Do not bind-mount broad host secret directories into the Dev Container, such as:
 - `~/.azure`
 - `~/.docker`
 
+On the host, where an agent's shell can read the whole home directory, run Claude Code's Bash
+sandbox with these directories denied
+([docs/development-environment.md](docs/development-environment.md), "Agent credentials").
+Inside the Dev Container, until it retires, do not bind-mount them into it.
+
 Prefer:
 
 - SSH agent forwarding for Git
-- repository-scoped tokens
+- repository-scoped tokens, exported from your own shell profile rather than a repository file
 - short-lived CI secrets
-- named volumes for agent login state
-- `.devcontainer/*.local.env` for local-only environment variables
 

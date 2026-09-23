@@ -3,6 +3,9 @@ target/
 *.class
 *.log
 .mvn/wrapper/maven-wrapper.jar
+# A checkout's own local repository when ~/.mavenrc sources scripts/mavenrc
+# (docs/development-environment.md, "Maven").
+.mvn/local-repo/
 
 # IDE
 .idea/

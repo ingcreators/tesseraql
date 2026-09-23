@@ -1,0 +1,21 @@
+# One local Maven repository per TesseraQL checkout, over the shared ~/.m2 as a read-only tail
+# (docs/host-development.md decision 5). Source it from ~/.mavenrc:
+#
+#   . /path/to/tesseraql/scripts/mavenrc
+#
+# Maven's own launcher (bin/mvn, which ./mvnw runs) sources ~/.mavenrc before it starts, so every
+# Maven run on the machine passes through here, and only a run inside a TesseraQL checkout — a
+# worktree included — is changed. Its installs land in <checkout>/.mvn/local-repo and go with the
+# worktree; its downloads are read from ~/.m2/repository, which no build writes any more, so two
+# sessions never install over each other's snapshots. CI has no ~/.mavenrc and is unchanged.
+#
+# MAVEN_ARGS is split on whitespace, so the checkout's path must not contain a space.
+# MAVEN_SKIP_RC=1 skips this file: that is how the shared repository is refreshed
+# (docs/development-environment.md).
+tesseraql_mavenrc_root=$(git rev-parse --show-toplevel 2>/dev/null) || tesseraql_mavenrc_root=
+if [ -n "$tesseraql_mavenrc_root" ] \
+  && grep -q '<artifactId>tesseraql-parent</artifactId>' "$tesseraql_mavenrc_root/pom.xml" 2>/dev/null; then
+  MAVEN_ARGS="-Dmaven.repo.local=$tesseraql_mavenrc_root/.mvn/local-repo -Dmaven.repo.local.tail=$HOME/.m2/repository ${MAVEN_ARGS:-}"
+  export MAVEN_ARGS
+fi
+unset tesseraql_mavenrc_root

@@ -1,0 +1,23 @@
+# The framework's toolchain on a host (docs/host-development.md decision 2): the tools the build
+# needs and CI runs, and the OS packages a host must carry. In the checkout:
+#
+#   mise install                        the tools
+#   mise bootstrap packages apply       the packages (apt, one sudo)
+#
+# Maven is not here: ./mvnw is the build's Maven. ToolchainLedgerTest holds these versions to
+# maven.compiler.release and to every setup-java and setup-node step in .github/workflows/.
+[tools]
+java = "temurin-25"
+node = "22"
+
+[settings]
+# pnpm comes from each package.json's packageManager through corepack: one pin, not two.
+node.corepack = true
+
+[bootstrap.packages]
+# The wrapper's only-script distribution unpacks with it; without it ./mvnw fetches the .tar.gz
+# and fails the pinned checksum with a compromise warning (PluginVersionLedgerTest).
+"apt:unzip" = "latest"
+# Claude Code's Bash sandbox on Linux and WSL 2 (docs/host-development.md decision 11).
+"apt:bubblewrap" = "latest"
+"apt:socat" = "latest"

@@ -122,6 +122,15 @@ class PluginVersionLedgerTest {
                 .as("the devcontainer must not install a second Maven; the wrapper is the one the "
                         + "build uses, and an apt maven on the PATH is how the wrong one gets run")
                 .doesNotContain("maven \\", "maven");
+
+        // The host's toolchain file, for the same reason (docs/host-development.md decision 2):
+        // mise puts what it installs on the PATH, and a declared maven there is the second
+        // Maven the container's apt package was.
+        String mise = Files.readString(REPO.resolve("mise.toml"));
+        assertThat(
+                mise.lines().map(String::strip).filter(line -> line.matches("\"?maven\"?\\s*=.*")))
+                .as("mise.toml must not declare a Maven; ./mvnw is the build's")
+                .isEmpty();
     }
 
     /**
