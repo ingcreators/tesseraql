@@ -10,7 +10,6 @@ import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -65,25 +64,28 @@ class OAuthIssuerUnificationIntegrationTest {
         // A member named in Japanese: addressed on the wire as /%E5%8F%97%E6%B3%A8, its MCP
         // resource a URI spelled the same way (docs/audit-low-leads.md, unfiled 48).
         new AppInstaller().install(packaged(appHome("受注", "s2")), installRoot);
-        // The origin must be declared before the gateway binds, so the port is picked first.
-        port = freePort();
-        Files.writeString(installRoot.resolve(
-                io.tesseraql.operations.app.StackSettings.FILE_NAME),
-                """
-                        externalOrigin: http://localhost:%d
-                        framework:
-                          datasource:
-                            jdbcUrl: %s
-                            username: %s
-                            password: %s
-                        security:
-                          oauth:
-                            enabled: true
-                          token:
-                            enabled: true
-                        """.formatted(port, POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
-                        POSTGRES.getPassword()));
-        gateway = MultiAppGateway.start(installRoot, port);
+        // The origin must be declared before the gateway binds, so the port is picked first —
+        // and picked again if it is taken in the meantime (docs/host-development.md decision 8).
+        gateway = PickedPort.start(picked -> {
+            port = picked;
+            Files.writeString(installRoot.resolve(
+                    io.tesseraql.operations.app.StackSettings.FILE_NAME),
+                    """
+                            externalOrigin: http://localhost:%d
+                            framework:
+                              datasource:
+                                jdbcUrl: %s
+                                username: %s
+                                password: %s
+                            security:
+                              oauth:
+                                enabled: true
+                              token:
+                                enabled: true
+                            """.formatted(picked, POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                            POSTGRES.getPassword()));
+            return MultiAppGateway.start(installRoot, picked);
+        });
     }
 
     @AfterAll
@@ -843,12 +845,6 @@ class OAuthIssuerUnificationIntegrationTest {
         }
         try (Stream<Path> files = Files.walk(root)) {
             files.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 }

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpRequest;
@@ -48,11 +47,7 @@ class ReloadContentDiffIntegrationTest {
     @BeforeAll
     static void start() throws Exception {
         appHome = prepareAppHome();
-        int port;
-        try (ServerSocket socket = new ServerSocket(0)) {
-            port = socket.getLocalPort();
-        }
-        runtime = TesseraqlRuntime.start(appHome, port);
+        runtime = TesseraqlRuntime.start(appHome, 0);
     }
 
     @AfterAll

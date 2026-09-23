@@ -253,6 +253,8 @@ class EmbeddedDbDevIntegrationTest {
 
     @Test
     void fixedPortBindsTheRequestedTcpPort(@TempDir Path dir) throws Exception {
+        // A concrete number, not 0: binding exactly the port asked for is the promise
+        // --embedded-db-port makes, and the assertion below.
         int port = freePort();
 
         EmbeddedPostgresSupport.Handle embedded = EmbeddedPostgresSupport.start(null, port, false);

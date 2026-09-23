@@ -50,7 +50,7 @@ Run the development stack over the gateway until interrupted.
 | `--offline` | — | Resolve modules only from the local repository, never over the network. Pair with --repo to resolve from a bag produced by 'tesseraql modules fetch'. |
 | `--log-format <text\|json>` | — | Log line format (default text; json for structured logs). |
 | `--log-level <level>` | — | Log threshold: trace\|debug\|info\|warn\|error (default info). |
-| `--port <port>` | — | The port the gateway fronts every app on (default 8080). |
+| `--port <port>` | — | The port the gateway fronts every app on (default 8080; 0 binds a free one). The address is printed and written to each application's work/dev.origin. |
 | `--watch` | — | Watch every application's web/, workflow/, and shared-definition trees (decisions/, rules/, scope/, domains/) and hot-reload on save - the editor-first alternative to Studio's Apply: a route edit bounces that route, a workflow edit rebuilds its transition endpoints, a shared-definition edit rebuilds every route. Jobs, consumers, and config/ changes still need a restart. |
 | `--modules <dir>` | — | Directory of optional plugin module jars (e.g. the pdf/excel file-format codecs), composed with the application's declared tesseraql.modules. |
 | `--embedded-db <data-dir>` | — | Run with an embedded PostgreSQL (no external database): one server, one database, shared by the stack - applications isolate with currentSchema in their own URLs, and the framework state rides the shared database so one sign-in carries. Pass a directory to persist data across restarts; omit it for an ephemeral run. |

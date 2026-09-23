@@ -1,9 +1,11 @@
 package io.tesseraql.runtime;
 
 import io.tesseraql.operations.app.InstalledApp;
+import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpClient;
 import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerRequest;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -132,64 +134,139 @@ public final class MultiAppGateway implements AutoCloseable {
     private final StackReconciler reconciler;
 
     private MultiAppGateway(MultiAppHost host, List<InstalledApp> hostedApps,
-            java.nio.file.Path installRoot, Settings settings, int frontPort,
+            java.nio.file.Path installRoot, Settings settings, Door door,
             String rootTarget, io.tesseraql.operations.app.StackSettings stackSettings) {
         this.host = host;
-        this.vertx = Vertx.vertx();
-        // What the front door will forward to one member at a time (docs/http-threading.md
-        // decision 5), read from the stack's own file — the same place the host reads the worker
-        // count it defaults to, because the two answer one question: how much concurrent work
-        // does a member do. The client is sized to match, so what the relay admits the transport
-        // carries rather than queues behind.
-        int perMember = maxConcurrentPerMember(stackSettings);
-        int perMemberStreams = maxStreamsPerMember(stackSettings, perMember);
-        // Sized to the SUM of the two shares, because on HTTP/1 one forward pins one pooled
-        // connection: a stream admitted past its own share would otherwise queue in the client,
-        // which is the queue this decision exists to remove. One number for both protocol modes
-        // is kept deliberately — the point of decision 5 is that a protocol flag never decides a
-        // capacity.
-        int outbound = outboundSizing(perMember, perMemberStreams);
-        this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2(),
-                outbound, readIdleSeconds(stackSettings)), StackRelay.outboundPool(outbound));
-        // Every per-app lookup is the host's live slot state (docs/runtime-replace.md): a
-        // replace swaps which runtime, which entry and which strip set answer for a member, and
-        // the relay reads all three per request rather than from a start-time copy. Membership
-        // itself is the start-time list — adding or removing an application is a stack deploy.
-        this.relay = new StackRelay(client,
-                hostedApps.stream().map(InstalledApp::name)
-                        .collect(java.util.stream.Collectors.toUnmodifiableSet()),
-                host::entry, host::ingressStrip,
-                settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget)
-                .maxConcurrentPerMember(perMember)
-                .maxStreamsPerMember(perMemberStreams)
-                .memberReadiness(host::memberReadiness)
-                // A refusal at the front counts on the member it was for, and the forwards in
-                // flight read on that member's scrape beside its own in-flight count
-                // (docs/deployment-maturity.md decision 7).
-                .refusalListener(host::gatewayRefused);
-        host.gatewaySignals(new MultiAppHost.GatewaySignals(relay::forwardsInFlight,
-                relay::streamForwardsInFlight));
-        this.server = vertx.createHttpServer(StackRelay.frontOptions(frontPort,
-                settings.http2(), idleTimeoutSeconds(stackSettings)));
-        server.requestHandler(relay::handle);
+        this.vertx = door.vertx();
+        this.server = door.server();
         try {
-            this.port = server.listen()
+            // What the front door will forward to one member at a time (docs/http-threading.md
+            // decision 5), read from the stack's own file — the same place the host reads the
+            // worker count it defaults to, because the two answer one question: how much
+            // concurrent work does a member do. The client is sized to match, so what the relay
+            // admits the transport carries rather than queues behind.
+            int perMember = maxConcurrentPerMember(stackSettings);
+            int perMemberStreams = maxStreamsPerMember(stackSettings, perMember);
+            // Sized to the SUM of the two shares, because on HTTP/1 one forward pins one pooled
+            // connection: a stream admitted past its own share would otherwise queue in the
+            // client, which is the queue this decision exists to remove. One number for both
+            // protocol modes is kept deliberately — the point of decision 5 is that a protocol
+            // flag never decides a capacity.
+            int outbound = outboundSizing(perMember, perMemberStreams);
+            this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2(),
+                    outbound, readIdleSeconds(stackSettings)), StackRelay.outboundPool(outbound));
+            // Every per-app lookup is the host's live slot state (docs/runtime-replace.md): a
+            // replace swaps which runtime, which entry and which strip set answer for a member,
+            // and the relay reads all three per request rather than from a start-time copy.
+            // Membership itself is the start-time list — adding or removing an application is a
+            // stack deploy.
+            this.relay = new StackRelay(client,
+                    hostedApps.stream().map(InstalledApp::name)
+                            .collect(java.util.stream.Collectors.toUnmodifiableSet()),
+                    host::entry, host::ingressStrip,
+                    settings.trustedProxies(), this::targetPort, host::surfacePort, rootTarget)
+                    .maxConcurrentPerMember(perMember)
+                    .maxStreamsPerMember(perMemberStreams)
+                    .memberReadiness(host::memberReadiness)
+                    // A refusal at the front counts on the member it was for, and the forwards
+                    // in flight read on that member's scrape beside its own in-flight count
+                    // (docs/deployment-maturity.md decision 7).
+                    .refusalListener(host::gatewayRefused);
+            host.gatewaySignals(new MultiAppHost.GatewaySignals(relay::forwardsInFlight,
+                    relay::streamForwardsInFlight));
+            door.front().serve(relay::handle);
+            this.port = door.isBound() ? door.bound() : listen(server, door.requested());
+        } catch (RuntimeException failed) {
+            closeQuietly();
+            throw failed;
+        }
+        this.reconciler = java.nio.file.Files.isRegularFile(installRoot.resolve("catalog.json"))
+                ? new StackReconciler(installRoot, host, reconcileSweep(installRoot))
+                : null;
+    }
+
+    /**
+     * The front door's answer before the relay exists, then the relay's.
+     *
+     * <p>{@code dev} binds the front before its members boot, so the origin they are given is the
+     * port the socket got rather than the number asked for — {@code dev --port 0} used to boot
+     * every member believing it was at {@code http://localhost:0} (docs/host-development.md
+     * decision 7). A request that arrives while they boot is told to come back, the readiness
+     * answer a draining stack gives for the opposite reason, rather than refused at the socket.
+     * {@code host} binds after its members, as it always has, so it never answers this.
+     */
+    static final class Front implements Handler<HttpServerRequest> {
+
+        private volatile Handler<HttpServerRequest> answer = Front::starting;
+
+        @Override
+        public void handle(HttpServerRequest request) {
+            answer.handle(request);
+        }
+
+        /** From here on every request is the relay's. */
+        void serve(Handler<HttpServerRequest> relay) {
+            answer = relay;
+        }
+
+        private static void starting(HttpServerRequest request) {
+            request.response()
+                    .setStatusCode(503)
+                    .putHeader("Retry-After", "1")
+                    .putHeader("Content-Type", "text/plain; charset=utf-8")
+                    .end("The stack is starting.\n");
+        }
+    }
+
+    /**
+     * The front door as {@link #start(java.nio.file.Path, int, Settings, String, DevMode)} opened
+     * it: the gateway's own Vert.x, its server answering through {@link Front}, and the port —
+     * {@code bound} is the socket's under {@code dev}, and {@code -1} until the constructor
+     * listens under {@code host}.
+     */
+    private record Door(Vertx vertx, HttpServer server, Front front, int requested, int bound) {
+
+        static Door open(int requested, Settings settings,
+                io.tesseraql.operations.app.StackSettings stackSettings) {
+            Vertx vertx = Vertx.vertx();
+            Front front = new Front();
+            HttpServer server = vertx.createHttpServer(StackRelay.frontOptions(requested,
+                    settings.http2(), idleTimeoutSeconds(stackSettings)));
+            server.requestHandler(front);
+            return new Door(vertx, server, front, requested, -1);
+        }
+
+        Door listening() {
+            return new Door(vertx, server, front, requested, listen(server, requested));
+        }
+
+        boolean isBound() {
+            return bound >= 0;
+        }
+
+        /** The boot-failure path before a gateway exists to own these. */
+        void release() {
+            BoundedClose.await(server.close().toCompletionStage().toCompletableFuture(),
+                    BoundedClose.BOUND, "the gateway's front server");
+            BoundedClose.await(vertx.close().toCompletionStage().toCompletableFuture(),
+                    BoundedClose.BOUND, "the gateway's Vert.x instance");
+        }
+    }
+
+    private static int listen(HttpServer server, int frontPort) {
+        try {
+            return server.listen()
                     .toCompletionStage().toCompletableFuture()
                     .get(START_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                     .actualPort();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            closeQuietly();
             throw new IllegalStateException("Interrupted starting the gateway", interrupted);
         } catch (java.util.concurrent.ExecutionException
                 | java.util.concurrent.TimeoutException failed) {
-            closeQuietly();
             throw new IllegalStateException("Could not start the gateway on port " + frontPort,
                     failed);
         }
-        this.reconciler = java.nio.file.Files.isRegularFile(installRoot.resolve("catalog.json"))
-                ? new StackReconciler(installRoot, host, reconcileSweep(installRoot))
-                : null;
     }
 
     /**
@@ -256,18 +333,35 @@ public final class MultiAppGateway implements AutoCloseable {
                 })
                 .orElse(PORTAL_TARGET);
         catalogued = members(catalogued, appName);
-        // The session cookie is the gateway's call, not the applications' (docs/base-path.md
-        // decision 4): a stack is one sign-in across one origin, so the cookie is issued at the
-        // root of it rather than scoped to each app's prefix. The address is the catalogue's, and
-        // the host reads it from there — each app is started serving the prefix it is fronted
-        // under, so it answers at the addresses it emits (decision 5).
-        MultiAppHost host = MultiAppHost.start(installRoot, HostContext.stack(), catalogued,
-                dev, stackSettings);
+        Door door = Door.open(frontPort, settings, stackSettings);
+        MultiAppHost host;
+        try {
+            // The development gateway's origin is its own address (DevMode), and the address is
+            // only known once the socket is bound: bind first, so the members are given the port
+            // the front got — never the number asked for, which under --port 0 was 0
+            // (docs/host-development.md decision 7). host keeps members-then-front.
+            DevMode bound = null;
+            if (dev != null) {
+                door = door.listening();
+                bound = dev.at(door.bound());
+            }
+            // The session cookie is the gateway's call, not the applications'
+            // (docs/base-path.md decision 4): a stack is one sign-in across one origin, so the
+            // cookie is issued at the root of it rather than scoped to each app's prefix. The
+            // address is the catalogue's, and the host reads it from there — each app is started
+            // serving the prefix it is fronted under, so it answers at the addresses it emits
+            // (decision 5).
+            host = MultiAppHost.start(installRoot, HostContext.stack(), catalogued, bound,
+                    stackSettings);
+        } catch (RuntimeException ex) {
+            door.release();
+            throw ex;
+        }
         try {
             List<InstalledApp> hosted = catalogued.stream()
                     .filter(app -> host.appNames().contains(app.name()))
                     .toList();
-            return new MultiAppGateway(host, hosted, installRoot, settings, frontPort,
+            return new MultiAppGateway(host, hosted, installRoot, settings, door,
                     rootTarget, stackSettings);
         } catch (RuntimeException ex) {
             host.close();

@@ -62,7 +62,7 @@ class StackStudioIntegrationTest {
         Files.writeString(stackDir.resolve("tesseraql-stack.yml"), "# stack marker\n");
         installApp("shop-a", "a");
         gateway = MultiAppGateway.start(stackDir, 0, new MultiAppGateway.Settings(), null,
-                new DevMode(null, "http://localhost:0"));
+                new DevMode(null, null));
         editorCookie = signIn("admin");
         viewerCookie = signIn("viewer");
     }

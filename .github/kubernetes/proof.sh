@@ -62,6 +62,30 @@ pods() {
     | .metadata.name'
 }
 
+# One proof per machine (docs/host-development.md decision 10). The cluster's name and its
+# NodePort are fixed, and the cluster outlives the phase that made it, so the lock is a lease the
+# cluster phase takes and teardown returns — a flock would end with each phase's process. The
+# lease names the checkout that holds it: that checkout re-running a phase is the rehearsal the
+# cluster phase already reuses a cluster for; any other checkout is refused, teardown included,
+# so a second session cannot delete the first one's cluster.
+LEASE="${XDG_RUNTIME_DIR:-/tmp}/tesseraql-kind-proof.lease"
+
+guard_lease() {
+  local owner
+  if [ "$1" = cluster ] && mkdir "$LEASE" 2> /dev/null; then
+    echo "$REPO" > "$LEASE/owner"
+    return 0
+  fi
+  [ -d "$LEASE" ] || return 0
+  owner=$(cat "$LEASE/owner" 2> /dev/null || echo "an unknown checkout")
+  [ "$owner" = "$REPO" ] || fail "another kind proof holds $LEASE (from $owner); wait for its" \
+    "teardown, or remove the directory if that proof is gone"
+}
+
+return_lease() {
+  rm -rf "$LEASE"
+}
+
 wait_for_port() {
   for _ in $(seq 1 30); do
     if curl -sf "http://localhost:$1/_tesseraql/health/live" > /dev/null; then
@@ -289,13 +313,18 @@ phase_logs() {
 
 phase_teardown() {
   "$KIND" delete cluster --name "$CLUSTER"
+  return_lease
 }
 
 case "${1:-}" in
-  cluster|install|rolling|firings|sessions|alerts|stop|logs|teardown) "phase_$1" ;;
+  cluster|install|rolling|firings|sessions|alerts|stop|logs|teardown)
+    guard_lease "$1"
+    "phase_$1"
+    ;;
   all)
     for phase in cluster install rolling firings sessions alerts stop; do
       echo "=== $phase"
+      guard_lease "$phase"
       "phase_$phase"
     done
     ;;

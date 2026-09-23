@@ -8,6 +8,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **`dev --port 0`.** The development gateway binds a free port before its applications boot,
+  gives them that origin — the stack issuer, the session tokens and the MCP surface all name it
+  — prints it, and records it in each application's `work/dev.origin`, so several `dev` runs
+  share a machine without choosing ports. Before, the origin was built from the number asked
+  for, before anything had bound: under `--port 0` every application booted at
+  `http://localhost:0` while the console printed the real port. The default stays 8080.
+  `docs/host-development.md` decision 7.
+
 - **The grid page's job region remembers.** A list page renders the signed-in user's exports of
   its `file-export` routes that still need them — running, or done and not yet fetched, at most
   five per route, newest first — in its job region at render, as the same job card the kick-off
@@ -279,6 +287,17 @@ All notable changes to TesseraQL are documented here. The format follows
   Phase 32.
 
 ### Changed
+
+- **`dev` binds its port first.** The front door listens before the applications boot, so a
+  taken port is refused before anything starts, and a request that arrives while they boot is
+  answered `503` with `Retry-After: 1` instead of a refused connection. `host` keeps its order:
+  applications first, then the front. `docs/host-development.md` decision 7.
+
+- **The kind proof holds a machine-wide lease** (`.github/kubernetes/proof.sh`). The cluster
+  phase takes it and teardown returns it; every phase run from another checkout is refused,
+  teardown included, because the cluster's name and NodePort are fixed and a second session
+  would otherwise build beside the first or delete its cluster. `docs/host-development.md`
+  decision 10.
 
 - **The task queue is its own bundled app, mounted with the application.** `/_tesseraql/tasks`
   moves out of the account app into a bundled `tasks` app (`tesseraql.apps.tasks.enabled` the
