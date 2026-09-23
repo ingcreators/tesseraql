@@ -1,7 +1,7 @@
 # Host development: mise pins the toolchain, parallel sessions share nothing they can collide on, and the Dev Container retires
 
 > **Status: designed 2026-09-23, measured against main `ddcc38cd7` (0.19.0-SNAPSHOT); S1
-> and S2 shipped the same day (#1445, #S2PR).** The direction is the maintainer's, given in conversation: develop on the WSL 2
+> and S2 shipped the same day (#1445, #1446).** The direction is the maintainer's, given in conversation: develop on the WSL 2
 > host with the toolchain pinned by [mise](https://mise.jdx.dev/); run several Claude Code
 > sessions side by side under [herdr](https://github.com/ogulcancelik/herdr), each in its own
 > worktree; retire the Dev Container rather than keep it as a second path; lose none of the
@@ -23,7 +23,7 @@
 > `mise.toml` — the tools and the OS packages the host needs — and a ledger that holds it to
 > CI, one local Maven repository per worktree, one full verify at a time, the credential rule
 > restated for a host, the setup page rewritten host-first. The container keeps working
-> throughout: **shipped, #S2PR** (as recommended; measured with mise 2026.9.12 in an isolated
+> throughout: **shipped, #1446** (as recommended; measured with mise 2026.9.12 in an isolated
 > data directory: `trusted_config_paths` belongs under `[settings]` — at the top level mise
 > ignores it — and then trusts a new worktree under the checkout; `mise install` resolves
 > Temurin 25.0.4 and Node 22.23; a non-interactive shell on shims alone runs both and corepack's
