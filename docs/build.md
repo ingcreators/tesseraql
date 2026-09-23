@@ -53,6 +53,24 @@ deliberately — a signature fixed by a functional interface the method is a ref
 SPI shape — carries `// NOPMD UnusedFormalParameter` on its declaration line with a comment
 saying why.
 
+## Ports in tests
+
+A test that starts something listening binds port 0 and reads the port back
+(`TesseraqlRuntime.start(appHome, 0)`, then `runtime.port()`; `dev --port 0`, then the printed
+port or `work/dev.origin`; GreenMail's `dynamicPort()`, then `getSmtp().getPort()`). Several
+builds share a machine when agent sessions run side by side, and a port picked, released and
+bound a moment later comes from the ephemeral range every outbound connection on the machine
+also draws from ([host-development.md](host-development.md) decision 8).
+
+Three shapes may pick a number first, and each says why in a comment:
+
+- **The port must be known before the bind** — a redirect URI or an external origin written into
+  configuration before boot. Start through `PickedPort.start` (the runtime module's test
+  sources), which picks again when the address was taken in the meantime.
+- **The number is the assertion** — a fixed-port option that must bind exactly what it was
+  given, or a rebind after a failed boot.
+- **Nothing may answer on it** — an unreachable database or a retired member.
+
 ## Test reports and coverage
 
 The `tesseraql:test` and `tesseraql:coverage` goals run the app's declarative suites and write

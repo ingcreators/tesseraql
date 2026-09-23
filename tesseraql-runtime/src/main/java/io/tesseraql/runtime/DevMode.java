@@ -23,7 +23,10 @@ package io.tesseraql.runtime;
  *                             and does not fire here: "override everything" must not be the one
  *                             place an override is refused
  * @param defaultExternalOrigin the origin to fall back to when the stack file declares none —
- *                             the development gateway's own address, never a production guess
+ *                             the development gateway's own address, never a production guess.
+ *                             The gateway fills it from the port its socket got ({@code at});
+ *                             a caller constructs a decision set without one, because only the
+ *                             bound socket knows it (docs/host-development.md decision 7)
  * @param extraModules         the {@code --modules} directory, composed onto every member
  *                             runtime's own module loader (docs/module-scope.md) — a
  *                             development override, never a declaration; {@code null} when the
@@ -32,8 +35,13 @@ package io.tesseraql.runtime;
 public record DevMode(DataSources.MainDatasourceOverride embeddedDb,
         String defaultExternalOrigin, java.io.File extraModules) {
 
-    /** The pre-decision-28 shape, kept for callers without a modules override. */
-    public DevMode(DataSources.MainDatasourceOverride embeddedDb, String defaultExternalOrigin) {
-        this(embeddedDb, defaultExternalOrigin, null);
+    /** What {@code dev} decides before its gateway binds: everything but the origin. */
+    public DevMode(DataSources.MainDatasourceOverride embeddedDb, java.io.File extraModules) {
+        this(embeddedDb, null, extraModules);
+    }
+
+    /** These decisions at the gateway's own address, once its front door has bound {@code port}. */
+    DevMode at(int port) {
+        return new DevMode(embeddedDb, "http://localhost:" + port, extraModules);
     }
 }

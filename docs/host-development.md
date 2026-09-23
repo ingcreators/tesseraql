@@ -1,7 +1,7 @@
 # Host development: mise pins the toolchain, parallel sessions share nothing they can collide on, and the Dev Container retires
 
-> **Status: designed 2026-09-23, measured against main `ddcc38cd7` (0.19.0-SNAPSHOT); nothing
-> shipped yet.** The direction is the maintainer's, given in conversation: develop on the WSL 2
+> **Status: designed 2026-09-23, measured against main `ddcc38cd7` (0.19.0-SNAPSHOT); S1
+> shipped the same day (#1445).** The direction is the maintainer's, given in conversation: develop on the WSL 2
 > host with the toolchain pinned by [mise](https://mise.jdx.dev/); run several Claude Code
 > sessions side by side under [herdr](https://github.com/ogulcancelik/herdr), each in its own
 > worktree; retire the Dev Container rather than keep it as a second path; lose none of the
@@ -11,10 +11,19 @@
 > **S1** — ports: `dev --port 0` binds before the members boot and records the origin it got;
 > the tests that pick a port and bind it later stop doing so where they can and retry where
 > they cannot; the kind proof holds a machine-wide lock. It helps inside the container too, so
-> it goes first. **S2** — the host toolchain and the parallel-session rules: `mise.toml` — the
-> tools and the OS packages the host needs — and a ledger that holds it to CI, one local Maven repository per worktree, one full verify at a
-> time, the credential rule restated for a host, the setup page rewritten host-first. The
-> container keeps working throughout. **The cutover** — not a pull request: the container's
+> it goes first: **shipped, #1445** (as recommended, with three findings of the slice's own:
+> the kind proof's lock is a lease, not a flock — each phase is its own process and the
+> cluster outlives it, decision 10; `NotificationIntegrationTest` needed no retry — one
+> GreenMail for the class on its own socket's port replaces the extension that re-bound a
+> picked port before every method, decision 8; and the pre-relay `503` is pinned by
+> `GatewayFrontTest` on the front itself, because a forked `dev` cannot be caught between its
+> bind and its boot — `DevPortZeroIntegrationTest` pins the order through the issuer, and a
+> revert probe that built the origin from the requested port turned it red with
+> `http://localhost:0`). **S2** — the host toolchain and the parallel-session rules:
+> `mise.toml` — the tools and the OS packages the host needs — and a ledger that holds it to
+> CI, one local Maven repository per worktree, one full verify at a time, the credential rule
+> restated for a host, the setup page rewritten host-first. The container keeps working
+> throughout. **The cutover** — not a pull request: the container's
 > state is backed up, restored on the host, re-keyed to the host's paths and checked, while the
 > volumes stay untouched. **S3** — the Dev Container is deleted, from a session on the host,
 > whose own pre-push ritual is the proof that the host builds.
@@ -204,6 +213,13 @@ not the framework's own test kit. **(c)** Stays, each with a one-line comment na
 number is picked. [build.md](build.md) gains the rule: a test that binds a port binds 0, and
 the three shapes that may not say why.
 
+*As shipped (S1):* `NotificationIntegrationTest` left group (b). Its port was picked for
+GreenMail, whose JUnit extension restarted the server before every method on that number — a
+window per method that no retry around the runtime's boot could close. One `GreenMail` for the
+class now starts on `ServerSetupTest.SMTP.dynamicPort()` before the runtime's mail channel is
+configured from `getSmtp().getPort()`, and the mailbox is emptied per test instead. The helper
+is `PickedPort` and has three callers.
+
 ### 9 — Databases and Testcontainers
 
 A session that runs an application uses `dev --embedded-db`: a random port, and a database
@@ -213,10 +229,17 @@ service: `README.md:63-65` asks only for an empty PostgreSQL on `localhost:5432`
 `TESTCONTAINERS_HOST_OVERRIDE` existed for docker-outside-of-docker and leaves with it; on the
 host, Testcontainers reaches its containers on `localhost`.
 
-### 10 — The kind proof takes a machine-wide lock
+### 10 — The kind proof takes a machine-wide lease
 
-`proof.sh` holds `flock -n` on `${XDG_RUNTIME_DIR:-/tmp}/tesseraql-kind.lock` and refuses at
-once, naming the lock, while another proof runs. CI runs one proof per runner and never
+The cluster's name (`two-node`) and its NodePort (30080) are fixed, and the cluster outlives
+the phase that made it: CI runs `proof.sh cluster`, `install`, … `teardown` as separate steps,
+each its own process. A `flock` would end with each phase, so the lock is a lease: the cluster
+phase takes it with an atomic `mkdir` of `${XDG_RUNTIME_DIR:-/tmp}/tesseraql-kind-proof.lease`
+and writes the checkout that holds it; every phase run from another checkout is refused,
+teardown included, so a second session can neither build beside the first nor delete its
+cluster; the holding checkout re-running a phase is the rehearsal the cluster phase already
+reuses a cluster for; teardown returns the lease. A proof that died without its teardown leaves
+the lease, and the refusal says to remove the directory. CI runs one proof per runner and never
 contends. *Weighed and declined:* a cluster name and host port per run — two three-node
 clusters at once is nothing anyone needs, and each takes the memory a full verify wants.
 

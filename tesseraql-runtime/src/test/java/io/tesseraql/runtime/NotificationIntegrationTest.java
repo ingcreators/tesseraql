@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.icegreen.greenmail.junit5.GreenMailExtension;
+import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.GreenMailUtil;
 import com.icegreen.greenmail.util.ServerSetupTest;
 import com.sun.net.httpserver.HttpServer;
@@ -14,7 +14,6 @@ import jakarta.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -36,8 +35,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -55,33 +54,23 @@ class NotificationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    // A port chosen here, not ServerSetupTest's fixed 3025 and not GreenMail's dynamicPort():
-    // parallel surefire forks must not race for one fixed port, but the runtime's mail channel
-    // is configured in @BeforeAll — before the extension first starts the server — and the
-    // extension's per-method restarts would re-roll a dynamic port under the running runtime.
-    static final int SMTP_PORT = chooseSmtpPort();
-
+    // One mail server for the class, on a port its own socket chooses, started before the
+    // runtime's mail channel is configured from it. The JUnit extension this replaced restarted
+    // the server per test on a port picked in advance — a fixed 3025 raced parallel forks, and a
+    // dynamic port would have moved under the running runtime — so every method reopened a
+    // pick-then-bind window (docs/host-development.md decision 8). The mailbox is emptied per
+    // test instead, which is what the restart was for.
+    //
     // GreenMail waits 2 seconds for its server to come up and then gives up. That is enough on
     // a quiet machine and not on a loaded CI runner, where this suite starts a Vert.x runtime, a
-    // PostgreSQL container and a webhook stub alongside it — and the extension pays the cost
-    // again on every test method, because it restarts the server per test. The startup budget
-    // is the only thing being widened here: a server that is genuinely broken still fails, ten
-    // seconds later.
-    @RegisterExtension
-    static final GreenMailExtension MAIL = new GreenMailExtension(smtpSetup());
+    // PostgreSQL container and a webhook stub alongside it. The startup budget is the only thing
+    // being widened here: a server that is genuinely broken still fails, ten seconds later.
+    static final GreenMail MAIL = new GreenMail(smtpSetup());
 
     private static com.icegreen.greenmail.util.ServerSetup smtpSetup() {
-        com.icegreen.greenmail.util.ServerSetup setup = ServerSetupTest.SMTP.port(SMTP_PORT);
+        com.icegreen.greenmail.util.ServerSetup setup = ServerSetupTest.SMTP.dynamicPort();
         setup.setServerStartupTimeout(10_000);
         return setup;
-    }
-
-    private static int chooseSmtpPort() {
-        try {
-            return freePort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
@@ -99,6 +88,7 @@ class NotificationIntegrationTest {
 
     @BeforeAll
     static void start() throws Exception {
+        MAIL.start();
         receiver = HttpServer.create(new InetSocketAddress(0), 0);
         receiver.createContext("/hook", exchange -> {
             deliveries.add(new Delivery(
@@ -122,9 +112,15 @@ class NotificationIntegrationTest {
         if (receiver != null) {
             receiver.stop(0);
         }
+        MAIL.stop();
         if (appHome != null) {
             deleteRecursively(appHome);
         }
+    }
+
+    @BeforeEach
+    void emptyMailbox() throws Exception {
+        MAIL.purgeEmailFromAllMailboxes();
     }
 
     @Test
@@ -289,7 +285,7 @@ class NotificationIntegrationTest {
                     url: %s
                     username: %s
                     password: %s
-                """.formatted(SMTP_PORT, receiver.getAddress().getPort(),
+                """.formatted(MAIL.getSmtp().getPort(), receiver.getAddress().getPort(),
                 POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
 
         Path config = target.resolve("config/tesseraql.yml");
@@ -346,12 +342,6 @@ class NotificationIntegrationTest {
             }
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 

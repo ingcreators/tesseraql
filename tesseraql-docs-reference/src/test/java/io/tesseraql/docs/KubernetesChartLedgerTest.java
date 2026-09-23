@@ -117,6 +117,25 @@ class KubernetesChartLedgerTest {
                 .contains("nodePort: {{ .Values.service.nodePort }}");
     }
 
+    /**
+     * One proof per machine (docs/host-development.md decision 10). The cluster's name and its
+     * NodePort are fixed, and the cluster outlives the phase that made it, so the lock is a lease:
+     * every phase passes the guard before it runs, the cluster phase takes the lease, and teardown
+     * returns it — a second session can neither build beside the first nor delete its cluster.
+     */
+    @Test
+    void everyPhaseRunsUnderTheMachineWideLease() throws IOException {
+        String script = Files.readString(REPO.resolve(".github/kubernetes/proof.sh"));
+        assertThat(script).as("taken atomically").contains("mkdir \"$LEASE\"");
+        assertThat(script).as("the dispatch guards each phase before running it")
+                .containsSubsequence("guard_lease \"$1\"", "\"phase_$1\"")
+                .containsSubsequence("guard_lease \"$phase\"", "\"phase_$phase\"");
+        String teardown = script.substring(script.indexOf("phase_teardown() {"));
+        assertThat(teardown.substring(0, teardown.indexOf("\n}")))
+                .as("teardown returns the lease once the cluster is gone")
+                .containsSubsequence("delete cluster", "return_lease");
+    }
+
     @Test
     void thePageDocumentsEveryTopLevelValue() throws IOException {
         String page = Files.readString(PAGE);

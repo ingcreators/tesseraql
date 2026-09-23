@@ -7,7 +7,6 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -79,11 +78,16 @@ class OidcLoginIntegrationTest {
         mockOp.createContext("/token", exchange -> respond(exchange, 200, tokenResponse()));
         mockOp.start();
 
-        // The runtime port stays pick-then-bind: prepareAppHome bakes it into the
-        // OIDC redirect URI before boot, so port 0 cannot be used here.
-        int runtimePort = freePort();
-        appHome = prepareAppHome(opPort, runtimePort);
-        runtime = TesseraqlRuntime.start(appHome, runtimePort);
+        // The runtime port is picked before boot: prepareAppHome bakes it into the OIDC
+        // redirect URI, so port 0 cannot be used here, and a port taken in the meantime is
+        // picked again (docs/host-development.md decision 8).
+        runtime = PickedPort.start(runtimePort -> {
+            if (appHome != null) {
+                deleteRecursively(appHome);
+            }
+            appHome = prepareAppHome(opPort, runtimePort);
+            return TesseraqlRuntime.start(appHome, runtimePort);
+        });
         seedDatabase();
     }
 
@@ -322,12 +326,6 @@ class OidcLoginIntegrationTest {
                     // best-effort cleanup
                 }
             });
-        }
-    }
-
-    private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         }
     }
 }

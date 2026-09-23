@@ -116,7 +116,9 @@ public final class TesseraqlCli implements Runnable {
         String logLevel;
 
         @Option(names = {
-                "--port"}, description = "The port the gateway fronts every app on (default 8080).")
+                "--port"}, description = "The port the gateway fronts every app on (default 8080;"
+                        + " 0 binds a free one). The address is printed and written to each"
+                        + " application's work/dev.origin.")
         int port = 8080;
 
         @Option(names = {"--watch"}, description = "Watch every application's web/, workflow/, "
@@ -228,10 +230,12 @@ public final class TesseraqlCli implements Runnable {
             EmbeddedPostgresSupport.Ownership embeddedDatabase = new EmbeddedPostgresSupport.Ownership();
             java.util.concurrent.atomic.AtomicReference<io.tesseraql.runtime.MultiAppGateway> startedGateway = new java.util.concurrent.atomic.AtomicReference<>();
             List<Path> markedHomes = embeddedDb == null ? List.of() : homes;
+            List<Path> startedHomes = homes;
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 try {
                     io.tesseraql.runtime.MultiAppGateway running = startedGateway.get();
                     if (running != null) {
+                        startedHomes.forEach(DevOriginMarker::delete);
                         running.close();
                     }
                 } finally {
@@ -273,10 +277,12 @@ public final class TesseraqlCli implements Runnable {
 
             // dev may default the external origin, because the development gateway knows its own
             // address by construction; host must not (docs/stack-architecture.md decision 22).
-            // --modules rides along as the one deliberately stack-wide module input: an override
-            // composed onto every member runtime's own loader, never a declaration.
+            // The gateway fills it in from the port its socket got, so --port 0 works
+            // (docs/host-development.md decision 7). --modules rides along as the one
+            // deliberately stack-wide module input: an override composed onto every member
+            // runtime's own loader, never a declaration.
             io.tesseraql.runtime.DevMode dev = new io.tesseraql.runtime.DevMode(dbOverride,
-                    "http://localhost:" + port, compile.modules);
+                    compile.modules);
             io.tesseraql.runtime.MultiAppGateway gateway;
             try {
                 gateway = io.tesseraql.runtime.MultiAppGateway.start(stackDir, port,
@@ -287,6 +293,11 @@ public final class TesseraqlCli implements Runnable {
             }
 
             startedGateway.set(gateway);
+            // Where this run answers, for a second terminal or an agent's session that started it
+            // on --port 0 and cannot read the console (docs/host-development.md decision 7).
+            for (Path home : homes) {
+                DevOriginMarker.write(home, "http://localhost:" + gateway.port());
+            }
 
             System.out.println("TesseraQL dev: " + gateway.appNames().size()
                     + " app(s) on port " + gateway.port() + ". Press Ctrl+C to stop.");
