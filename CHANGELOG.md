@@ -326,6 +326,15 @@ All notable changes to TesseraQL are documented here. The format follows
   model that runs: the connection pool and `maxInFlight` are the ceilings, raised together, and a
   pool holds its full size from boot. `docs/capacity-defaults.md` decisions 3-4.
 
+- **The stack's framework pool is sized by declaration.** `framework.datasource` in
+  `tesseraql-stack.yml` takes the pool keys an application's datasource takes:
+  `maximumPoolSize`, `minimumIdle`, `connectionTimeoutMillis` and the rest. Undeclared, the pool
+  keeps 10 connections and a 30 s wait, now TesseraQL's own defaults. Before, the pool was built
+  on a bare HikariCP configuration: it inherited those numbers from HikariCP, and sizing keys
+  written in the block had no effect. Under `--embedded-db` the embedded server still supplies
+  the coordinate, and the block still supplies the sizing. `docs/capacity-defaults.md`
+  decision 6; `docs/hosting.md`.
+
 - **Content after a JSON value or a YAML document is refused.** A request body such as
   `{"a":1} {"b":2}`, stored JSON with trailing text, or an application file with a second `---`
   document used to be read as its first value with the rest dropped silently; each is now the

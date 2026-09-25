@@ -58,7 +58,8 @@ class MultiAppHostIntegrationTest {
         // an application's address is its name, and its own configuration cannot move it.
         installApp("shop-b", "b", "/legacy", ModuleFixtureFunctions.GreetsB.class);
         // Business data is isolated by schema, so the main coordinates differ; the stack
-        // supplies the framework connection (docs/stack-architecture.md decision 22).
+        // supplies the framework connection (docs/stack-architecture.md decision 22), sized by
+        // declaration (docs/capacity-defaults.md decision 6).
         Files.writeString(installRoot.resolve(
                 io.tesseraql.operations.app.StackSettings.FILE_NAME),
                 """
@@ -67,6 +68,9 @@ class MultiAppHostIntegrationTest {
                             jdbcUrl: %s
                             username: %s
                             password: %s
+                            maximumPoolSize: 5
+                            minimumIdle: 2
+                            connectionTimeoutMillis: 7000
                         """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
                         POSTGRES.getPassword()));
         host = MultiAppHost.start(installRoot);
@@ -214,6 +218,66 @@ class MultiAppHostIntegrationTest {
                     .isInstanceOf(io.tesseraql.core.error.TqlException.class)
                     .hasMessageContaining("TQL-APP-4214")
                     .hasMessageContaining("validates instead of migrating");
+        }
+    }
+
+    /**
+     * The stack's framework pool reads the same sizing keys as an application's datasource
+     * (docs/capacity-defaults.md decision 6). Before, it was built on a bare HikariCP
+     * configuration, so the block's sizing was read by nothing.
+     */
+    @Test
+    void theStackFrameworkPoolIsSizedByItsDeclaration() {
+        assertThat(host.context().frameworkDataSource())
+                .isInstanceOfSatisfying(com.zaxxer.hikari.HikariDataSource.class, pool -> {
+                    assertThat(pool.getPoolName()).isEqualTo("tesseraql-stack-framework");
+                    assertThat(pool.getMaximumPoolSize()).isEqualTo(5);
+                    assertThat(pool.getMinimumIdle()).isEqualTo(2);
+                    assertThat(pool.getConnectionTimeout()).isEqualTo(7_000L);
+                });
+    }
+
+    /**
+     * Undeclared, the stack framework pool takes TesseraQL's defaults, 10 connections and 30 s.
+     * Under {@code --embedded-db} the embedded server supplies the coordinate and the stack file
+     * still supplies the sizing.
+     */
+    @Test
+    void theStackFrameworkPoolDefaultsAreTesseraqlsAndTheEmbeddedCoordinateKeepsTheSizing()
+            throws IOException {
+        Path stack = Files.createTempDirectory("tesseraql-stack-framework-pool");
+        try {
+            Files.writeString(stack.resolve(io.tesseraql.operations.app.StackSettings.FILE_NAME),
+                    """
+                            framework:
+                              datasource:
+                                jdbcUrl: %s
+                                username: %s
+                                password: %s
+                            """.formatted(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(),
+                            POSTGRES.getPassword()));
+            try (com.zaxxer.hikari.HikariDataSource pool = DataSources.createStackFramework(
+                    io.tesseraql.operations.app.StackSettings.load(stack).config(), null)) {
+                assertThat(pool.getMaximumPoolSize()).isEqualTo(10);
+                assertThat(pool.getConnectionTimeout()).isEqualTo(30_000L);
+            }
+
+            Files.writeString(stack.resolve(io.tesseraql.operations.app.StackSettings.FILE_NAME),
+                    """
+                            framework:
+                              datasource:
+                                jdbcUrl: jdbc:postgresql://nowhere.invalid:5432/stack
+                                maximumPoolSize: 3
+                            """);
+            try (com.zaxxer.hikari.HikariDataSource pool = DataSources.createStackFramework(
+                    io.tesseraql.operations.app.StackSettings.load(stack).config(),
+                    new DataSources.MainDatasourceOverride(POSTGRES.getJdbcUrl(),
+                            POSTGRES.getUsername(), POSTGRES.getPassword()))) {
+                assertThat(pool.getJdbcUrl()).isEqualTo(POSTGRES.getJdbcUrl());
+                assertThat(pool.getMaximumPoolSize()).isEqualTo(3);
+            }
+        } finally {
+            deleteRecursively(stack);
         }
     }
 
