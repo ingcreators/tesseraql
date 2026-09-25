@@ -76,6 +76,12 @@
 > own, configured from the stack file, and the origin's `/_tesseraql/metrics` reports the sign-in
 > pool as `main`.
 >
+> **S6 (the surface's scrape).** **Shipped, #1467**, as designed. `StackSettings.surfaceMetrics()`
+> hands the subtree over as declared, and a placeholder in it resolves where the surface reads the
+> key, as the `security:` graft's secrets always have. The test proves that, and the bearer path
+> through the stack file's `ops.metrics.view` policy (401 without a bearer, 403 without the
+> policy, 200 with it). A revert probe that dropped the graft turned both enabled cases red.
+>
 > **Amended 2026-09-25, after S1: decisions 5 and 7 are replaced, and decisions 5a and 5b are
 > new.** The record first designed `tesseraql.batch.datasource`, a key naming another datasource
 > for jobs. The maintainer's questions in conversation took it apart:

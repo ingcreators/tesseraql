@@ -68,6 +68,27 @@ query, and the password hash is checked in the JVM, so a few connections carry a
 A stack that declares no `framework.datasource` gives the surface a pool of its own, 10
 connections on the coordinate its applications agree on.
 
+To see whether sign-in waits for a connection, give the surface a scrape. The surface is bundled,
+so its scrape is configured in the stack file, with the keys an application uses under
+`tesseraql.metrics`:
+
+```yaml
+metrics:
+  enabled: true            # the origin's /_tesseraql/metrics
+  unauthenticated: true    # a scraper the network already guards; or, instead:
+security:
+  jwt:
+    secret: ${secret.env.STACK_JWT_SECRET}
+  policies:
+    ops.metrics.view:      # a bearer holding this policy reads the scrape
+      anyOf:
+        - role: OPS
+```
+
+The origin's `/_tesseraql/metrics` then reports the sign-in pool as `pool="main"`: the framework
+pool where `framework.datasource` is declared, and the surface's own otherwise. Each member keeps
+its own scrape at `/<name>/_tesseraql/metrics`, configured in its own `tesseraql.metrics`.
+
 The host also migrates the framework's `security` schema **once**, before any application starts;
 each hosted runtime then validates it and refuses to start on a mismatch (`TQL-APP-4214`). A
 runtime pointed at a framework database the host never migrated therefore fails loudly at boot,

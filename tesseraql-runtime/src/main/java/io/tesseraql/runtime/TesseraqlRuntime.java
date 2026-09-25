@@ -2776,6 +2776,14 @@ public final class TesseraqlRuntime implements AutoCloseable {
                 ? loaded.withConfig(withStackSecurity(loaded.config(),
                         hostContext.surfaceSecurity()))
                 : loaded;
+        if (hostContext.surfaceMetrics() != null) {
+            // The surface's scrape, from the stack file's metrics: subtree through the same
+            // merge: the portal is bundled, so nothing else can configure it, and the origin's
+            // /_tesseraql/metrics then reports the pool sign-in rides
+            // (docs/capacity-defaults.md decision 13).
+            manifest = manifest.withConfig(withStackSecurityPath(manifest.config(),
+                    java.util.List.of("metrics"), hostContext.surfaceMetrics()));
+        }
         if (hostContext.workshop() && hostContext.stackMembers() != null) {
             // The workshop's shell mounts on the surface runtime when the host said a workshop
             // exists (docs/studio-shell.md structural decision 2) — a topology graft over the

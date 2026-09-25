@@ -326,7 +326,8 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                                                 : agreedFrameworkOverride(configs),
                                         frameworkPool,
                                         applications, host.memberOrigins(),
-                                        settings.surfaceSecurity(), host.deployPen())),
+                                        settings.surfaceSecurity(), settings.surfaceMetrics(),
+                                        host.deployPen())),
                         Set.of()));
                 LOG.info("Hosting the stack surface (sign-in, account, portal) at the origin"
                         + " scope from {}", surfaceHome);
