@@ -211,7 +211,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
         ModulesGuard.requireResolved(installRoot, applications, configs);
         boolean embedded = dev != null && dev.embeddedDb() != null;
         com.zaxxer.hikari.HikariDataSource frameworkPool = embedded
-                ? DataSources.create("tesseraql-stack-framework", dev.embeddedDb())
+                ? DataSources.createStackFramework(settings.config(), dev.embeddedDb())
                 : frameworkPool(configs, settings);
         // One Vert.x for the whole host (docs/http-threading.md decision 4), sized from the
         // stack's own file. Each runtime used to build its own, so a host's worker and event-loop
@@ -818,9 +818,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
             }
             io.tesseraql.operations.app.StackSettings.Coordinate coordinate = supplied.get();
             requireFrameworkDriver(coordinate.jdbcUrl(), settings.frameworkModules());
-            return DataSources.create("tesseraql-stack-framework",
-                    new DataSources.MainDatasourceOverride(coordinate.jdbcUrl(),
-                            coordinate.username(), coordinate.password()));
+            return DataSources.createStackFramework(settings.config(), null);
         }
 
         if (configs.size() > 1) {
@@ -854,6 +852,11 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     /** The HTTP port the given app's active version is listening on. */
     public int port(String appName) {
         return app(appName).port();
+    }
+
+    /** The stack-level settings settled at boot, which every runtime start shares. */
+    HostContext context() {
+        return context;
     }
 
     @Override

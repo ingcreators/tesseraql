@@ -45,6 +45,7 @@ framework:
     jdbcUrl: jdbc:postgresql://${DB_HOST:localhost}:5432/stack
     username: ${secret.env.STACK_DB_USER}
     password: ${secret.env.STACK_DB_PASSWORD}
+    maximumPoolSize: 5   # sign-in is millisecond point queries
 externalOrigin: https://apps.example.com
 root:
   redirect: orders       # /  ->  /orders; omitted, / lands on the portal
@@ -54,6 +55,12 @@ When the stack supplies `framework.datasource`, the host builds one pool and eve
 framework state — sessions, tokens, preferences — rides it, so one sign-in carries by
 construction. An application that *explicitly* declares `tesseraql.framework.datasource` in that
 arrangement is refused (`TQL-APP-4212`) rather than silently repointed.
+
+The pool takes the keys an application's datasource takes, with the same defaults: 10
+connections, a 30 s wait, and `minimumIdle` at the pool size
+([deployment](deployment.md#connection-pools)). Sign-in is short point queries, so a few
+connections carry a lot of it. Under `dev --embedded-db` the embedded server supplies the
+coordinate, and the block still supplies the sizing.
 
 The host also migrates the framework's `security` schema **once**, before any application starts;
 each hosted runtime then validates it and refuses to start on a mismatch (`TQL-APP-4214`). A

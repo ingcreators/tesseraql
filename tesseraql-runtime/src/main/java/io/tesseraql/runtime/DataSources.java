@@ -106,9 +106,8 @@ public final class DataSources {
     }
 
     /**
-     * Creates a pool from an explicit coordinate under its own name — the stack's framework pool
-     * rides this (docs/stack-architecture.md decision 22), so it must not collide with any
-     * runtime's {@code tesseraql-main}.
+     * Creates a pool from an explicit coordinate under its own name. It reads no sizing keys, so
+     * the pool takes HikariCP's defaults.
      */
     public static HikariDataSource create(String poolName, MainDatasourceOverride override) {
         HikariConfig hikari = new HikariConfig();
@@ -245,10 +244,24 @@ public final class DataSources {
     }
 
     /**
+     * The stack's framework pool (docs/stack-architecture.md decision 22), from the stack file's
+     * {@code framework.datasource}: its coordinate, or {@code override}'s under
+     * {@code --embedded-db}, and its sizing, with every pool's keys and TesseraQL's defaults
+     * rather than HikariCP's (docs/capacity-defaults.md decision 6). Its name must not collide
+     * with any runtime's {@code tesseraql-main}.
+     */
+    static HikariDataSource createStackFramework(AppConfig stack,
+            MainDatasourceOverride override) {
+        return createRole(stack, "tesseraql-stack-framework", "framework.datasource.", override,
+                "framework.datasource.", null);
+    }
+
+    /**
      * A role pool (docs/capacity-defaults.md decision 5): a second pool onto the database the
      * coordinate at {@code coordinatePrefix} names — or {@code override}'s, when {@code main} is
      * overridden — sized by the block at {@code sizingPrefix}, with every pool's keys and
-     * defaults. {@code main}'s role pools and each tenant's are built here.
+     * defaults. {@code main}'s role pools and each tenant's are built here, and so is the stack's
+     * framework pool.
      */
     static HikariDataSource createRole(AppConfig config, String poolName, String coordinatePrefix,
             MainDatasourceOverride override, String sizingPrefix, ClassLoader moduleLoader) {

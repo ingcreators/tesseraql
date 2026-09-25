@@ -29,7 +29,12 @@
 > revert probe that sent route transfers back to the online pool turned the integration test red.
 >
 > **S2b (the stack's framework pool).** It is sized by declaration rather than by HikariCP's own
-> defaults.
+> defaults. **Shipped, #1461**, as designed. The pool is built by the same builder as the role
+> pools. Under `--embedded-db`, the embedded server supplies the coordinate and the stack file
+> still supplies the sizing. A revert probe that restored the bare HikariCP configuration turned
+> the integration test red. Two pools built from an override still read no sizing keys: an
+> application's `main` under `--embedded-db`, and the stack surface runtime's `main`, a fixed 10
+> in production. Neither is in this record's decisions, so both are left open.
 >
 > **S3 (the skeleton).** `tesseraql new` writes a production profile that separates the online pool
 > from the two role pools. The stack marker states the production posture.

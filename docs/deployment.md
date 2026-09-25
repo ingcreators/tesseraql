@@ -171,6 +171,9 @@ with `TQL-RATE-4295` and a longer `Retry-After`, because what a stream waits for
 stream ending. The two codes are different on purpose: a monitor that cannot tell a refused
 route from a refused stream cannot tell which number to raise.
 
+A `maxInFlight`, `maxEventStreams`, `workerThreads` or `eventLoopThreads` that is not a positive
+integer refuses at startup (`TQL-YAML-1112`) rather than starting with a bound nobody asked for.
+
 **Beyond `maxBodyBytes` the runtime answers 413 with `TQL-SEC-4150`**, draining what remains of
 the upload so the refusal actually arrives (an unread stream leaves the client stuck writing).
 The one number covers JSON bodies and streamed file uploads alike, so a deployment taking large
@@ -250,6 +253,8 @@ cancel the second. Set it only if you know your slowest legitimate response.
 Health (`/_tesseraql/health` and below) is checked before the bound, so no gate refuses it.
 Use `/health/live` for liveness: it touches no dependency.
 
+### Connection pools
+
 **Raise `maxInFlight` together with the connection pool.** The pool decides how many routes that
 need the database run at once, and `maxInFlight` decides how many more may wait for a connection.
 Raising the pool alone shrinks the queue. Raising `maxInFlight` alone lengthens the wait, each
@@ -271,6 +276,10 @@ The first two are TesseraQL's own defaults rather than the driver pool's, so the
 change under you when a dependency changes its mind. `leakDetectionThresholdMillis` stays off
 because it is a debugging aid whose log volume is an operator's decision, not a default.
 
+The stack's framework pool takes the same keys, with the same defaults, under
+`framework.datasource` in `tesseraql-stack.yml`
+([hosting](hosting.md#the-stacks-own-settings--tesseraql-stackyml)).
+
 Background work — [jobs](jobs.md), [file transfers](file-transfers.md), streams — borrows from
 these same pools by default. Contention then shows up as request latency you can measure. Watch
 `tesseraql_pool_threads_awaiting` in the [metrics](#metrics-prometheus) below: a non-zero reading
@@ -282,9 +291,6 @@ and routes holding one for a second saturate it at 10. If the answer is "many mo
 check first whether the database can absorb them: the limit that matters is the one at the far
 end, and every pool holds its full size from boot unless `minimumIdle` says otherwise
 ([capacity](capacity.md#from-one-node-to-replicas)).
-
-A count that is not a positive integer refuses at startup (`TQL-YAML-1112`) rather than
-starting with a pool nobody asked for.
 
 ### Role pools: jobs and file transfers off the online pool
 
