@@ -32,18 +32,34 @@ public final class TenantRouting {
 
     /** The datasource for this exchange, honoring tenant routing over the {@code main} connector. */
     public static DataSource dataSource(Exchange exchange, String datasourceName) {
-        Object tenant = "main".equals(datasourceName)
-                ? exchange.getProperty(TesseraqlProperties.TENANT)
-                : null;
+        return dataSource(exchange, datasourceName, PoolRole.ONLINE);
+    }
+
+    /**
+     * As {@link #dataSource(Exchange, String)}, for work of {@code role} (docs/capacity-defaults.md
+     * decisions 5 and 5a): on {@code main}, the tenant's role pool in a per-tenant mode, else the
+     * role pool {@code main} declares, else {@code main} itself. A named datasource has no roles.
+     */
+    public static DataSource dataSource(Exchange exchange, String datasourceName, PoolRole role) {
+        boolean main = "main".equals(datasourceName);
+        Object tenant = main ? exchange.getProperty(TesseraqlProperties.TENANT) : null;
         if (tenant instanceof TenantContext tenantContext) {
             TenantDataSourceResolver resolver = exchange.beans().lookup(
                     TesseraqlProperties.TENANT_DATASOURCE_RESOLVER_BEAN,
                     TenantDataSourceResolver.class);
             if (resolver != null) {
-                DataSource resolved = resolver.resolve(tenantContext.id());
+                DataSource resolved = resolver.resolve(tenantContext.id(), role);
                 if (resolved != null) {
                     return resolved;
                 }
+            }
+        }
+        if (main && role != PoolRole.ONLINE) {
+            MainRolePools roles = exchange.beans().lookup(
+                    TesseraqlProperties.MAIN_ROLE_POOLS_BEAN, MainRolePools.class);
+            DataSource rolePool = roles == null ? null : roles.of(role);
+            if (rolePool != null) {
+                return rolePool;
             }
         }
         DataSource dataSource = exchange.beans().lookup(datasourceName, DataSource.class);

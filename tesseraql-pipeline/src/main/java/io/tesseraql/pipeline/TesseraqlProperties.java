@@ -89,6 +89,8 @@ public final class TesseraqlProperties {
     /** How many rows that enrichment takes per reference query — its {@code batchSize}. */
     public static final String EXPORT_ENRICH_WINDOW = "TesseraqlExportEnrichWindow";
     public static final String TENANT_DATASOURCE_RESOLVER_BEAN = "tesseraqlTenantDataSources";
+    /** The role pools {@code main} declares (docs/capacity-defaults.md decision 5). */
+    public static final String MAIN_ROLE_POOLS_BEAN = "tesseraqlMainRolePools";
     /** The data-scope resolver expanding {@code /*%scope%/} directives (roadmap Phase 29). */
     public static final String SCOPE_RESOLVER_BEAN = "tesseraqlScopeResolver";
     /** The file-scope resolver for {@code ${scope.*}} placeholders on duckdb datasources. */

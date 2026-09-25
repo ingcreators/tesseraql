@@ -30,6 +30,7 @@ final class OpsDashboards {
             io.tesseraql.opsui.PollSourceStatus pollSourceStatus,
             io.tesseraql.opsui.CalendarStatus calendarStatus,
             javax.sql.DataSource dataSource, Map<String, HikariDataSource> dataSources,
+            Map<String, HikariDataSource> reportedPools,
             io.tesseraql.core.telemetry.AggregatingMeter meter, long alertIntervalMillis) {
         return new io.tesseraql.opsui.OpsDashboard(jobRepository, lanes, slowSqlLog,
                 traceLogOf(effectiveTracer),
@@ -66,7 +67,9 @@ final class OpsDashboards {
                 // The pool that is the constraint, the runtime at capacity, and the interval both
                 // are judged over (docs/deployment-maturity.md decision 9); the readiness memo and
                 // a cut stop reach the dashboard on their own.
-                .poolStats(() -> TesseraqlRuntime.poolStats(dataSources))
+                // Every reported pool, main's role pools included (docs/capacity-defaults.md
+                // decision 5): a file-transfer pool with waiters is the bound users meet.
+                .poolStats(() -> TesseraqlRuntime.poolStats(reportedPools))
                 .refusals(() -> EdgeMetrics.refusedTotal(meter))
                 .alertInterval(java.time.Duration.ofMillis(alertIntervalMillis))
                 // An unauthenticated endpoint doing real work per poll is a lever; a memo

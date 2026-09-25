@@ -134,6 +134,14 @@ public final class JdbcFileTransferService implements FileTransferService {
      * mode wires one, and then it refuses an unknown tenant as every other executor does.
      */
     private java.util.function.Function<String, DataSource> tenantPools;
+    /**
+     * The pools onto main's own database — the service's own, and main's role pools — by
+     * identity (docs/capacity-defaults.md decision 5b). A run whose work pool is one of them is on
+     * the database its record and verdict live in, and writes them on its work connection.
+     */
+    private volatile Set<DataSource> mainDatabase;
+    /** Where a split run takes its record connection: main's file-transfer pool, or main. */
+    private volatile DataSource recordPool;
 
     /**
      * One constructor, and the heartbeat is an argument rather than a setter: a transfer is
@@ -151,6 +159,38 @@ public final class JdbcFileTransferService implements FileTransferService {
         this.dataSource = dataSource;
         this.codecs = codecs;
         this.functions = functions;
+        this.mainDatabase = identitySet(dataSource);
+        this.recordPool = dataSource;
+    }
+
+    private static Set<DataSource> identitySet(DataSource... pools) {
+        Set<DataSource> set = java.util.Collections
+                .newSetFromMap(new java.util.IdentityHashMap<>());
+        for (DataSource pool : pools) {
+            if (pool != null) {
+                set.add(pool);
+            }
+        }
+        return java.util.Collections.unmodifiableSet(set);
+    }
+
+    /**
+     * main's role pools, where it declares them (docs/capacity-defaults.md decisions 5 and 5b):
+     * the pool route transfers run on, and the one job runs — a poll-triggered import among them —
+     * run on. Both open onto main's own database, so a transfer on either still commits its rows
+     * and its verdict in one transaction. A tenant's transfer, which cannot, takes its record
+     * connection from the file-transfer pool rather than from the pool requests are served on.
+     * Either may be {@code null}.
+     */
+    public JdbcFileTransferService mainRoles(DataSource fileTransferPool, DataSource jobPool) {
+        mainDatabase = identitySet(dataSource, fileTransferPool, jobPool);
+        recordPool = fileTransferPool != null ? fileTransferPool : dataSource;
+        return this;
+    }
+
+    /** Whether a run on {@code pool} splits its record and verdict onto a second connection. */
+    boolean splits(DataSource pool) {
+        return !mainDatabase.contains(pool);
     }
 
     /**
@@ -196,34 +236,45 @@ public final class JdbcFileTransferService implements FileTransferService {
     /**
      * A run's two connections when its pool is a tenant's (docs/multi-tenancy.md): the rows on the
      * tenant pool, the transfer record and the execution verdict on {@code main}, where the
-     * framework tables live in every mode. On the main pool they are one connection and one
-     * transaction, as they always were.
+     * framework tables live in every mode. On a pool onto main's own database — main itself, or a
+     * role pool main declares — they are one connection and one transaction, as they always were:
+     * the test is the database, not the pool object (docs/capacity-defaults.md decision 5b).
      *
      * <p>Two connections cannot commit as one. The order is the rows first, then the verdict: a
      * failure between the two leaves rows that landed under a RUNNING record the reaper closes
      * as abandoned and this class names at WARNING — never a COMPLETED verdict over rows that
      * did not land. The compare-and-set on the verdict still runs before either commit, so a
      * transfer finished elsewhere still writes nothing.
+     *
+     * <p>The record connection is opened when it is first used — the final rows, spool reference
+     * and compare-and-set, at the end of the run — not beside the work connection at its start.
+     * No statement moves; what changes is that a running tenant transfer no longer holds a
+     * connection on main for its whole duration, and the one it takes at the end comes from
+     * main's file-transfer pool where one is declared.
      */
     private final class Bookkeeping implements AutoCloseable {
 
         private final Connection work;
-        private final Connection record;
         private final boolean split;
-        private final boolean recordAutoCommit;
+        private Connection record;
+        private boolean recordAutoCommit;
 
-        Bookkeeping(Connection work, DataSource pool) throws SQLException {
+        Bookkeeping(Connection work, DataSource pool) {
             this.work = work;
-            this.split = pool != dataSource;
-            this.record = split ? dataSource.getConnection() : work;
-            this.recordAutoCommit = split && record.getAutoCommit();
-            if (split) {
-                record.setAutoCommit(false);
-            }
+            this.split = splits(pool);
         }
 
         /** The connection the transfer record and the verdict are written on. */
-        Connection record() {
+        Connection record() throws SQLException {
+            if (!split) {
+                return work;
+            }
+            if (record == null) {
+                Connection opened = recordPool.getConnection();
+                recordAutoCommit = opened.getAutoCommit();
+                opened.setAutoCommit(false);
+                record = opened;
+            }
             return record;
         }
 
@@ -231,6 +282,9 @@ public final class JdbcFileTransferService implements FileTransferService {
         void commit(String what) throws SQLException {
             if (split) {
                 work.commit();
+                if (record == null) {
+                    return;
+                }
                 try {
                     record.commit();
                 } catch (SQLException ex) {
@@ -241,11 +295,11 @@ public final class JdbcFileTransferService implements FileTransferService {
                 }
                 return;
             }
-            record.commit();
+            work.commit();
         }
 
         void rollback() throws SQLException {
-            if (split) {
+            if (split && record != null) {
                 record.rollback();
             }
             work.rollback();
@@ -253,7 +307,7 @@ public final class JdbcFileTransferService implements FileTransferService {
 
         @Override
         public void close() {
-            if (split) {
+            if (split && record != null) {
                 Transactions.restoreQuietly(record, recordAutoCommit, "transfer record");
                 try {
                     record.close();

@@ -22,9 +22,11 @@ public final class DataSources {
     }
 
     /**
-     * The pool size a datasource gets when it declares none, matching the HTTP worker pool's
-     * default: a worker that cannot get a connection is a thread doing nothing but waiting, and
-     * a connection no worker can reach is a connection the database holds open for nobody.
+     * The pool size a datasource gets when it declares none. A route that needs the database runs
+     * only while it holds a connection, so this is how many such routes run at once, and a
+     * runtime's {@code maxInFlight} of forty queues three times as many again
+     * (docs/capacity.md). It was first chosen to match the HTTP worker pool, when routes ran on
+     * it (docs/http-threading.md decision 2).
      */
     private static final int DEFAULT_MAX_POOL_SIZE = 10;
 
@@ -156,6 +158,9 @@ public final class DataSources {
     public static java.util.LinkedHashMap<String, HikariDataSource> createAll(AppConfig config,
             MainDatasourceOverride override, java.nio.file.Path appHome,
             ClassLoader moduleLoader) {
+        // Before any pool connects: a role pool under the wrong datasource configures nothing,
+        // and is refused rather than read and ignored (docs/capacity-defaults.md decision 5).
+        MainRoles.refuseMisplaced(config);
         java.util.LinkedHashMap<String, HikariDataSource> pools = new java.util.LinkedHashMap<>();
         Object declared = config.navigate("tesseraql.datasources");
         if (declared instanceof java.util.Map<?, ?> map) {
@@ -239,19 +244,54 @@ public final class DataSources {
         return null;
     }
 
+    /**
+     * A role pool (docs/capacity-defaults.md decision 5): a second pool onto the database the
+     * coordinate at {@code coordinatePrefix} names — or {@code override}'s, when {@code main} is
+     * overridden — sized by the block at {@code sizingPrefix}, with every pool's keys and
+     * defaults. {@code main}'s role pools and each tenant's are built here.
+     */
+    static HikariDataSource createRole(AppConfig config, String poolName, String coordinatePrefix,
+            MainDatasourceOverride override, String sizingPrefix, ClassLoader moduleLoader) {
+        HikariConfig hikari = new HikariConfig();
+        hikari.setPoolName(poolName);
+        if (override != null) {
+            hikari.setJdbcUrl(override.jdbcUrl());
+            if (override.username() != null) {
+                hikari.setUsername(override.username());
+            }
+            if (override.password() != null) {
+                hikari.setPassword(override.password());
+            }
+        } else {
+            coordinate(hikari, config, coordinatePrefix);
+            bindModuleDriver(hikari, moduleLoader);
+        }
+        sized(hikari, config, sizingPrefix);
+        return new HikariDataSource(hikari);
+    }
+
     /** The shared Hikari knob mapping every pool builds from. */
     private static HikariConfig base(AppConfig config, String poolName, String prefix) {
         HikariConfig hikari = new HikariConfig();
         hikari.setPoolName(poolName);
+        coordinate(hikari, config, prefix);
+        return sized(hikari, config, prefix);
+    }
+
+    /** Where a pool connects: the {@code jdbcUrl}, {@code username} and {@code password} at a prefix. */
+    private static void coordinate(HikariConfig hikari, AppConfig config, String prefix) {
         hikari.setJdbcUrl(config.requireString(prefix + "jdbcUrl"));
         config.getString(prefix + "username").ifPresent(hikari::setUsername);
         config.getString(prefix + "password").ifPresent(hikari::setPassword);
+    }
+
+    /** How big a pool is and how it waits: every pool's sizing keys, at a prefix. */
+    private static HikariConfig sized(HikariConfig hikari, AppConfig config, String prefix) {
         // TesseraQL's default, not Hikari's (docs/http-threading.md decision 2). These two
         // decide how much concurrent database work a runtime does, and leaving them inherited
-        // meant the answer lived in a dependency's release notes: an application that declared
-        // neither got Hikari's 10 against an HTTP worker pool of 20, so half the workers could
-        // only ever wait here. The pool now matches tesseraql.http.workerThreads by default and
-        // the two are raised together.
+        // meant the answer lived in a dependency's release notes. The pool's twin is
+        // tesseraql.http.maxInFlight, not the worker pool, which runs no route
+        // (docs/capacity-defaults.md decision 3): raise the two together.
         hikari.setMaximumPoolSize(config.getString(prefix + "maximumPoolSize")
                 .map(Integer::parseInt)
                 .orElse(DEFAULT_MAX_POOL_SIZE));

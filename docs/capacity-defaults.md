@@ -23,6 +23,10 @@
 > platform runs uses, and a `fileTransferPool`, which the asynchronous file transfers a route starts
 > use. Both open onto main's own database. In a per-tenant mode, each tenant's pool gains the same
 > two roles. A transfer's bookkeeping follows the database rather than the pool object.
+> **Shipped, #1460**, as amended. One addition: the ops dashboard's pool alert and the scrape both
+> report main's role pools (`main.jobPool`, `main.fileTransferPool`), so a role pool with waiters
+> pages `TQL-OPS-9011` like any other. The readiness probe still walks only the named pools. A
+> revert probe that sent route transfers back to the online pool turned the integration test red.
 >
 > **S2b (the stack's framework pool).** It is sized by declaration rather than by HikariCP's own
 > defaults.
@@ -322,7 +326,11 @@ names a real coordinate.
 - **S2b:** [deployment.md](deployment.md) and [hosting.md](hosting.md) describe the stack
   framework pool's keys.
 - **S3:** [deployment.md](deployment.md)'s profile section points at the generated files, and the
-  getting-started text `tesseraql new` prints is checked.
+  getting-started text `tesseraql new` prints is checked. The configuration schema the editor
+  reads (`tesseraql-config-v1`) describes `jobPool` and `fileTransferPool`. Its
+  `maximumPoolSize` description, which still says HikariCP's default applies, is corrected. Both
+  schema copies are regenerated with the dogfood ritual that S3 runs anyway. S2a left the schema
+  alone: its `additionalProperties: true` already accepts the keys.
 - **CHANGELOG:** each slice, under Changed or Added.
 
 ## What this breaks

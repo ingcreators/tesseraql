@@ -271,11 +271,10 @@ The first two are TesseraQL's own defaults rather than the driver pool's, so the
 change under you when a dependency changes its mind. `leakDetectionThresholdMillis` stays off
 because it is a debugging aid whose log volume is an operator's decision, not a default.
 
-Background work — [jobs](jobs.md), file transfers, streams — borrows from these same pools
-outside the worker pool. That is deliberate: contention shows up as request latency you can
-measure rather than hiding in a second pool. Watch `tesseraql_pool_threads_awaiting` in the
-[metrics](#metrics-prometheus) below; a non-zero reading is the pool, not the database, being
-the constraint.
+Background work — [jobs](jobs.md), [file transfers](file-transfers.md), streams — borrows from
+these same pools by default. Contention then shows up as request latency you can measure. Watch
+`tesseraql_pool_threads_awaiting` in the [metrics](#metrics-prometheus) below: a non-zero reading
+means the pool, not the database, is the constraint.
 
 Size it from measured latency rather than from a guess. Concurrency is throughput times latency,
 so routes holding a connection for 50 ms saturate a pool of 10 at roughly 200 requests a second,
@@ -286,6 +285,54 @@ end, and every pool holds its full size from boot unless `minimumIdle` says othe
 
 A count that is not a positive integer refuses at startup (`TQL-YAML-1112`) rather than
 starting with a pool nobody asked for.
+
+### Role pools: jobs and file transfers off the online pool
+
+A long job, or a user's export that takes minutes, holds a connection for as long as it runs.
+On the shared pool, that connection is not there for a page. `main` may declare a **second pool
+onto its own database** for each kind of such work:
+
+```yaml
+tesseraql:
+  datasources:
+    main:
+      jdbcUrl: jdbc:postgresql://db:5432/app
+      maximumPoolSize: 10          # requests
+      jobPool:                     # every job run
+        maximumPoolSize: 3
+        minimumIdle: 0
+      fileTransferPool:            # the online batch: a list page's export, My exports, a CSV import
+        maximumPoolSize: 5
+        minimumIdle: 0
+```
+
+| Pool | What runs on it |
+| --- | --- |
+| `jobPool` | Every execution of a `kind: job`: scheduled, from an external scheduler's `tesseraql job run`, manual from the ops console, an `after:` chain. Its steps, its `export:` steps, and a poll-triggered import |
+| `fileTransferPool` | The asynchronous transfers a `file-export` or `file-import` route starts. Nothing else bounds how many run at once, so this pool's size is that bound |
+| `main` | Requests, including a synchronous `query-export` downloaded in place, the outbox, consumers, and everything else |
+
+- **Each role pool is optional, and takes main's coordinate.** The blocks are
+  `tesseraql.datasources.main.jobPool` and `tesseraql.datasources.main.fileTransferPool`, and
+  each uses the same keys and defaults as the table above. Where a role is undeclared, that work
+  stays on `main`, as before.
+- **What decides the pool is the executor, not who started the work.** A manual run from the
+  console is a job. A job that names `datasource: main` is a job on `main`, so it runs on
+  `jobPool`. A job that names another datasource runs on that datasource's pool.
+- **A transfer on a role pool commits its rows and its verdict together,** as on `main`: a role
+  pool is main's own database.
+- **The scrape reports them as `main.jobPool` and `main.fileTransferPool`,** and a role pool
+  with waiters pages like any other (`TQL-OPS-9011`).
+- **Declaring one under another datasource refuses the boot with `TQL-YAML-1115`,** because it
+  would configure nothing there. So does declaring one on a duckdb `main`, an in-process engine
+  with no second pool to open.
+- **In a per-tenant mode,** each tenant's pool gets the same roles
+  ([multi-tenancy](multi-tenancy.md#schema-per-tenant-and-database-per-tenant)).
+
+`connectionTimeoutMillis` decides what happens beyond a role pool's size: the work queues for a
+connection, then fails. A transfer a user is watching can wait a couple of minutes, and a job
+inside a night window longer. Past that, the pool is too small for the load, and a visible
+failure says so.
 
 ## Transport security (TLS and HSTS)
 

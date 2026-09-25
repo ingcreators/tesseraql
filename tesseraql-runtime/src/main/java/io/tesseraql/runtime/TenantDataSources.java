@@ -4,8 +4,10 @@ import com.zaxxer.hikari.HikariDataSource;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.pipeline.tenant.PoolRole;
 import io.tesseraql.pipeline.tenant.TenantDataSourceResolver;
 import io.tesseraql.yaml.config.AppConfig;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -41,10 +43,14 @@ public final class TenantDataSources implements TenantDataSourceResolver, AutoCl
             "schema-per-tenant", "database-per-tenant");
 
     private final Map<String, HikariDataSource> byTenant;
+    /** Each tenant's role pools (docs/capacity-defaults.md decision 5a); absent roles stay on its pool. */
+    private final Map<String, Map<PoolRole, HikariDataSource>> rolesByTenant;
     private final boolean perTenant;
 
-    private TenantDataSources(Map<String, HikariDataSource> byTenant, boolean perTenant) {
+    private TenantDataSources(Map<String, HikariDataSource> byTenant,
+            Map<String, Map<PoolRole, HikariDataSource>> rolesByTenant, boolean perTenant) {
         this.byTenant = byTenant;
+        this.rolesByTenant = rolesByTenant;
         this.perTenant = perTenant;
     }
 
@@ -76,16 +82,48 @@ public final class TenantDataSources implements TenantDataSourceResolver, AutoCl
             }
         }
         if (!perTenant || !(node instanceof Map<?, ?> datasources) || datasources.isEmpty()) {
-            return new TenantDataSources(Map.of(), perTenant);
+            return new TenantDataSources(Map.of(), Map.of(), perTenant);
         }
         Map<String, HikariDataSource> built = new LinkedHashMap<>();
-        for (Object key : datasources.keySet()) {
-            String tenant = String.valueOf(key);
-            built.put(tenant, DataSources.create(
-                    config, "tesseraql-tenant-" + tenant, "tenancy.datasources." + tenant + ".",
-                    moduleLoader));
+        Map<String, Map<PoolRole, HikariDataSource>> roles = new LinkedHashMap<>();
+        try {
+            for (Object key : datasources.keySet()) {
+                String tenant = String.valueOf(key);
+                String prefix = "tenancy.datasources." + tenant + ".";
+                built.put(tenant, DataSources.create(
+                        config, "tesseraql-tenant-" + tenant, prefix, moduleLoader));
+                Map<PoolRole, HikariDataSource> tenantRoles = new EnumMap<>(PoolRole.class);
+                roles.put(tenant, tenantRoles);
+                for (PoolRole role : MainRoles.ROLES) {
+                    String sizing = roleSizing(config, prefix, role);
+                    if (sizing != null) {
+                        tenantRoles.put(role, DataSources.createRole(config,
+                                "tesseraql-tenant-" + tenant + "-" + MainRoles.suffix(role),
+                                prefix, null, sizing, moduleLoader));
+                    }
+                }
+            }
+        } catch (RuntimeException failed) {
+            // The pools already open would otherwise outlive a boot that refused.
+            roles.values().forEach(owned -> owned.values().forEach(HikariDataSource::close));
+            built.values().forEach(HikariDataSource::close);
+            throw failed;
         }
-        return new TenantDataSources(Map.copyOf(built), perTenant);
+        return new TenantDataSources(Map.copyOf(built), Map.copyOf(roles), perTenant);
+    }
+
+    /**
+     * Where a tenant's role pool reads its sizing (docs/capacity-defaults.md decision 5a): the
+     * tenant block's own role block, else main's, else {@code null} — the tenant keeps that work
+     * on its own pool, exactly as {@code main} does when it declares no such role.
+     */
+    private static String roleSizing(AppConfig config, String tenantPrefix, PoolRole role) {
+        String own = tenantPrefix + MainRoles.key(role);
+        if (config.navigate(own) != null) {
+            return own + ".";
+        }
+        String mains = "tesseraql.datasources.main." + MainRoles.key(role);
+        return config.navigate(mains) != null ? mains + "." : null;
     }
 
     boolean isEmpty() {
@@ -119,6 +157,17 @@ public final class TenantDataSources implements TenantDataSourceResolver, AutoCl
         return fallback;
     }
 
+    /**
+     * As {@link #dataSourceFor(String, DataSource)}, for work of {@code role}
+     * (docs/capacity-defaults.md decision 5a): the tenant's role pool where it has one, else its
+     * own pool — refused, as ever, for an unknown tenant in a per-tenant mode. In shared-schema
+     * mode there are no tenant pools, so {@code fallback} is main's pool for the role.
+     */
+    DataSource dataSourceFor(String tenantId, DataSource fallback, PoolRole role) {
+        HikariDataSource rolePool = rolePool(tenantId, role);
+        return rolePool != null ? rolePool : dataSourceFor(tenantId, fallback);
+    }
+
     @Override
     public DataSource resolve(String tenantId) {
         DataSource dataSource = byTenant.get(tenantId);
@@ -130,7 +179,19 @@ public final class TenantDataSources implements TenantDataSourceResolver, AutoCl
     }
 
     @Override
+    public DataSource resolve(String tenantId, PoolRole role) {
+        HikariDataSource rolePool = rolePool(tenantId, role);
+        return rolePool != null ? rolePool : resolve(tenantId);
+    }
+
+    private HikariDataSource rolePool(String tenantId, PoolRole role) {
+        Map<PoolRole, HikariDataSource> roles = rolesByTenant.get(tenantId);
+        return roles == null || role == PoolRole.ONLINE ? null : roles.get(role);
+    }
+
+    @Override
     public void close() {
+        rolesByTenant.values().forEach(roles -> roles.values().forEach(HikariDataSource::close));
         byTenant.values().forEach(HikariDataSource::close);
     }
 }
