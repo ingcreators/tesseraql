@@ -37,6 +37,32 @@ class AppLinterBrokenDocumentTest {
         return dir;
     }
 
+    /**
+     * A second YAML document in one application file is refused (docs/jackson-3.md S2): Jackson
+     * 2 read the first and dropped the rest, so a stray `---` hid everything after it.
+     */
+    @Test
+    void aSecondDocumentInOneFileIsRefused(@TempDir Path dir) throws Exception {
+        app(dir);
+        Files.createDirectories(dir.resolve("web/twice"));
+        Files.writeString(dir.resolve("web/twice/get.yml"), """
+                version: tesseraql/v1
+                id: twice
+                kind: route
+                recipe: query-json
+                security:
+                  auth: public
+                ---
+                id: the-second-document
+                """);
+
+        assertThat(at(new AppLinter().lint(dir), "web/twice/get.yml")).singleElement()
+                .satisfies(finding -> {
+                    assertThat(finding.code()).isEqualTo("TQL-YAML-1001");
+                    assertThat(finding.message()).contains("Trailing token");
+                });
+    }
+
     private static List<LintFinding> at(List<LintFinding> findings, String source) {
         return findings.stream().filter(finding -> source.equals(finding.source())).toList();
     }

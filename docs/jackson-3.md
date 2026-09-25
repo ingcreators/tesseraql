@@ -17,7 +17,10 @@
 > The bench reading moved by −0.2%.
 >
 > **S2 (the one default adopted).** Trailing content after a JSON value or a YAML document is
-> refused. Today it is dropped silently.
+> refused. Today it is dropped silently. **Shipped, #1455**, as designed: every factory enables
+> `FAIL_ON_TRAILING_TOKENS`; a sign-in body carrying two objects is a 400 where it was a 401
+> for the first, and a route file with a second document is its own `TQL-YAML-1001`. No tracked
+> file or fixture carried trailing content.
 >
 > **S3 (one Jackson line on the runtime).** Jackson 2 leaves the runtime closure, and a tripwire
 > keeps it out.
