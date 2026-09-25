@@ -100,9 +100,16 @@ public final class DataSources {
         return String.valueOf(cause.getMessage()).replace('\n', ' ');
     }
 
-    /** Creates the {@code main} HikariCP pool from an explicit override rather than config. */
-    public static HikariDataSource create(MainDatasourceOverride override) {
-        return create("tesseraql-main", override);
+    /**
+     * The {@code main} pool under an override (docs/capacity-defaults.md decision 11): the
+     * override's coordinate, and the sizing {@code tesseraql.datasources.main} declares, with
+     * every pool's keys and defaults. The override relocates the database; it does not discard
+     * what was declared about the pool (docs/cli-surface.md decision 4b).
+     */
+    private static HikariDataSource overriddenMain(AppConfig config,
+            MainDatasourceOverride override) {
+        return createRole(config, "tesseraql-main", "tesseraql.datasources.main.", override,
+                "tesseraql.datasources.main.", null);
     }
 
     /**
@@ -132,7 +139,8 @@ public final class DataSources {
 
     /**
      * Like {@link #createAll(AppConfig)}, but when {@code override} is non-null the {@code main}
-     * pool is built from it instead of config — {@code main} may then be absent from config.
+     * pool connects to it instead of the configured coordinate, still sized by config —
+     * {@code main} may then be absent from config.
      */
     public static java.util.LinkedHashMap<String, HikariDataSource> createAll(AppConfig config,
             MainDatasourceOverride override) {
@@ -166,13 +174,13 @@ public final class DataSources {
             for (Object name : map.keySet()) {
                 String poolName = String.valueOf(name);
                 pools.put(poolName, override != null && "main".equals(poolName)
-                        ? create(override)
+                        ? overriddenMain(config, override)
                         : create(config, poolName, appHome, override, moduleLoader));
             }
         }
         if (!pools.containsKey("main")) {
             if (override != null) {
-                pools.put("main", create(override));
+                pools.put("main", overriddenMain(config, override));
             } else {
                 pools.values().forEach(HikariDataSource::close);
                 // Reuse the single-pool path for its clear missing-key error.
