@@ -276,6 +276,9 @@ The first two are TesseraQL's own defaults rather than the driver pool's, so the
 change under you when a dependency changes its mind. `leakDetectionThresholdMillis` stays off
 because it is a debugging aid whose log volume is an operator's decision, not a default.
 
+They apply under `dev --embedded-db` too: the embedded server replaces where `main` connects, not
+what it declares about its pool.
+
 The stack's framework pool takes the same keys, with the same defaults, under
 `framework.datasource` in `tesseraql-stack.yml`
 ([hosting](hosting.md#the-stacks-own-settings--tesseraql-stackyml)).

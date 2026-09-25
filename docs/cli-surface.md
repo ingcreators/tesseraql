@@ -323,6 +323,12 @@ Two properties fall out of that, and both are the point:
 - **Everything declared on `main` survives** — `maximumPoolSize` and its neighbours are read from
   configuration as usual, because the pool is no longer built from three fields.
 
+  *(2026-09-25: this second property did not hold until
+  [capacity-defaults.md](capacity-defaults.md) decision 11. The query parameters were carried over,
+  but the pool was still built from the override alone, so a declared `maximumPoolSize` and its
+  neighbours were read by nothing under `--embedded-db`. An overridden `main` now takes the
+  override's coordinate and the declared sizing.)*
+
 **A backstop, because the placeholder is a convention rather than a contract.** `db.main.*` is
 written by the scaffolder and followed by every example, but the runtime reads only
 `tesseraql.datasources.main.*`; an application may spell its URL literally. So after resolution, if

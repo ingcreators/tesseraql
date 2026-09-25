@@ -526,6 +526,14 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Fixed
 
+- **Under `--embedded-db`, `main` keeps the pool size it declares.** `main` was built from the
+  embedded server's coordinate alone, so `maximumPoolSize`, `connectionTimeoutMillis` and the
+  other pool keys under `tesseraql.datasources.main` were read by nothing, and the pool took
+  HikariCP's defaults.
+  Its role pools already read their sizing under the same override. Now the override supplies only
+  the coordinate. `docs/cli-surface.md` decision 4b had promised this; its query parameters were
+  carried over, and now the sizing is too. `docs/capacity-defaults.md` decision 11.
+
 - **The stack file's `security.oauth.enabled` reads every configuration spelling.** It went
   through `Boolean.parseBoolean`, so `on`, `yes` and `1` turned the stack's authorization
   server off without a word — now as under YAML 1.2, where `on` and `yes` are text. It reads

@@ -38,7 +38,7 @@
 >
 > **S3 (the skeleton).** `tesseraql new` writes a production profile that separates the online pool
 > from the two role pools. The stack marker states the production posture. **Shipped, #1462**, as
-> amended, and with it the campaign is complete. The generated README gained a short
+> amended, and with it the first design is complete. The generated README gained a short
 > "Environments" section, and the base configuration's comment says the same: an application
 > that declares `prod` and `staging` refuses any other profile. A freshly generated application
 > boots under `prod` against PostgreSQL with the layout above, and a job holds its connection on
@@ -52,6 +52,11 @@
 > TOTP check and IAM Admin. Its sessions ride the framework pool, so one sign-in was split across
 > two pools on one database. So where the host holds a framework pool, the surface borrows it as
 > its `main` and holds no pool of its own (S5). That takes 10 standing connections off every node.
+>
+> **S4 (an overridden `main`).** **Shipped, #1464**, as designed. The public
+> `create(MainDatasourceOverride)` is gone, and `main` under an override is built by `createRole`.
+> A revert probe that restored the bare builder turned the declared-sizing test red. The defaults
+> case stays green either way, because HikariCP's numbers are TesseraQL's.
 >
 > **Amended 2026-09-25, after S1: decisions 5 and 7 are replaced, and decisions 5a and 5b are
 > new.** The record first designed `tesseraql.batch.datasource`, a key naming another datasource
