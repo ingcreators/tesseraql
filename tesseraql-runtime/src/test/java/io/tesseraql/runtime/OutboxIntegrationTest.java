@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -31,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for the transactional outbox (design ch. 39.2): the command and its event commit
@@ -43,7 +43,7 @@ class OutboxIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -71,7 +71,7 @@ class OutboxIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.path("affected").asInt()).isEqualTo(1);
-        assertThat(body.path("eventId").asText()).isNotBlank();
+        assertThat(body.path("eventId").asString()).isNotBlank();
 
         assertThat(runtime.outboxStore().listPending(50))
                 .anyMatch(event -> "USER_DEACTIVATED".equals(event.eventType())

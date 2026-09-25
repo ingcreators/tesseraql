@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for the duckdb datasource (docs/duckdb.md): CSV and Parquet files read through
@@ -32,7 +32,7 @@ class DuckDbReadIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     TesseraqlRuntime runtime;
     Path appHome;
@@ -57,15 +57,15 @@ class DuckDbReadIntegrationTest {
         HttpResponse<String> parquet = get("/api/sales/summary");
         assertThat(parquet.statusCode()).isEqualTo(200);
         var rows = MAPPER.readTree(parquet.body()).get("data");
-        assertThat(rows.get(0).get("category").asText()).isEqualTo("widgets");
+        assertThat(rows.get(0).get("category").asString()).isEqualTo("widgets");
         assertThat(rows.get(0).get("total").asLong()).isEqualTo(300);
 
         // One response composed from main (PostgreSQL) and a CSV read (DuckDB).
         HttpResponse<String> dashboard = get("/api/dashboard");
         assertThat(dashboard.statusCode()).isEqualTo(200);
         var body = MAPPER.readTree(dashboard.body());
-        assertThat(body.get("open").get(0).get("name").asText()).isEqualTo("main-only");
-        assertThat(body.get("drops").get(0).get("region").asText()).isEqualTo("east");
+        assertThat(body.get("open").get(0).get("name").asString()).isEqualTo("main-only");
+        assertThat(body.get("drops").get(0).get("region").asString()).isEqualTo("east");
 
         // The fence: a raw path outside the scope roots is refused by the engine itself,
         // even though the route compiled — defense in depth under the locked configuration.

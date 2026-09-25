@@ -932,11 +932,11 @@ class BasePathEmissionIntegrationTest {
     @Test
     void aCompletedExportsLinksAreSinglePrefixedAndAnswer() throws Exception {
         String transferId = startExport("/api/things/export");
-        com.fasterxml.jackson.databind.JsonNode status = awaitTerminal(
+        tools.jackson.databind.JsonNode status = awaitTerminal(
                 "/api/things/export/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
 
-        String fileUrl = status.get("fileUrl").asText();
+        String fileUrl = status.get("fileUrl").asString();
         assertThat(fileUrl).startsWith(PREFIX + "/api/things/export/" + transferId + "/file");
         assertThat(fetch(fileUrl).statusCode()).as("GET %s", fileUrl).isEqualTo(200);
 
@@ -957,11 +957,11 @@ class BasePathEmissionIntegrationTest {
     @Test
     void aFailedExportSaysWhyWithACodeAndNoDriverText() throws Exception {
         String transferId = startExport("/api/things/export-bad");
-        com.fasterxml.jackson.databind.JsonNode status = awaitTerminal(
+        tools.jackson.databind.JsonNode status = awaitTerminal(
                 "/api/things/export-bad/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("FAILED");
-        assertThat(status.path("code").asText()).isEqualTo("TQL-LD-2810");
-        assertThat(status.path("reason").asText()).contains("statement");
+        assertThat(status.get("status").asString()).isEqualTo("FAILED");
+        assertThat(status.path("code").asString()).isEqualTo("TQL-LD-2810");
+        assertThat(status.path("reason").asString()).contains("statement");
         assertThat(status.toString()).doesNotContain("division by zero");
 
         String card = getHtml("/api/things/export-bad/" + transferId).body();
@@ -972,18 +972,18 @@ class BasePathEmissionIntegrationTest {
     private static String startExport(String path) throws Exception {
         HttpResponse<String> response = postForm(path, "_csrf=" + csrf);
         assertThat(response.statusCode()).as(response.body()).isEqualTo(202);
-        return new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.body())
-                .get("transferId").asText();
+        return io.tesseraql.yaml.JsonMappers.constrained().readTree(response.body())
+                .get("transferId").asString();
     }
 
-    private static com.fasterxml.jackson.databind.JsonNode awaitTerminal(String statusPath)
+    private static tools.jackson.databind.JsonNode awaitTerminal(String statusPath)
             throws Exception {
-        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        tools.jackson.databind.ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
         long deadline = System.currentTimeMillis() + 20_000;
         while (true) {
-            com.fasterxml.jackson.databind.JsonNode status = mapper
+            tools.jackson.databind.JsonNode status = mapper
                     .readTree(get(statusPath).body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

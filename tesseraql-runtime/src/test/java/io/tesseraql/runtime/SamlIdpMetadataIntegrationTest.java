@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -26,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for sourcing the pinned IdP signing key from IdP metadata (design ch. 10.14): the
@@ -38,7 +38,7 @@ class SamlIdpMetadataIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String AUDIENCE = "https://sp.example.com/saml";
     private static final String RECIPIENT = "https://sp.example.com/_tesseraql/saml/acs";
     private static final Instant NOW = Instant.now();
@@ -79,7 +79,7 @@ class SamlIdpMetadataIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(response.body()).get("loginId").asText()).isEqualTo("carol");
+        assertThat(MAPPER.readTree(response.body()).get("loginId").asString()).isEqualTo("carol");
     }
 
     private static Path prepareAppHome() throws IOException {

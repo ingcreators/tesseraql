@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -20,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * enrich: end to end (docs/lookups.md): a row set carrying a code is enriched with the name
@@ -36,7 +36,7 @@ class EnrichIntegrationTest {
             // executions and their binds, not an inference (docs/caching.md decision 8).
             .withCommand("postgres", "-c", "log_statement=all");
 
-    static final ObjectMapper MAPPER = new ObjectMapper();
+    static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -127,9 +127,9 @@ class EnrichIntegrationTest {
     void mergesTheReferenceNameOntoEveryRow() throws Exception {
         JsonNode rows = MAPPER.readTree(get("/api/orders").body()).get("rows");
         assertThat(rows).hasSize(4);
-        assertThat(rows.get(0).get("partner_name").asText()).isEqualTo("Acme");
-        assertThat(rows.get(1).get("partner_name").asText()).isEqualTo("Globex");
-        assertThat(rows.get(2).get("partner_name").asText()).isEqualTo("Acme");
+        assertThat(rows.get(0).get("partner_name").asString()).isEqualTo("Acme");
+        assertThat(rows.get(1).get("partner_name").asString()).isEqualTo("Globex");
+        assertThat(rows.get(2).get("partner_name").asString()).isEqualTo("Acme");
         // No partner row for P9: the column is present and null, not absent.
         assertThat(rows.get(3).has("partner_name")).isTrue();
         assertThat(rows.get(3).get("partner_name").isNull()).isTrue();
@@ -149,10 +149,10 @@ class EnrichIntegrationTest {
     @Test
     void aCompositeKeyEnrichesFromItsOwnReference() throws Exception {
         JsonNode rows = MAPPER.readTree(get("/api/orders").body()).get("rows");
-        assertThat(rows.get(0).get("terms").asText()).isEqualTo("net30");
-        assertThat(rows.get(1).get("terms").asText()).isEqualTo("net60");
+        assertThat(rows.get(0).get("terms").asString()).isEqualTo("net30");
+        assertThat(rows.get(1).get("terms").asString()).isEqualTo("net60");
         // Same buyer as row 0, same partner as row 1 — only the pair picks 'prepaid'.
-        assertThat(rows.get(2).get("terms").asText()).isEqualTo("prepaid");
+        assertThat(rows.get(2).get("terms").asString()).isEqualTo("prepaid");
     }
 
     /** into: names a named query, so a detail page's history is enriched the same way. */
@@ -160,8 +160,8 @@ class EnrichIntegrationTest {
     void aNamedQueryIsEnrichedLikeTheMainResult() throws Exception {
         JsonNode body = MAPPER.readTree(get("/api/orders/1").body());
         assertThat(body.get("history")).hasSize(2);
-        assertThat(body.get("history").get(0).get("partner_name").asText()).isEqualTo("Acme");
-        assertThat(body.get("history").get(1).get("partner_name").asText()).isEqualTo("Globex");
+        assertThat(body.get("history").get(0).get("partner_name").asString()).isEqualTo("Acme");
+        assertThat(body.get("history").get(1).get("partner_name").asString()).isEqualTo("Globex");
     }
 
     /** batchSize: 1 splits the key set across statements; the merged result is the same. */
@@ -169,8 +169,8 @@ class EnrichIntegrationTest {
     void aKeySetLargerThanTheBatchIsSplitAndStillMergesWhole() throws Exception {
         JsonNode rows = MAPPER.readTree(get("/api/orders/batched").body()).get("rows");
         assertThat(rows).hasSize(4);
-        assertThat(rows.get(0).get("partner_name").asText()).isEqualTo("Acme");
-        assertThat(rows.get(1).get("partner_name").asText()).isEqualTo("Globex");
+        assertThat(rows.get(0).get("partner_name").asString()).isEqualTo("Acme");
+        assertThat(rows.get(1).get("partner_name").asString()).isEqualTo("Globex");
         assertThat(rows.get(3).get("partner_name").isNull()).isTrue();
     }
 
@@ -194,10 +194,10 @@ class EnrichIntegrationTest {
         seenRequests.clear();
         JsonNode rows = MAPPER.readTree(get("/api/orders/via-http").body()).get("rows");
         assertThat(rows).hasSize(4);
-        assertThat(rows.get(0).get("name").asText()).isEqualTo("http-P1");
-        assertThat(rows.get(1).get("name").asText()).isEqualTo("http-P2");
+        assertThat(rows.get(0).get("name").asString()).isEqualTo("http-P1");
+        assertThat(rows.get(1).get("name").asString()).isEqualTo("http-P2");
         // Row 2 repeats P1 and costs no second call; three distinct keys, three requests.
-        assertThat(rows.get(2).get("name").asText()).isEqualTo("http-P1");
+        assertThat(rows.get(2).get("name").asString()).isEqualTo("http-P1");
         assertThat(seenRequests.stream().filter(r -> r.startsWith("/partners/"))).hasSize(3);
     }
 
@@ -206,8 +206,8 @@ class EnrichIntegrationTest {
     void aBatchHttpReferenceCallsOnceForTheWholeKeySet() throws Exception {
         seenRequests.clear();
         JsonNode rows = MAPPER.readTree(get("/api/orders/via-search").body()).get("rows");
-        assertThat(rows.get(0).get("name").asText()).isEqualTo("batch-P1");
-        assertThat(rows.get(1).get("name").asText()).isEqualTo("batch-P2");
+        assertThat(rows.get(0).get("name").asString()).isEqualTo("batch-P1");
+        assertThat(rows.get(1).get("name").asString()).isEqualTo("batch-P2");
         assertThat(rows.get(3).get("name").isNull()).isTrue();
         assertThat(seenRequests.stream().filter(r -> r.startsWith("POST /search"))).hasSize(1);
     }
@@ -225,8 +225,8 @@ class EnrichIntegrationTest {
         int statementsBefore = logged("from partners");
         int p1Before = logged("parameters: $1 = 'P1'");
         JsonNode body = MAPPER.readTree(get("/api/orders/1").body());
-        assertThat(body.get("order").get(0).get("partner_name").asText()).isEqualTo("Acme");
-        assertThat(body.get("history").get(1).get("partner_name").asText()).isEqualTo("Globex");
+        assertThat(body.get("order").get(0).get("partner_name").asString()).isEqualTo("Acme");
+        assertThat(body.get("history").get(1).get("partner_name").asString()).isEqualTo("Globex");
         Thread.sleep(400);
         assertThat(logged("from partners") - statementsBefore)
                 .as("two blocks, two key sets, two statements").isEqualTo(2);
@@ -240,8 +240,8 @@ class EnrichIntegrationTest {
         seenRequests.clear();
         JsonNode rows = MAPPER.readTree(get("/api/orders/via-http-twice").body()).get("rows");
         assertThat(rows).hasSize(4);
-        assertThat(rows.get(0).get("first").get(0).get("name").asText()).isEqualTo("http-P1");
-        assertThat(rows.get(0).get("second").get(0).get("name").asText()).isEqualTo("http-P1");
+        assertThat(rows.get(0).get("first").get(0).get("name").asString()).isEqualTo("http-P1");
+        assertThat(rows.get(0).get("second").get(0).get("name").asString()).isEqualTo("http-P1");
         assertThat(seenRequests.stream().filter(r -> r.startsWith("/partners/")))
                 .as("three distinct keys, three calls, two blocks").hasSize(3);
     }
@@ -252,9 +252,9 @@ class EnrichIntegrationTest {
         Thread.sleep(400);
         int before = logged("from partners");
         assertThat(MAPPER.readTree(get("/api/orders/held").body()).get("rows").get(0)
-                .get("partner_name").asText()).isEqualTo("Acme");
+                .get("partner_name").asString()).isEqualTo("Acme");
         assertThat(MAPPER.readTree(get("/api/orders/held").body()).get("rows").get(0)
-                .get("partner_name").asText()).isEqualTo("Acme");
+                .get("partner_name").asString()).isEqualTo("Acme");
         Thread.sleep(400);
         assertThat(logged("from partners") - before).as("two requests, one fetch").isEqualTo(1);
 
@@ -263,7 +263,7 @@ class EnrichIntegrationTest {
                 "{\"code\":\"P1\",\"name\":\"Acme Holdings\"}");
         assertThat(renamed.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(get("/api/orders/held").body()).get("rows").get(0)
-                .get("partner_name").asText()).isEqualTo("Acme Holdings");
+                .get("partner_name").asString()).isEqualTo("Acme Holdings");
         Thread.sleep(400);
         assertThat(logged("from partners") - before).isEqualTo(2);
         // Restore the name for the rows that read it.
@@ -275,9 +275,9 @@ class EnrichIntegrationTest {
     void aHeldHttpReferenceCallsOncePerKeyAcrossRequests() throws Exception {
         seenRequests.clear();
         assertThat(MAPPER.readTree(get("/api/orders/via-http-held").body()).get("rows").get(0)
-                .get("name").asText()).isEqualTo("http-P1");
+                .get("name").asString()).isEqualTo("http-P1");
         assertThat(MAPPER.readTree(get("/api/orders/via-http-held").body()).get("rows").get(0)
-                .get("name").asText()).isEqualTo("http-P1");
+                .get("name").asString()).isEqualTo("http-P1");
         assertThat(seenRequests.stream().filter(r -> r.startsWith("/partners/")))
                 .as("three distinct keys, three calls, two requests").hasSize(3);
     }

@@ -3,8 +3,6 @@ package io.tesseraql.cli;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -19,6 +17,8 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The dev-token minting loop (docs/getting-started.md): the token verifies against the
@@ -27,7 +27,7 @@ import picocli.CommandLine;
  */
 class TokenCommandTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     @Test
     void mintsAVerifiableTokenWithConfiguredClaimNames(@TempDir Path dir) throws Exception {
@@ -69,20 +69,21 @@ class TokenCommandTest {
         assertThat(parts[2]).isEqualTo(expected);
 
         JsonNode payload = MAPPER.readTree(Base64.getUrlDecoder().decode(parts[1]));
-        assertThat(payload.get("sub").asText()).isEqualTo("aoki");
-        assertThat(payload.get("loginId").asText()).isEqualTo("aoki");
+        assertThat(payload.get("sub").asString()).isEqualTo("aoki");
+        assertThat(payload.get("loginId").asString()).isEqualTo("aoki");
         // Roles land under the CONFIGURED claim name, not a hardcoded one.
-        assertThat(payload.get("groups").get(0).asText()).isEqualTo("SUPPLIER");
-        assertThat(payload.get("partner").asText()).isEqualTo("P-100");
+        assertThat(payload.get("groups").get(0).asString()).isEqualTo("SUPPLIER");
+        assertThat(payload.get("partner").asString()).isEqualTo("P-100");
         assertThat(payload.get("departments").isArray()).isTrue();
-        assertThat(payload.get("departments").get(1).asText()).isEqualTo("sales");
+        assertThat(payload.get("departments").get(1).asString()).isEqualTo("sales");
         assertThat(payload.get("exp").asLong())
                 .isBetween(System.currentTimeMillis() / 1000 + 1500,
                         System.currentTimeMillis() / 1000 + 1900);
         // Minted for token-test, the token can enter token-test (docs/codec-discovery.md
         // decision 7): the application-use grant rides under the permissions claim.
         assertThat(payload.get("permissions")).isNotNull();
-        assertThat(payload.get("permissions").get(0).asText()).isEqualTo("tql.app.use.token-test");
+        assertThat(payload.get("permissions").get(0).asString())
+                .isEqualTo("tql.app.use.token-test");
     }
 
     /** An explicit permission list is the caller's; the grant is not smuggled into it. */
@@ -110,7 +111,7 @@ class TokenCommandTest {
         String[] parts = out.toString(StandardCharsets.UTF_8).trim().split("\\.");
         JsonNode payload = MAPPER.readTree(Base64.getUrlDecoder().decode(parts[1]));
         assertThat(payload.get("permissions")).hasSize(1);
-        assertThat(payload.get("permissions").get(0).asText()).isEqualTo("token-test.read");
+        assertThat(payload.get("permissions").get(0).asString()).isEqualTo("token-test.read");
     }
 
     @Test

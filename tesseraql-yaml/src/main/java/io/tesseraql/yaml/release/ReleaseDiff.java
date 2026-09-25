@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.release;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.manifest.AppManifest;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.manifest.MigrationFile;
@@ -10,7 +8,6 @@ import io.tesseraql.yaml.openapi.OpenApiDiff;
 import io.tesseraql.yaml.openapi.OpenApiGenerator;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -19,6 +16,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * "What does this deploy change" (roadmap Phase 46): a deterministic diff of two app trees —
@@ -287,19 +286,15 @@ public final class ReleaseDiff {
 
     /** The report as stable JSON, for artifacts and the docs portal. */
     public static String toJson(Report report) {
-        try {
-            Map<String, Object> tree = new LinkedHashMap<>();
-            tree.put("schemaVersion", 1);
-            tree.put("routes", report.routes());
-            tree.put("api", report.api().entries());
-            tree.put("newMigrations", report.newMigrations());
-            tree.put("policies", report.policies());
-            tree.put("schema", report.schema());
-            tree.put("empty", report.isEmpty());
-            return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(tree);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-            throw new UncheckedIOException(ex);
-        }
+        Map<String, Object> tree = new LinkedHashMap<>();
+        tree.put("schemaVersion", 1);
+        tree.put("routes", report.routes());
+        tree.put("api", report.api().entries());
+        tree.put("newMigrations", report.newMigrations());
+        tree.put("policies", report.policies());
+        tree.put("schema", report.schema());
+        tree.put("empty", report.isEmpty());
+        return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(tree);
     }
 
     private static void appendNames(StringBuilder out, String label, List<String> names) {

@@ -288,6 +288,28 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Jackson 3.1, the long-term-support line.** The framework's JSON and YAML run on Jackson 3.1
+  (`tools.jackson`) instead of 2.22, and stay on the LTS line: patch releases flow, minor ones
+  wait for Jackson's next LTS. Every mapper factory keeps Jackson 2's value for each default
+  Jackson 3 changed that an application would see — an absent boolean is still false, an
+  unknown JSON property still refused, properties still in declaration order, enums still by
+  name — and `JacksonDefaultsLedgerTest` holds them there with the read bounds, duplicate-key
+  detection and ASCII escaping, all of which Jackson's own migration recipe silently dropped
+  when it rewrote a mapper built over a configured factory. Eight mappers built outside the
+  factories (one read a Studio request body with no bound) now come from them, and the ledger
+  that missed them sees every construction shape. The public methods of the MCP, security and
+  YAML modules that carry a Jackson type now carry the `tools.jackson` one. No speed change was
+  claimed or measured beyond noise. `docs/jackson-3.md` is the record.
+
+- **YAML is read as YAML 1.2 with the core schema — the reading the editor already applies**
+  through `redhat.vscode-yaml`. `yes`/`no`/`on`/`off` are text: a boolean field refuses them
+  (as the editor already flagged), and a configuration boolean still accepts them. A number
+  with leading zeros is decimal (`0123` is 123; a text field keeps `0123`), where YAML 1.1 read
+  it as octal. Binary, underscore and base-60 numbers are text. `~`, `Null`, `True` and hex
+  numbers keep their meaning. Jackson 3.1 reads the stricter JSON schema; a thin parser
+  subclass reads the core schema until an LTS line carries Jackson 3.2's own support for it.
+  `docs/jackson-3.md` decision 6.
+
 - **The framework's toolchain is pinned by `mise.toml`** — Temurin 25, CI's distribution where
   the Dev Container carried Microsoft's build; Node 22, with pnpm from each `package.json`'s
   `packageManager` through corepack; and, under `[bootstrap.packages]`, the OS packages a host
@@ -427,6 +449,17 @@ All notable changes to TesseraQL are documented here. The format follows
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
 ### Fixed
+
+- **The stack file's `security.oauth.enabled` reads every configuration spelling.** It went
+  through `Boolean.parseBoolean`, so `on`, `yes` and `1` turned the stack's authorization
+  server off without a word — now as under YAML 1.2, where `on` and `yes` are text. It reads
+  through the configuration's own rule (true/false, yes/no, on/off, 1/0), and anything else is
+  refused with `TQL-YAML-1107` naming the key. `docs/jackson-3.md` decision 7.
+
+- **The user-admin example's commands answer their outbox event id.** Three routes bound
+  `eventId: main.eventId`, a name nothing in the context carries, so the field was always
+  `null`; the two tests that checked it read the null as the text `"null"` under Jackson 2 and
+  passed. They bind `outbox.eventId` now, and the tests read a real id.
 
 - **The transfer page wears the shell's chrome.** The page a no-JS kick-off or a bookmarked
   status URL lands on — the job card inside the application's shell — rendered the shell with

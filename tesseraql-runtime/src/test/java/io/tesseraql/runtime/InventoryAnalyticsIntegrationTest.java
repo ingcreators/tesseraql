@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Milestone M23 (docs/roadmap.md, Phase 58) against the REAL inventory gallery app: the DuckDB
@@ -49,7 +49,7 @@ class InventoryAnalyticsIntegrationTest {
             // is a count, not an inference (docs/caching.md decision 12).
             .withCommand("postgres", "-c", "log_statement=all");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 
     TesseraqlRuntime runtime;
@@ -155,7 +155,7 @@ class InventoryAnalyticsIntegrationTest {
         HttpResponse<String> uploaded = upload("/reports/R-1/files", uploader,
                 "report.parquet", parquet);
         assertThat(uploaded.statusCode()).isEqualTo(201);
-        String datasetId = MAPPER.readTree(uploaded.body()).get("id").asText();
+        String datasetId = MAPPER.readTree(uploaded.body()).get("id").asString();
 
         HttpResponse<String> owned = get("/api/report?id=" + datasetId,
                 Map.of("Authorization", "Bearer " + uploader));

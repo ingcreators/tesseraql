@@ -1,7 +1,5 @@
 package io.tesseraql.security.jwt;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
 import java.io.ByteArrayInputStream;
 import java.math.BigInteger;
@@ -14,6 +12,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Parses RSA public keys for RS256 verification (design ch. 11.1), JDK-only — no JOSE library. A
@@ -140,6 +140,6 @@ public final class Jwks {
 
     private static String text(JsonNode node, String field) {
         JsonNode value = node.get(field);
-        return value == null || value.isNull() ? null : value.asText();
+        return value == null || value.isNull() ? null : value.asString("");
     }
 }

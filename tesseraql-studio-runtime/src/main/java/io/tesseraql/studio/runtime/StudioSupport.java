@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
 
 /**
  * The Studio machinery's shared helpers, extracted verbatim from the runtime boot when the
@@ -178,10 +179,11 @@ final class StudioSupport {
         String trimmed = body.stripLeading();
         if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
             try {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                tools.jackson.databind.ObjectMapper mapper = io.tesseraql.yaml.JsonMappers
+                        .constrained();
                 return mapper.writerWithDefaultPrettyPrinter()
                         .writeValueAsString(mapper.readTree(body));
-            } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+            } catch (JacksonException ignored) {
                 // Not valid JSON after all — show the raw body.
             }
         }
@@ -371,10 +373,10 @@ final class StudioSupport {
             return Map.of();
         }
         try {
-            Object parsed = new com.fasterxml.jackson.databind.ObjectMapper().readValue(body,
+            Object parsed = io.tesseraql.yaml.JsonMappers.constrained().readValue(body,
                     Map.class);
             return parsed instanceof Map ? (Map<String, Object>) parsed : Map.of();
-        } catch (java.io.IOException ex) {
+        } catch (JacksonException ex) {
             return Map.of();
         }
     }

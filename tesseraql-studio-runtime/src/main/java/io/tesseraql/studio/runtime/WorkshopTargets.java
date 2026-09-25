@@ -1,6 +1,5 @@
 package io.tesseraql.studio.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -12,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Where the studio shell's delegated calls go (docs/studio-shell.md structural decision 2): a
@@ -95,7 +96,7 @@ interface WorkshopTargets {
                     return decoded.size() == 1 && decoded.containsKey("__value__")
                             ? decoded.get("__value__")
                             : decoded;
-                } catch (java.io.IOException ex) {
+                } catch (JacksonException ex) {
                     throw new TqlException(UNREACHABLE,
                             "The workshop for '" + member + "' answered unparseably");
                 }

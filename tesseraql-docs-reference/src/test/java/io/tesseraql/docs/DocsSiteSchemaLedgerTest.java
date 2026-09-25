@@ -2,15 +2,15 @@ package io.tesseraql.docs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.json.JsonReadFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import tools.jackson.core.json.JsonReadFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * {@code wrangler.jsonc} names no schema it cannot resolve (docs/audit-low-leads.md slice 23,
@@ -37,7 +37,7 @@ class DocsSiteSchemaLedgerTest {
         if (schema == null) {
             return;
         }
-        String reference = schema.asText();
+        String reference = schema.asString();
         if (reference.startsWith("https://")) {
             return;
         }
@@ -50,7 +50,8 @@ class DocsSiteSchemaLedgerTest {
         Path manifest = REPO.resolve("package.json");
         assertThat(manifest).as("the package.json at the deploy Path, which declares %s",
                 packageName).isRegularFile();
-        JsonNode declared = new ObjectMapper().readTree(manifest.toFile());
+        JsonNode declared = new tools.jackson.databind.json.JsonMapper()
+                .readTree(manifest.toFile());
         assertThat(declared.path("devDependencies").has(packageName)
                 || declared.path("dependencies").has(packageName))
                 .as("%s declared in %s", packageName, manifest).isTrue();

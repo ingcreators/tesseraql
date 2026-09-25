@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -31,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A download keeps its name on the wire (docs/download-name-and-bytes.md). Every {@code
@@ -58,7 +58,7 @@ class DownloadFilenameIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
     private static final HttpClient HTTP_1_1 = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1).build();
@@ -187,7 +187,7 @@ class DownloadFilenameIntegrationTest {
             HttpResponse<String> uploaded = upload("/reports/R-1/files", writer, row[0],
                     "%PDF-1.4 stub".getBytes(StandardCharsets.UTF_8));
             assertThat(uploaded.statusCode()).isEqualTo(201);
-            String id = MAPPER.readTree(uploaded.body()).path("id").asText();
+            String id = MAPPER.readTree(uploaded.body()).path("id").asString();
 
             HttpResponse<String> download = HTTP_1_1.send(
                     request("/reports/R-1/files/" + id, writer).build(),
@@ -199,7 +199,7 @@ class DownloadFilenameIntegrationTest {
             JsonNode listing = MAPPER.readTree(HTTP_1_1.send(
                     request("/reports/R-1/files", writer).build(),
                     HttpResponse.BodyHandlers.ofString()).body());
-            assertThat(listing.findValues("filename")).extracting(JsonNode::asText)
+            assertThat(listing.findValues("filename")).extracting(JsonNode::asString)
                     .contains(row[0]);
         }
     }
@@ -253,7 +253,7 @@ class DownloadFilenameIntegrationTest {
         HttpResponse<String> uploaded = upload("/reports/R-1/files", writer, "sized.pdf",
                 "%PDF-1.4 sized stub, twenty-nine bytes".getBytes(StandardCharsets.UTF_8));
         assertThat(uploaded.statusCode()).isEqualTo(201);
-        String id = MAPPER.readTree(uploaded.body()).path("id").asText();
+        String id = MAPPER.readTree(uploaded.body()).path("id").asString();
         HttpResponse<byte[]> attachment = HTTP_1_1.send(
                 request("/reports/R-1/files/" + id, writer).build(),
                 HttpResponse.BodyHandlers.ofByteArray());

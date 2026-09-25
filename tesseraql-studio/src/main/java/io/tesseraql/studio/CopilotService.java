@@ -1,9 +1,5 @@
 package io.tesseraql.studio;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -20,6 +16,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The Studio copilot (roadmap Phase 44, decision point 8 resolved): a chat loop against an
@@ -201,15 +202,15 @@ public final class CopilotService {
                 return;
             }
             for (JsonNode call : toolCalls) {
-                String name = call.path("function").path("name").asText();
-                String arguments = call.path("function").path("arguments").asText("{}");
+                String name = call.path("function").path("name").asString("");
+                String arguments = call.path("function").path("arguments").asString("{}");
                 if (listener != null) {
                     listener.toolCall(name);
                 }
                 String result = executeTool(name, arguments, canEdit, actor);
                 ObjectNode toolMessage = MAPPER.createObjectNode();
                 toolMessage.put("role", "tool");
-                toolMessage.put("tool_call_id", call.path("id").asText());
+                toolMessage.put("tool_call_id", call.path("id").asString(""));
                 toolMessage.put("content", result);
                 history.add(toolMessage);
             }
@@ -260,13 +261,13 @@ public final class CopilotService {
                 }
                 JsonNode delta = MAPPER.readTree(payload).path("choices").path(0)
                         .path("delta");
-                String text = delta.path("content").asText("");
+                String text = delta.path("content").asString("");
                 if (!text.isEmpty()) {
                     content.append(text);
                     listener.delta(text);
                 }
                 for (JsonNode part : delta.path("tool_calls")) {
-                    ObjectNode call = calls.computeIfAbsent(part.path("index").asInt(),
+                    ObjectNode call = calls.computeIfAbsent(part.path("index").asInt(0),
                             index -> {
                                 ObjectNode fresh = MAPPER.createObjectNode();
                                 fresh.put("type", "function");
@@ -275,17 +276,17 @@ public final class CopilotService {
                                 return fresh;
                             });
                     if (part.hasNonNull("id")) {
-                        call.put("id", part.path("id").asText());
+                        call.put("id", part.path("id").asString(""));
                     }
                     ObjectNode function = (ObjectNode) call.path("function");
                     JsonNode partFunction = part.path("function");
                     if (partFunction.hasNonNull("name")) {
-                        function.put("name", function.path("name").asText()
-                                + partFunction.path("name").asText());
+                        function.put("name", function.path("name").asString("")
+                                + partFunction.path("name").asString(""));
                     }
                     if (partFunction.hasNonNull("arguments")) {
-                        function.put("arguments", function.path("arguments").asText()
-                                + partFunction.path("arguments").asText());
+                        function.put("arguments", function.path("arguments").asString("")
+                                + partFunction.path("arguments").asString(""));
                     }
                 }
             }
@@ -340,21 +341,22 @@ public final class CopilotService {
                     argumentsJson == null || argumentsJson.isBlank() ? "{}" : argumentsJson);
             return switch (name) {
                 case "list_routes" -> listRoutes();
-                case "read_source" -> studio.source(args.path("path").asText());
+                case "read_source" -> studio.source(args.path("path").asString(""));
                 case "lint" -> lint();
                 case "schema_tables" -> schemaTables();
                 case "preview_draft" -> preview(args);
                 case "save_draft" -> saveDraft(args, canEdit, actor);
                 default -> "Unknown tool: " + name;
             };
+        } catch (JacksonException ex) {
+            // First: a JacksonException is a RuntimeException in Jackson 3.
+            return "Tool " + name + " failed: bad arguments";
         } catch (RuntimeException ex) {
             return "Tool " + name + " failed: " + ex.getMessage();
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
-            return "Tool " + name + " failed: bad arguments";
         }
     }
 
-    private String listRoutes() throws com.fasterxml.jackson.core.JsonProcessingException {
+    private String listRoutes() {
         List<Map<String, String>> routes = new ArrayList<>();
         for (RouteFile route : manifest.routes()) {
             Map<String, String> row = new LinkedHashMap<>();
@@ -369,7 +371,7 @@ public final class CopilotService {
         return MAPPER.writeValueAsString(routes);
     }
 
-    private String lint() throws com.fasterxml.jackson.core.JsonProcessingException {
+    private String lint() {
         // The studio's health lint: the application's function and codec sets, not the
         // process default's (docs/codec-discovery.md decision 3).
         List<LintFinding> findings = studio.health();
@@ -378,7 +380,7 @@ public final class CopilotService {
                 : MAPPER.writeValueAsString(findings);
     }
 
-    private String schemaTables() throws com.fasterxml.jackson.core.JsonProcessingException {
+    private String schemaTables() {
         DocService docs = new DocService(manifest);
         Map<String, List<String>> tables = new LinkedHashMap<>();
         for (String table : docs.tableNames()) {
@@ -390,8 +392,8 @@ public final class CopilotService {
     }
 
     private String preview(JsonNode args) {
-        StudioService.PreviewResult result = studio.preview(args.path("path").asText(),
-                args.path("content").asText());
+        StudioService.PreviewResult result = studio.preview(args.path("path").asString(""),
+                args.path("content").asString(""));
         return result.valid()
                 ? "VALID (" + result.kind() + "): " + result.result()
                 : "INVALID (" + result.kind() + "): " + result.error();
@@ -402,8 +404,8 @@ public final class CopilotService {
             return "Refused: you do not hold a Studio edit role, so the copilot may not save"
                     + " drafts in this session.";
         }
-        String path = args.path("path").asText();
-        studio.saveDraft(path, args.path("content").asText());
+        String path = args.path("path").asString("");
+        studio.saveDraft(path, args.path("content").asString(""));
         studio.recordCopilotDraft(actor, path);
         return "Draft saved at " + path + ". It is NOT served yet: review the diff and apply"
                 + " it in the editor (" + "/_tesseraql/studio/ui/source?path=" + path + ").";
@@ -476,18 +478,18 @@ public final class CopilotService {
     private static List<Entry> transcript(List<JsonNode> history) {
         List<Entry> entries = new ArrayList<>();
         for (JsonNode message : history) {
-            String role = message.path("role").asText();
+            String role = message.path("role").asString("");
             if ("system".equals(role) || "tool".equals(role)) {
                 continue;
             }
             String text = message.path("content").isNull()
                     ? ""
-                    : message.path("content").asText("");
+                    : message.path("content").asString("");
             String tool = null;
             JsonNode calls = message.path("tool_calls");
             if (calls.isArray() && !calls.isEmpty()) {
                 List<String> names = new ArrayList<>();
-                calls.forEach(call -> names.add(call.path("function").path("name").asText()));
+                calls.forEach(call -> names.add(call.path("function").path("name").asString("")));
                 tool = String.join(", ", names);
             }
             if (!text.isBlank() || tool != null) {

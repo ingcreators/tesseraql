@@ -1,7 +1,5 @@
 package io.tesseraql.report.docs;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -23,6 +21,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Generates the full spec-layer documentation model and its {@code spec.json} artifact
@@ -72,7 +72,7 @@ public final class AppDocGenerator {
     public String toJson(AppManifest manifest) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(generate(manifest));
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(GEN_ERROR, "Failed to serialize spec.json: " + ex.getMessage());
         }
     }

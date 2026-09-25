@@ -1,7 +1,7 @@
 package io.tesseraql.mcp;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Objects;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * One MCP tool: its programmatic {@code name}, a human {@code title} and {@code description}, the

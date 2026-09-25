@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.audit.RouteAuditSink;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Step;
@@ -12,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The opt-in business-route audit log (roadmap Phase 45): one durable row per invocation —
@@ -103,7 +104,7 @@ public final class RouteAudit implements Step {
         }
         try {
             return MAPPER.writeValueAsString(new LinkedHashMap<>(recorded));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             return null;
         }
     }

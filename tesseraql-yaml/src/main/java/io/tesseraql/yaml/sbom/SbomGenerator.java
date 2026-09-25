@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.sbom;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +9,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Generates a deterministic CycloneDX SBOM for an app package (design ch. 50). Each YAML/SQL/
@@ -104,7 +104,7 @@ public final class SbomGenerator {
         try {
             return mapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(cycloneDx(manifest, appName, appVersion, dependencies));
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ERROR, "Failed to serialize SBOM: " + ex.getMessage());
         }
     }

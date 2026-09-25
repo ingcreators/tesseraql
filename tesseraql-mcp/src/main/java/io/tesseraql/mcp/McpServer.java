@@ -1,9 +1,5 @@
 package io.tesseraql.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.core.error.TqlException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,6 +8,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * A transport-agnostic Model Context Protocol server: it turns one parsed JSON-RPC message into the
@@ -128,12 +128,12 @@ public final class McpServer {
         }
         JsonNode id = message.get("id");
         JsonNode methodNode = message.get("method");
-        if (methodNode == null || !methodNode.isTextual()) {
+        if (methodNode == null || !methodNode.isString()) {
             return id == null
                     ? Optional.empty()
                     : Optional.of(error(id, INVALID_REQUEST, "Missing method"));
         }
-        String method = methodNode.asText();
+        String method = methodNode.asString("");
         boolean notification = id == null;
         if (notification) {
             // The only notification we expect is notifications/initialized; nothing to answer.
@@ -173,7 +173,7 @@ public final class McpServer {
 
     private ObjectNode initialize(JsonNode params) {
         String requested = params != null && params.hasNonNull("protocolVersion")
-                ? params.get("protocolVersion").asText()
+                ? params.get("protocolVersion").asString("")
                 : LATEST;
         String negotiated = SUPPORTED.contains(requested) ? requested : LATEST;
 
@@ -229,7 +229,7 @@ public final class McpServer {
         if (params == null || !params.hasNonNull("name")) {
             return error(id, INVALID_PARAMS, "tools/call requires a tool name");
         }
-        String toolName = params.get("name").asText();
+        String toolName = params.get("name").asString("");
         McpTool tool = tools.get(toolName);
         if (tool == null) {
             return error(id, INVALID_PARAMS, "Unknown tool: " + toolName);
@@ -297,7 +297,7 @@ public final class McpServer {
         if (params == null || !params.hasNonNull("uri")) {
             return error(id, INVALID_PARAMS, "resources/read requires a uri");
         }
-        String uri = params.get("uri").asText();
+        String uri = params.get("uri").asString("");
         McpResource resource = resources.get(uri);
         if (resource == null) {
             return error(id, RESOURCE_NOT_FOUND, "Unknown resource: " + uri);
@@ -353,7 +353,7 @@ public final class McpServer {
         if (params == null || !params.hasNonNull("name")) {
             return error(id, INVALID_PARAMS, "prompts/get requires a prompt name");
         }
-        String promptName = params.get("name").asText();
+        String promptName = params.get("name").asString("");
         McpPrompt prompt = prompts.get(promptName);
         if (prompt == null) {
             return error(id, INVALID_PARAMS, "Unknown prompt: " + promptName);
@@ -363,7 +363,7 @@ public final class McpServer {
         if (supplied != null && supplied.isObject()) {
             for (Map.Entry<String, JsonNode> entry : supplied.properties()) {
                 if (entry.getValue() != null && !entry.getValue().isNull()) {
-                    arguments.put(entry.getKey(), entry.getValue().asText());
+                    arguments.put(entry.getKey(), entry.getValue().asString(""));
                 }
             }
         }

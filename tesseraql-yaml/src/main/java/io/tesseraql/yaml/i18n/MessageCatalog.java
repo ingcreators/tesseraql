@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Stream;
+import tools.jackson.core.JacksonException;
 
 /**
  * Per-app message catalogs (roadmap Phase 22): one {@code messages/<locale>.yml} file per BCP-47
@@ -246,7 +247,7 @@ public final class MessageCatalog {
         Object tree;
         try {
             tree = io.tesseraql.yaml.YamlMappers.constrained().readValue(content, Object.class);
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(INVALID_CATALOG, "Message catalog '" + source
                     + "' is not valid YAML: " + ex.getMessage());
         }

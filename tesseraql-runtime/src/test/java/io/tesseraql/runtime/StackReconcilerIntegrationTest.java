@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.version.SemanticVersion;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.AppInstaller;
@@ -36,6 +35,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The file protocol end to end (docs/runtime-replace.md structural decision 2): the same
@@ -56,7 +56,7 @@ class StackReconcilerIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
     private static final AppUpgrader UPGRADER = new AppUpgrader();
     private static final SemanticVersion FRAMEWORK = SemanticVersion.parse("0.1.0");
@@ -321,7 +321,7 @@ class StackReconcilerIntegrationTest {
                         "http://localhost:" + gateway.port() + "/shop/api/items")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
-        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
+        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asString();
     }
 
     private static String itemNameQuietly() {

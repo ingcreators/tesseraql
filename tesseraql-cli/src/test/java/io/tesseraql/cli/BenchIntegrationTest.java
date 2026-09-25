@@ -2,8 +2,6 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,6 +18,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import picocli.CommandLine;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Row 5 of docs/deployment-maturity.md as an assertion: against a booted runtime whose in-flight
@@ -33,7 +33,7 @@ class BenchIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;

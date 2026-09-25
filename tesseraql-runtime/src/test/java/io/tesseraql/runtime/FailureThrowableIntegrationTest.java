@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -25,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A failure leaves its throwable (docs/audit-medium-leads.md slice 7, F106): a job run and a
@@ -39,7 +39,7 @@ class FailureThrowableIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static TesseraqlRuntime runtime;
@@ -92,9 +92,9 @@ class FailureThrowableIntegrationTest {
                             StandardCharsets.UTF_8))
                     .build(), HttpResponse.BodyHandlers.ofString());
             assertThat(response.statusCode()).isEqualTo(202);
-            String transferId = MAPPER.readTree(response.body()).get("transferId").asText();
+            String transferId = MAPPER.readTree(response.body()).get("transferId").asString();
             JsonNode status = awaitTerminal("/api/items/import/" + transferId);
-            assertThat(status.get("status").asText()).isEqualTo("FAILED");
+            assertThat(status.get("status").asString()).isEqualTo("FAILED");
         });
 
         List<String> lines = log.lines().toList();
@@ -121,7 +121,7 @@ class FailureThrowableIntegrationTest {
                     URI.create("http://localhost:" + runtime.port() + statusPath)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             JsonNode status = MAPPER.readTree(response.body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

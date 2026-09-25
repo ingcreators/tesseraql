@@ -3,7 +3,6 @@ package io.tesseraql.oidc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import io.tesseraql.security.jwt.JwtAuthenticator;
@@ -16,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * ID-token validation: signature, iss, exp and aud via JwtAuthenticator, plus the OIDC nonce check.
@@ -29,7 +29,7 @@ class OidcTokenValidatorTest {
 
     private static final String CLIENT_ID = "my-app";
     private static final String ISSUER = "https://idp.example.com/";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final Base64.Encoder ENC = Base64.getUrlEncoder().withoutPadding();
 
     private static KeyPair keyPair;

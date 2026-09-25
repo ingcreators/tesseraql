@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.adobe.testing.s3mock.testcontainers.S3MockContainer;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.io.IOException;
@@ -30,6 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for remote lakes (docs/duckdb.md "Remote data paths"): the lake's Parquet data
@@ -49,7 +49,7 @@ class RemoteLakeIntegrationTest {
     static final S3MockContainer S3MOCK = new S3MockContainer("5.2.3")
             .withInitialBuckets("lake,other");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     TesseraqlRuntime runtime;
     Path appHome;

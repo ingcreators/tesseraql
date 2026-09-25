@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.oauth.SigningKeys;
 import io.tesseraql.security.jwt.Jwks;
 import java.io.IOException;
@@ -23,6 +21,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The authorization server's extension end to end (docs/token-issuance.md decision 8, the
@@ -36,7 +36,7 @@ class OAuthJwksIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -73,7 +73,7 @@ class OAuthJwksIntegrationTest {
 
         JsonNode document = MAPPER.readTree(response.body());
         assertThat(document.get("keys")).hasSize(1);
-        assertThat(document.get("keys").get(0).get("kid").asText())
+        assertThat(document.get("keys").get(0).get("kid").asString())
                 .isEqualTo(SigningKeys.INITIAL_KID);
         assertThat(Jwks.parseJwkSet(response.body().getBytes(StandardCharsets.UTF_8)))
                 .containsKey(SigningKeys.INITIAL_KID);

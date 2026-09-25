@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppInstaller;
 import io.tesseraql.operations.app.InstalledApp;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
@@ -38,6 +37,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The replace operation, end to end (docs/runtime-replace.md structural decision 1): deploying an
@@ -57,7 +57,7 @@ class MultiAppReplaceIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
     private static final AppInstaller INSTALLER = new AppInstaller();
 
@@ -135,7 +135,7 @@ class MultiAppReplaceIntegrationTest {
                     HttpResponse<String> response = get("/shop/api/items");
                     String marker = response.statusCode() == 200
                             ? MAPPER.readTree(response.body()).get("data").get(0).get("name")
-                                    .asText()
+                                    .asString()
                             : "";
                     samples.add(new Sample(response.statusCode(), marker, after));
                     Thread.sleep(10);
@@ -310,7 +310,7 @@ class MultiAppReplaceIntegrationTest {
         HttpResponse<String> drained = slow.get(30, java.util.concurrent.TimeUnit.SECONDS);
         assertThat(drained.statusCode()).as("the in-flight request completed, not cut")
                 .isEqualTo(200);
-        assertThat(MAPPER.readTree(drained.body()).get("data").get(0).get("name").asText())
+        assertThat(MAPPER.readTree(drained.body()).get("data").get(0).get("name").asString())
                 .as("and it was the old version that answered it").isEqualTo("s5");
         promote.join(30_000);
         assertThat(itemName()).isEqualTo("s7");
@@ -368,7 +368,7 @@ class MultiAppReplaceIntegrationTest {
     private static String itemName() throws Exception {
         HttpResponse<String> response = get("/shop/api/items");
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
-        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
+        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asString();
     }
 
     private static HttpResponse<String> get(String path) throws Exception {

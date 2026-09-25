@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobStatus;
 import java.io.ByteArrayOutputStream;
@@ -44,6 +42,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A request-sourced export value is refused before the SQL runs, and the fallback chain is one
@@ -70,7 +70,7 @@ class ExportRequestFormatsIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String JWT_SECRET = "0123456789abcdef0123456789abcdef";
     private static final String ZONE_TEXT = "Not a time zone this app can use (expected e.g."
@@ -137,13 +137,13 @@ class ExportRequestFormatsIntegrationTest {
 
             assertThat(response.statusCode()).as(bad).isEqualTo(400);
             JsonNode error = json(response).get("error");
-            assertThat(error.get("code").asText()).as(bad).isEqualTo("TQL-FIELD-2001");
+            assertThat(error.get("code").asString()).as(bad).isEqualTo("TQL-FIELD-2001");
             JsonNode field = error.at("/details/fields/0");
-            assertThat(field.get("field").asText()).as(bad).isEqualTo("tz");
-            assertThat(field.get("code").asText()).as(bad).isEqualTo("timezone");
-            assertThat(field.get("source").asText()).as(bad).isEqualTo("query.tz");
+            assertThat(field.get("field").asString()).as(bad).isEqualTo("tz");
+            assertThat(field.get("code").asString()).as(bad).isEqualTo("timezone");
+            assertThat(field.get("source").asString()).as(bad).isEqualTo("query.tz");
             assertThat(field.has("value")).as("no value on the wire for " + bad).isFalse();
-            assertThat(field.get("message").asText()).as(bad).isEqualTo(ZONE_TEXT);
+            assertThat(field.get("message").asString()).as(bad).isEqualTo(ZONE_TEXT);
             assertThat(after).as("the extraction ran for " + bad).isEqualTo(before);
         }
     }
@@ -171,7 +171,7 @@ class ExportRequestFormatsIntegrationTest {
         String after = sequence();
 
         assertThat(refused.statusCode()).isEqualTo(400);
-        assertThat(json(refused).at("/error/details/fields/0/code").asText()).isEqualTo("locale");
+        assertThat(json(refused).at("/error/details/fields/0/code").asString()).isEqualTo("locale");
         assertThat(after).as("the extraction ran").isEqualTo(before);
 
         HttpResponse<String> fullwidth = get("/api/x/loc?loc=ja-JP-u-nu-fullwide", null);
@@ -228,10 +228,10 @@ class ExportRequestFormatsIntegrationTest {
 
             assertThat(response.statusCode()).as(String.valueOf(bad)).isEqualTo(400);
             JsonNode field = json(response).at("/error/details/fields/0");
-            assertThat(field.get("field").asText()).as(String.valueOf(bad))
+            assertThat(field.get("field").asString()).as(String.valueOf(bad))
                     .isEqualTo("principal.claim.zoneinfo");
-            assertThat(field.get("messageKey").asText()).isEqualTo("tql.input.claim.timezone");
-            assertThat(field.get("message").asText()).isEqualTo(CLAIM_ZONE_TEXT);
+            assertThat(field.get("messageKey").asString()).isEqualTo("tql.input.claim.timezone");
+            assertThat(field.get("message").asString()).isEqualTo(CLAIM_ZONE_TEXT);
             assertThat(after).as("the extraction ran for " + bad).isEqualTo(before);
         }
 
@@ -265,8 +265,8 @@ class ExportRequestFormatsIntegrationTest {
         assertThat(deDe.body()).contains(CONFIG_LOCALE_CELL);
         assertThat(japanese.statusCode()).isEqualTo(400);
         JsonNode field = json(japanese).at("/error/details/fields/0");
-        assertThat(field.get("field").asText()).isEqualTo("principal.claim.locale");
-        assertThat(field.get("messageKey").asText()).isEqualTo("tql.input.claim.locale");
+        assertThat(field.get("field").asString()).isEqualTo("principal.claim.locale");
+        assertThat(field.get("messageKey").asString()).isEqualTo("tql.input.claim.locale");
     }
 
     /**
@@ -286,12 +286,12 @@ class ExportRequestFormatsIntegrationTest {
         Thread.sleep(300);
 
         assertThat(zone.statusCode()).isEqualTo(400);
-        assertThat(json(zone).at("/error/details/fields/0/field").asText()).isEqualTo("tz");
+        assertThat(json(zone).at("/error/details/fields/0/field").asString()).isEqualTo("tz");
         assertThat(locale.statusCode()).isEqualTo(400);
-        assertThat(json(locale).at("/error/details/fields/0/field").asText()).isEqualTo("loc");
-        assertThat(json(locale).at("/error/details/fields/0/code").asText()).isEqualTo("locale");
+        assertThat(json(locale).at("/error/details/fields/0/field").asString()).isEqualTo("loc");
+        assertThat(json(locale).at("/error/details/fields/0/code").asString()).isEqualTo("locale");
         assertThat(number.statusCode()).isEqualTo(400);
-        assertThat(json(number).at("/error/details/fields/0/field").asText()).isEqualTo("tz");
+        assertThat(json(number).at("/error/details/fields/0/field").asString()).isEqualTo("tz");
         assertThat(count("select count(*) from tql_file_transfer where route_id = 'x.feseq'"))
                 .as("transfer rows after three refusals").isZero();
         assertThat(count("select count(*) from tql_job_execution where job_id = 'x.feseq'"))
@@ -327,8 +327,8 @@ class ExportRequestFormatsIntegrationTest {
 
         assertThat(refused.statusCode()).isEqualTo(400);
         JsonNode field = json(refused).at("/error/details/fields/0");
-        assertThat(field.get("field").asText()).isEqualTo("principal.claim.locale");
-        assertThat(field.get("messageKey").asText()).isEqualTo("tql.input.claim.locale");
+        assertThat(field.get("field").asString()).isEqualTo("principal.claim.locale");
+        assertThat(field.get("messageKey").asString()).isEqualTo("tql.input.claim.locale");
         assertThat(count("select count(*) from imported")).isEqualTo(before);
         assertThat(count("select count(*) from tql_file_transfer where route_id = 'x.impc'"))
                 .isZero();
@@ -457,7 +457,7 @@ class ExportRequestFormatsIntegrationTest {
         String log = captureStderr(() -> response.set(get("/api/x/codec", null)));
 
         assertThat(response.get().statusCode()).isEqualTo(500);
-        assertThat(json(response.get()).at("/error/code").asText()).isEqualTo("TQL-LD-2802");
+        assertThat(json(response.get()).at("/error/code").asString()).isEqualTo("TQL-LD-2802");
         List<String> lines = log.lines().toList();
         int at = lines.indexOf(lines.stream()
                 .filter(line -> line.contains("Route 'x.codec' failed with TQL-LD-2802"))
@@ -482,7 +482,7 @@ class ExportRequestFormatsIntegrationTest {
         String log = captureStderr(() -> response.set(get("/api/x/badsql", null)));
 
         assertThat(response.get().statusCode()).isEqualTo(500);
-        assertThat(json(response.get()).at("/error/code").asText()).isEqualTo("TQL-SQL-2500");
+        assertThat(json(response.get()).at("/error/code").asString()).isEqualTo("TQL-SQL-2500");
         assertThat(log).contains("SQL execution failed").contains("export.sql");
     }
 
@@ -564,16 +564,16 @@ class ExportRequestFormatsIntegrationTest {
         HttpResponse<String> accepted = post("/api/x/feseq", body, "application/json", null);
         assertThat(accepted.statusCode()).as(body).isEqualTo(202);
         JsonNode started = json(accepted);
-        assertThat(awaitTerminal(started.get("statusUrl").asText(), null)).as(body)
+        assertThat(awaitTerminal(started.get("statusUrl").asString(), null)).as(body)
                 .isEqualTo("COMPLETED");
-        return download(started.get("transferId").asText());
+        return download(started.get("transferId").asString());
     }
 
     /** Uploads {@code csv} to the import route and waits for the run to complete. */
     private static void fileImport(String path, String csv, String bearer) throws Exception {
         HttpResponse<String> accepted = post(path, csv, "text/csv", bearer);
         assertThat(accepted.statusCode()).as(csv).isEqualTo(202);
-        assertThat(awaitTerminal(json(accepted).get("statusUrl").asText(), bearer)).as(csv)
+        assertThat(awaitTerminal(json(accepted).get("statusUrl").asString(), bearer)).as(csv)
                 .isEqualTo("COMPLETED");
     }
 
@@ -581,7 +581,7 @@ class ExportRequestFormatsIntegrationTest {
         String path = statusUrl.startsWith("http") ? URI.create(statusUrl).getPath() : statusUrl;
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
-            String status = json(get(path, bearer)).get("status").asText();
+            String status = json(get(path, bearer)).get("status").asString();
             if (!"RUNNING".equals(status) && !"STARTED".equals(status)) {
                 return status;
             }

@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import javax.sql.DataSource;
+import tools.jackson.core.JacksonException;
 
 /**
  * JDBC-backed {@link IdempotencyStore} persisting to {@code TQL_IDEMPOTENCY_RECORD}
@@ -20,8 +21,9 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
 
     /** TQL-IDEM-5001: the idempotency store could not complete an operation. */
     private static final TqlErrorCode STORE_ERROR = new TqlErrorCode(TqlDomain.IDEM, 5001);
-    private static final com.fasterxml.jackson.databind.ObjectMapper HEADERS_JSON = new com.fasterxml.jackson.databind.ObjectMapper();
-    private static final com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>> HEADERS_TYPE = new com.fasterxml.jackson.core.type.TypeReference<>() {
+    private static final tools.jackson.databind.ObjectMapper HEADERS_JSON = io.tesseraql.yaml.JsonMappers
+            .constrained();
+    private static final tools.jackson.core.type.TypeReference<java.util.Map<String, String>> HEADERS_TYPE = new tools.jackson.core.type.TypeReference<>() {
     };
 
     private final DataSource dataSource;
@@ -101,7 +103,7 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
         }
         try {
             return HEADERS_JSON.writeValueAsString(headers);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw TqlException.builder(STORE_ERROR)
                     .message("Failed to serialize replay headers: " + ex.getMessage()).cause(ex)
                     .build();
@@ -114,7 +116,7 @@ public final class JdbcIdempotencyStore implements IdempotencyStore {
         }
         try {
             return HEADERS_JSON.readValue(json, HEADERS_TYPE);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw TqlException.builder(STORE_ERROR)
                     .message("Failed to read replay headers: " + ex.getMessage()).cause(ex)
                     .build();

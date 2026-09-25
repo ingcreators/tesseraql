@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.notify;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -16,6 +14,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Compiles {@code notify:} declarations and encodes them as transactional outbox events (roadmap
@@ -264,7 +264,7 @@ public final class NotifyEvents {
         try {
             return OutboxEvent.toInsert(AGGREGATE_TYPE, source, EVENT_TYPE,
                     MAPPER.writeValueAsString(envelope), appName, notBefore, cancelKey);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to encode notification '" + source + "': " + ex.getMessage());
         }
@@ -286,7 +286,7 @@ public final class NotifyEvents {
             return new Envelope(string(raw.get("channel")), string(raw.get("source")),
                     string(raw.get("recipient")), string(raw.get("tenant")),
                     string(raw.get("attach")), payload);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to decode notification envelope: " + ex.getMessage());
         }

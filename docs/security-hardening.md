@@ -38,7 +38,7 @@ Exposure differs by parser, and the assessment is honest about it:
 | --- | --- | --- |
 | 2-way SQL (`Sql2WayParser`) | app SQL files, at build and boot | author-controlled; **semi-trusted** for a shared `.tqlapp` the admission gate parses |
 | Expressions (`ExpressionParser`) | route conditions, binds, `validate:` rules | author-controlled (compiled once; values bind at runtime, the tree does not re-parse) |
-| YAML (`SimpleYamlParser` over Jackson/SnakeYAML) | app documents at boot **and request bodies at the Studio editor endpoints** | author files are trusted; **Studio request bodies are runtime, authenticated, client-controlled** |
+| YAML (`SimpleYamlParser` over Jackson/snakeyaml-engine) | app documents at boot **and request bodies at the Studio editor endpoints** | author files are trusted; **Studio request bodies are runtime, authenticated, client-controlled** |
 | SCIM filter (`ScimFilter`, `ScimGroupPatch`) | the `?filter=` / PATCH path from a provisioning client | **runtime, authenticated, client-controlled** |
 
 ### Findings (probed 2026-07)
@@ -82,7 +82,11 @@ safe:
   with explicit `StreamReadConstraints` (nesting, document, and name/string length)
   rather than relying on library defaults that a dependency change could move, and the
   file parse methods harmonize onto the same coded `TQL-YAML-1001` the string methods
-  already return.
+  already return. Under Jackson 3 the YAML parser is snakeyaml-engine's, whose own defaults
+  cap a document at 3,145,728 code points and fifty aliases per collection; the nesting
+  bound is the framework's (100, `JsonLimits`), and `JacksonDefaultsLedgerTest` fails the
+  build if a factory loses it — the migration recipe dropped exactly this configuration
+  once, and compiled (docs/jackson-3.md).
 - **The fuzz harness proves it.** A deterministic generative harness (below) drives each
   parser with structure-aware and mutated inputs on every build, asserting the
   fail-closed invariant — so a regression that reintroduces a crash fails the build, not

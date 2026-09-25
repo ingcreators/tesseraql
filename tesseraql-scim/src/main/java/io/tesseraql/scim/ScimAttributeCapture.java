@@ -1,12 +1,12 @@
 package io.tesseraql.scim;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.tesseraql.identity.FederatedIdentities;
 import io.tesseraql.identity.IdentityService;
 import io.tesseraql.identity.RealmConfig;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Lands provisioned SCIM attributes in the identity store (docs/application-roles.md structural
@@ -147,6 +147,6 @@ public final class ScimAttributeCapture {
     }
 
     private static String scalar(JsonNode value) {
-        return value == null || !value.isValueNode() || value.isNull() ? null : value.asText();
+        return value == null || !value.isValueNode() || value.isNull() ? null : value.asString("");
     }
 }

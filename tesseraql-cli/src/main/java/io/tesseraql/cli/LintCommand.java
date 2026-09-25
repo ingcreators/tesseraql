@@ -1,7 +1,5 @@
 package io.tesseraql.cli;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.yaml.lint.AppLinter;
 import io.tesseraql.yaml.lint.LintFinding;
 import java.nio.file.Path;
@@ -10,6 +8,8 @@ import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * {@code tesseraql lint --app <dir>}: runs the app linter (recipes, SQL files, security policies)

@@ -101,8 +101,21 @@ public final class AppConfig {
         if (raw == null) {
             return defaultValue;
         }
-        String value = resolve(String.valueOf(raw), 0).trim();
-        return switch (value.toLowerCase(java.util.Locale.ROOT)) {
+        return booleanValue(dottedPath, resolve(String.valueOf(raw), 0), raw);
+    }
+
+    /**
+     * The one spelling rule for an authored boolean read outside an {@code AppConfig} — a stack
+     * file's map, say (docs/jackson-3.md decision 7): the same spellings as
+     * {@link #getBoolean}, the same refusal. YAML 1.2 reads {@code on} and {@code yes} as text,
+     * so a {@code Boolean.parseBoolean} over the text answers {@code false} for both.
+     */
+    public static boolean booleanValue(String dottedPath, Object raw) {
+        return booleanValue(dottedPath, String.valueOf(raw), raw);
+    }
+
+    private static boolean booleanValue(String dottedPath, String text, Object raw) {
+        return switch (text.trim().toLowerCase(java.util.Locale.ROOT)) {
             case "true", "yes", "on", "1" -> true;
             case "false", "no", "off", "0" -> false;
             default -> throw new TqlException(NOT_BOOLEAN, "Configuration key '" + dottedPath

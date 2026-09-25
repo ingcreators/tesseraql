@@ -566,7 +566,7 @@ Schema for TesseraQL declarative view documents (*.view.yml): what a route rende
 | Property | Type | Description |
 | --- | --- | --- |
 | `name` \* | string | The link's label; a message key resolves through the catalog. |
-| `params` \* | map of  | The query state the link applies - declared route inputs plus the framework sort/dir/size params. |
+| `params` \* | map of any | The query state the link applies - declared route inputs plus the framework sort/dir/size params. |
 
 ### actions
 

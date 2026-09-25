@@ -1,9 +1,9 @@
 package io.tesseraql.oidc;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.util.function.Function;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Resolves and caches the OpenID Provider {@link OidcMetadata} from its discovery document
@@ -62,10 +62,10 @@ public final class OidcDiscovery {
 
     private static String requireText(JsonNode node, String field) {
         JsonNode value = node.get(field);
-        if (value == null || value.isNull() || value.asText().isBlank()) {
+        if (value == null || value.isNull() || value.asString("").isBlank()) {
             throw new OidcException("OIDC discovery document missing '" + field + "'");
         }
-        return value.asText();
+        return value.asString("");
     }
 
     private static URI requireUri(JsonNode node, String field) {
@@ -74,8 +74,8 @@ public final class OidcDiscovery {
 
     private static URI optionalUri(JsonNode node, String field) {
         JsonNode value = node.get(field);
-        return value == null || value.isNull() || value.asText().isBlank()
+        return value == null || value.isNull() || value.asString("").isBlank()
                 ? null
-                : URI.create(value.asText());
+                : URI.create(value.asString(""));
     }
 }

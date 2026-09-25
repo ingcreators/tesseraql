@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -28,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for the SAML ACS route (design ch. 10.14): a signed SAML response posted to
@@ -40,7 +40,7 @@ class SamlAcsIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String AUDIENCE = "https://sp.example.com/saml";
     private static final String RECIPIENT = "https://sp.example.com/_tesseraql/saml/acs";
     private static final Instant NOW = Instant.now();
@@ -74,8 +74,8 @@ class SamlAcsIntegrationTest {
                 .get().asString().contains("tesseraql_sid=");
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.get("ok").asBoolean()).isTrue();
-        assertThat(body.get("loginId").asText()).isEqualTo("alice");
-        assertThat(body.get("subject").asText()).isEqualTo("alice@idp.example.com");
+        assertThat(body.get("loginId").asString()).isEqualTo("alice");
+        assertThat(body.get("subject").asString()).isEqualTo("alice@idp.example.com");
     }
 
     @Test

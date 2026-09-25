@@ -1,9 +1,13 @@
 package io.tesseraql.mcp;
 
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.StreamReadConstraints;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.json.JsonLimits;
+import tools.jackson.core.StreamReadConstraints;
+import tools.jackson.core.json.JsonFactory;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.MapperFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.cfg.EnumFeature;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The constrained JSON mapper for this module's parse paths — JSON-RPC request bodies from any
@@ -19,12 +23,22 @@ final class McpJson {
 
     /** A JSON mapper with explicit read constraints. */
     static ObjectMapper constrained() {
-        return new ObjectMapper(JsonFactory.builder()
+        return JsonMapper.builder(JsonFactory.builder()
                 .streamReadConstraints(StreamReadConstraints.builder()
                         .maxNestingDepth(JsonLimits.MAX_NESTING_DEPTH)
                         .maxStringLength(JsonLimits.MAX_STRING_LENGTH)
                         .maxNameLength(JsonLimits.MAX_NAME_LENGTH)
                         .build())
-                .build());
+                .build())
+                // Jackson 2's observable defaults — the same lines as io.tesseraql.yaml
+                // .JacksonDefaults, which this module sits below; JacksonDefaultsLedgerTest
+                // holds the two equal (docs/jackson-3.md decision 4).
+                .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+                .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+                .disable(EnumFeature.READ_ENUMS_USING_TO_STRING)
+                .disable(EnumFeature.WRITE_ENUMS_USING_TO_STRING)
+                .build();
     }
 }

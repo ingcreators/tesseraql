@@ -1,7 +1,5 @@
 package io.tesseraql.oauth;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigInteger;
 import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
@@ -9,6 +7,8 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Renders the published key set as an RFC 7517 JWK Set — the document every replica serves
@@ -38,7 +38,7 @@ public final class JwksDocuments {
         }
         try {
             return MAPPER.writeValueAsString(Map.of("keys", jwks));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("JWKS rendering failed", e);
         }
     }

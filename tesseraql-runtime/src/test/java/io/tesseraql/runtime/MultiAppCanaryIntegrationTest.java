@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.version.SemanticVersion;
 import io.tesseraql.operations.app.AppInstaller;
 import io.tesseraql.operations.app.AppUpgrader;
@@ -31,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for canary traffic splitting (design ch. 31). A staged canary candidate is
@@ -43,7 +43,7 @@ class MultiAppCanaryIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static MultiAppGateway gateway;
     static Path installRoot;
@@ -120,7 +120,7 @@ class MultiAppCanaryIntegrationTest {
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         String cookie = setCookie.substring(0, setCookie.indexOf(';'));
-        String csrf = MAPPER.readTree(login.body()).path("csrfToken").asText();
+        String csrf = MAPPER.readTree(login.body()).path("csrfToken").asString();
 
         String home = shellGet("/_tesseraql/ops/console", cookie).body();
         assertThat(home).contains(">shop<").contains(">shop (canary)<")
@@ -162,7 +162,7 @@ class MultiAppCanaryIntegrationTest {
                         "http://localhost:" + gateway.port() + "/shop/api/items")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
-        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
+        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asString();
     }
 
     private static void seedDatabase() throws Exception {

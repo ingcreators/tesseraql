@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -16,6 +15,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Pipeline step that binds an HTTP request into the TesseraQL execution context (design ch. 7.2,
@@ -265,7 +266,7 @@ public final class RequestBinder implements Step {
             @SuppressWarnings("unchecked")
             Map<String, Object> parsed = mapper.readValue(raw, Map.class);
             return parsed == null ? Map.of() : parsed;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             // The sentence travels in details, not in the message: ErrorResponseRenderer replaces
             // an envelope's message with the localized status phrase, so a message-only throw
             // answered "Bad Request" and rendered an alert with an empty body. And the wording is

@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Portability test (design ch. 42): the same example app runs on MySQL by swapping the JDBC driver,
@@ -41,7 +41,7 @@ class MySqlPortabilityIntegrationTest {
     @Container
     static final MySQLContainer MYSQL = new MySQLContainer("mysql:8.0");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -76,7 +76,7 @@ class MySqlPortabilityIntegrationTest {
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.path("data")).isNotEmpty();
         // The 'source' column only exists in search.mysql.sql, proving the variant was selected.
-        assertThat(body.path("data").get(0).path("source").asText()).isEqualTo("mysql");
+        assertThat(body.path("data").get(0).path("source").asString()).isEqualTo("mysql");
     }
 
     /**

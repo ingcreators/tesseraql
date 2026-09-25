@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
 
 /**
  * Accepts an uploaded file body (design ch. 28): the raw request body, or a multipart file part,
@@ -284,10 +285,11 @@ public final class FileImportProcessor implements Step {
         exchange.response().header(Headers.CONTENT_TYPE, "application/json; charset=utf-8");
         try {
             exchange.setBody(MAPPER.writeValueAsString(body));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalStateException(ex);
         }
     }
 
-    static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    static final tools.jackson.databind.ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers
+            .constrained();
 }

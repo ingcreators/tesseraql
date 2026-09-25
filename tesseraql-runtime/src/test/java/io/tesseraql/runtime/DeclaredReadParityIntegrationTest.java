@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The honesty probe: a {@code sql:} route and a {@code contract:} route over byte-identical
@@ -59,7 +59,7 @@ class DeclaredReadParityIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** One statement, and both routes run this text. */
     private static final String LIST_THINGS = """
@@ -107,8 +107,8 @@ class DeclaredReadParityIntegrationTest {
         JsonNode sqlRows = rows(get("/api/parity/sql"));
         JsonNode contractRows = rows(get("/api/parity/contract"));
 
-        assertThat(sqlRows.get(0).get("occurred_at").asText())
-                .isEqualTo(contractRows.get(0).get("occurred_at").asText())
+        assertThat(sqlRows.get(0).get("occurred_at").asString())
+                .isEqualTo(contractRows.get(0).get("occurred_at").asString())
                 .isEqualTo("2026-09-05T14:30:00");
     }
 
@@ -163,7 +163,7 @@ class DeclaredReadParityIntegrationTest {
 
     private static List<String> keysOf(JsonNode node) {
         List<String> keys = new java.util.ArrayList<>();
-        node.fieldNames().forEachRemaining(keys::add);
+        node.propertyNames().iterator().forEachRemaining(keys::add);
         return keys;
     }
 
@@ -173,7 +173,7 @@ class DeclaredReadParityIntegrationTest {
     }
 
     private String codeOf(HttpResponse<String> response) throws Exception {
-        return MAPPER.readTree(response.body()).path("error").path("code").asText();
+        return MAPPER.readTree(response.body()).path("error").path("code").asString();
     }
 
     private HttpResponse<String> get(String path) throws Exception {

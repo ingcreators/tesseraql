@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Flyway migrations at boot: {@code db/migration} applies for the application under a history
@@ -34,7 +34,7 @@ class AppMigrationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     TesseraqlRuntime runtime;
     Path appHome;
@@ -58,7 +58,7 @@ class AppMigrationIntegrationTest {
         // The main app's two migrations created and seeded its table; the route can query it.
         HttpResponse<String> items = get("/api/items");
         assertThat(items.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(items.body()).get("data").get(0).get("name").asText())
+        assertThat(MAPPER.readTree(items.body()).get("data").get(0).get("name").asString())
                 .isEqualTo("seeded");
 
         // Each app migrates under its own history table, named for it.

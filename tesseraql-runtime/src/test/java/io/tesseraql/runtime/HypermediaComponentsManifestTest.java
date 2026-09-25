@@ -2,13 +2,12 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Drift guard against the Hypermedia Components kit (hc #manifest, exported since 0.1.9). The
@@ -78,7 +77,8 @@ class HypermediaComponentsManifestTest {
 
     @Test
     void manifestDeclaresEveryBehaviorEventAndRecipeTheFrameworkDependsOn() throws Exception {
-        JsonNode manifest = new ObjectMapper().readTree(webjarResource("dist/manifest.json"));
+        JsonNode manifest = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(webjarResource("dist/manifest.json"));
 
         assertThat(names(manifest.get("behaviors"))).containsAll(REQUIRED_BEHAVIORS);
         assertThat(names(manifest.get("events"))).containsAll(REQUIRED_EVENTS);
@@ -236,7 +236,7 @@ class HypermediaComponentsManifestTest {
 
     private static List<String> names(JsonNode array) {
         List<String> names = new ArrayList<>();
-        array.forEach(entry -> names.add(entry.get("name").asText()));
+        array.forEach(entry -> names.add(entry.get("name").asString()));
         return names;
     }
 }

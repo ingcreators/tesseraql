@@ -1,6 +1,5 @@
 package io.tesseraql.cli;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.util.Durations;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.bench.BenchScenario;
@@ -27,6 +26,7 @@ import java.util.concurrent.Callable;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@code tesseraql bench --app <dir> --url <base-url>}: drives an application's declared routes

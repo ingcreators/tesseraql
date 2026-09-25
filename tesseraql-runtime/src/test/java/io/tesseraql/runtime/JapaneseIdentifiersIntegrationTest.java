@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -27,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The identifier contract over HTTP (docs/unicode-identifiers.md): the 受注管理 gallery app
@@ -41,7 +41,7 @@ class JapaneseIdentifiersIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -69,8 +69,8 @@ class JapaneseIdentifiersIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(response.body()).path("data");
         assertThat(data).hasSize(2);
-        assertThat(data.get(0).path("受注番号").asText()).isEqualTo("J-1001");
-        assertThat(data.get(0).path("顧客名").asText()).isEqualTo("山田商事");
+        assertThat(data.get(0).path("受注番号").asString()).isEqualTo("J-1001");
+        assertThat(data.get(0).path("顧客名").asString()).isEqualTo("山田商事");
     }
 
     @Test
@@ -82,7 +82,7 @@ class JapaneseIdentifiersIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(response.body()).path("data");
         assertThat(data).hasSize(1);
-        assertThat(data.get(0).path("受注番号").asText()).isEqualTo("J-1002");
+        assertThat(data.get(0).path("受注番号").asString()).isEqualTo("J-1002");
     }
 
     @Test
@@ -91,8 +91,8 @@ class JapaneseIdentifiersIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode row = MAPPER.readTree(response.body()).path("data").get(0);
-        assertThat(row.path("顧客名").asText()).isEqualTo("佐藤物産");
-        assertThat(row.path("状態").asText()).isEqualTo("出荷済");
+        assertThat(row.path("顧客名").asString()).isEqualTo("佐藤物産");
+        assertThat(row.path("状態").asString()).isEqualTo("出荷済");
     }
 
     /**
@@ -111,7 +111,7 @@ class JapaneseIdentifiersIntegrationTest {
         JsonNode data = MAPPER.readTree(response.body()).path("data");
         // The detail route's answer for 受注番号=エクスポート is an empty list: the wrong route.
         assertThat(data.size()).as(response.body()).isEqualTo(1);
-        assertThat(data.get(0).path("surface").asText()).isEqualTo("export");
+        assertThat(data.get(0).path("surface").asString()).isEqualTo("export");
     }
 
     @Test

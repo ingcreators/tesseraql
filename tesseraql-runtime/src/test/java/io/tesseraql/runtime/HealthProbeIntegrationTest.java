@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Truthful health (roadmap Phase 45): {@code /health/live} is pure liveness and stays 200 no
@@ -34,7 +34,7 @@ class HealthProbeIntegrationTest {
     // Managed by hand (not @Container) because the test itself stops it mid-flight.
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -65,7 +65,7 @@ class HealthProbeIntegrationTest {
         assertThat(get("/_tesseraql/health/live").body()).contains("UP");
         HttpResponse<String> ready = get("/_tesseraql/health/ready");
         assertThat(ready.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(ready.body()).get("status").asText()).isEqualTo("UP");
+        assertThat(MAPPER.readTree(ready.body()).get("status").asString()).isEqualTo("UP");
         // The bare /health serves the same readiness roll-up.
         assertThat(get("/_tesseraql/health").statusCode()).isEqualTo(200);
     }
@@ -84,7 +84,7 @@ class HealthProbeIntegrationTest {
         HttpResponse<String> ready = get("/_tesseraql/health/ready");
         assertThat(ready.statusCode()).as("after 5 s of silence: %s", ready.body())
                 .isEqualTo(200);
-        assertThat(MAPPER.readTree(ready.body()).get("status").asText()).isEqualTo("UP");
+        assertThat(MAPPER.readTree(ready.body()).get("status").asString()).isEqualTo("UP");
         Thread.sleep(10_000);
         assertThat(get("/_tesseraql/health/ready").statusCode())
                 .as("after 10 s of silence, the Kubernetes default period").isEqualTo(200);
@@ -101,14 +101,14 @@ class HealthProbeIntegrationTest {
         // allowed is for it to stay stale, which is what this waits to see.
         HttpResponse<String> ready = awaitReadiness(503);
         assertThat(ready.statusCode()).isEqualTo(503);
-        assertThat(MAPPER.readTree(ready.body()).get("status").asText()).isEqualTo("DOWN");
+        assertThat(MAPPER.readTree(ready.body()).get("status").asString()).isEqualTo("DOWN");
         assertThat(get("/_tesseraql/health").statusCode()).isEqualTo(503);
 
         // Liveness never touches a dependency: the process still answers, so an orchestrator
         // does not restart a pod for a database outage it cannot fix.
         HttpResponse<String> live = get("/_tesseraql/health/live");
         assertThat(live.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(live.body()).get("status").asText()).isEqualTo("UP");
+        assertThat(MAPPER.readTree(live.body()).get("status").asString()).isEqualTo("UP");
     }
 
     /** Polls readiness until it reports {@code expected}, well inside a handful of TTLs. */

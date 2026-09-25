@@ -3,8 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.core.spool.SpoolKind;
 import io.tesseraql.core.spool.SpoolRef;
@@ -36,6 +34,8 @@ import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The shared temp store (docs/deployment.md, "Shared export files"): with
@@ -57,7 +57,7 @@ class SharedTempStoreIntegrationTest {
     static TesseraqlRuntime runtime;
     static Path appHome;
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String DB_SCHEME = "tql-temp-db:";
 
@@ -187,7 +187,7 @@ class SharedTempStoreIntegrationTest {
     void anAsyncExportUnderTheDatabaseStoreDownloads() throws Exception {
         String transferId = startExport("/api/orders/export-async");
         JsonNode status = awaitTerminal("/api/orders/export-async/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(spoolUriOf(transferId)).startsWith(DB_SCHEME);
 
         HttpResponse<String> file = get("/api/orders/export-async/" + transferId + "/file");
@@ -206,7 +206,7 @@ class SharedTempStoreIntegrationTest {
     @Test
     void aZeroRowExportCarriesItsHeaderOnTheAsyncAndJobArms() throws Exception {
         String transferId = startExport("/api/orders/export-none");
-        assertThat(awaitTerminal("/api/orders/export-none/" + transferId).get("status").asText())
+        assertThat(awaitTerminal("/api/orders/export-none/" + transferId).get("status").asString())
                 .isEqualTo("COMPLETED");
         HttpResponse<String> file = get("/api/orders/export-none/" + transferId + "/file");
         assertThat(file.statusCode()).isEqualTo(200);
@@ -236,7 +236,7 @@ class SharedTempStoreIntegrationTest {
     @Test
     void theSweepReclaimsTheSpoolRowsUnderTheDatabaseStore() throws Exception {
         String transferId = startExport("/api/orders/export-async");
-        assertThat(awaitTerminal("/api/orders/export-async/" + transferId).get("status").asText())
+        assertThat(awaitTerminal("/api/orders/export-async/" + transferId).get("status").asString())
                 .isEqualTo("COMPLETED");
         String spoolUri = spoolUriOf(transferId);
         assertThat(spoolUri).startsWith(DB_SCHEME);
@@ -263,7 +263,7 @@ class SharedTempStoreIntegrationTest {
     @Test
     void aDownloadThatFailsIsNotRecordedAsDelivered() throws Exception {
         String transferId = startExport("/api/orders/export-async");
-        assertThat(awaitTerminal("/api/orders/export-async/" + transferId).get("status").asText())
+        assertThat(awaitTerminal("/api/orders/export-async/" + transferId).get("status").asString())
                 .isEqualTo("COMPLETED");
         String spoolId = spoolUriOf(transferId).substring(DB_SCHEME.length());
         // The bytes vanish from under the transfer — an operator's delete, a foreign sweep.
@@ -284,14 +284,14 @@ class SharedTempStoreIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.noBody()).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     private static JsonNode awaitTerminal(String statusPath) throws Exception {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
             JsonNode status = MAPPER.readTree(get(statusPath).body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

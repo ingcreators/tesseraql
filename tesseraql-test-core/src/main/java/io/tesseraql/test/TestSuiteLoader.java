@@ -1,13 +1,13 @@
 package io.tesseraql.test;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
-import java.io.IOException;
+import io.tesseraql.yaml.YamlMappers;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Loads a declarative {@link TestSuite} from a YAML file with a {@code tests:} block (design ch. 13).
@@ -18,13 +18,13 @@ public final class TestSuiteLoader {
     /** TQL-YAML-1403: an {@code expect:} block that is present but asserts nothing. */
     private static final TqlErrorCode EMPTY_EXPECT = new TqlErrorCode(TqlDomain.YAML, 1403);
 
-    private final ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
+    private final ObjectMapper mapper = YamlMappers.constrained();
 
     public TestSuite load(Path file) {
         try {
             return requireVersion(mapper.readValue(Files.readString(file), TestSuite.class),
                     file.toString());
-        } catch (IOException ex) {
+        } catch (JacksonException | java.io.IOException ex) {
             throw TqlException.builder(PARSE_ERROR)
                     .message("Failed to load test suite: " + ex.getMessage())
                     .source(file.toString())
@@ -36,7 +36,7 @@ public final class TestSuiteLoader {
     public TestSuite parse(String yaml) {
         try {
             return requireVersion(mapper.readValue(yaml, TestSuite.class), "test suite");
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(PARSE_ERROR, "Failed to parse test suite: " + ex.getMessage());
         }
     }

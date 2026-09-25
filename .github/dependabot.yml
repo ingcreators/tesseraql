@@ -20,6 +20,14 @@ updates:
       # what was measured, including one failure that is still unexplained. Unpin when that
       # work is scheduled.
       - dependency-name: "org.duckdb:duckdb_jdbc"
+      # Jackson stays on its long-term-support line, 3.1 (docs/jackson-3.md decision 1): patch
+      # releases flow, minor and major ones do not. Remove the update-types when Jackson names
+      # the next LTS, and move to it as its own change — the core-schema YAML subclass
+      # (CoreSchemaYamlParser) is deleted once an LTS carries jackson-dataformats-text #627.
+      - dependency-name: "tools.jackson*"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
 
   # The documentation site's JavaScript. Without this entry nothing updates it: the nanoid
   # advisory (GHSA-2v37-7h3g-55p8) sat open because Dependabot was watching Maven, Actions and

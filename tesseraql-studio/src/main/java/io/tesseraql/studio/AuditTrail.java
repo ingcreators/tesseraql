@@ -1,7 +1,5 @@
 package io.tesseraql.studio;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.studio.StudioService.AuditEntry;
 import io.tesseraql.studio.StudioService.AuditPage;
 import io.tesseraql.yaml.view.SortState;
@@ -18,6 +16,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Who did what, when: the append-only {@code work/studio/audit/audit.jsonl} log every
@@ -114,9 +114,9 @@ final class AuditTrail {
                     continue;
                 }
                 JsonNode node = jsonMapper.readTree(line);
-                AuditEntry entry = new AuditEntry(node.path("at").asText(""),
-                        node.path("actor").asText(""),
-                        node.path("action").asText(""), node.path("target").asText(""));
+                AuditEntry entry = new AuditEntry(node.path("at").asString(""),
+                        node.path("actor").asString(""),
+                        node.path("action").asString(""), node.path("target").asString(""));
                 if (q.isEmpty() || matches(entry, q)) {
                     entries.add(entry);
                 }

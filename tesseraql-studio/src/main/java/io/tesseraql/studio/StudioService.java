@@ -1,6 +1,5 @@
 package io.tesseraql.studio;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -37,6 +36,8 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The backend for TesseraQL Studio (design ch. 16): an explorer over the app's routes and jobs,
@@ -1559,7 +1560,7 @@ public final class StudioService {
             try {
                 out.put("body", jsonMapper.writerWithDefaultPrettyPrinter()
                         .writeValueAsString(writable));
-            } catch (com.fasterxml.jackson.core.JsonProcessingException ignored) {
+            } catch (JacksonException ignored) {
                 // Skip the body skeleton if it can't be serialized (never expected for scalars).
             }
         } else {

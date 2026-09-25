@@ -3,8 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
 import java.io.IOException;
@@ -28,6 +26,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for single-port multi-app routing (design ch. 32.7). Two installed apps are
@@ -40,7 +40,7 @@ class MultiAppGatewayIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static MultiAppGateway gateway;
     static Path installRoot;
@@ -506,7 +506,7 @@ class MultiAppGatewayIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(response.body()).get("data");
         assertThat(data).hasSize(1);
-        return data.get(0).get("name").asText();
+        return data.get(0).get("name").asString();
     }
 
     private static HttpResponse<String> get(String path) throws Exception {

@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -16,6 +15,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Renders a caught exception into a JSON error response (design ch. 37.2, 37.4).
@@ -441,7 +442,7 @@ public final class ErrorResponseRenderer implements Step {
         }
         try {
             return mapper.writeValueAsString(params);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             return null;
         }
     }

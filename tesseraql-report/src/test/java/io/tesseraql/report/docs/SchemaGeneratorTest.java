@@ -2,7 +2,6 @@ package io.tesseraql.report.docs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.scaffold.CatalogSchema;
 import java.sql.Types;
 import java.util.List;
@@ -33,7 +32,8 @@ class SchemaGeneratorTest {
                 .contains("\"users\"")
                 .contains("\"refTable\"");
         // Round-trips back into the model unchanged.
-        SchemaDoc back = new ObjectMapper().readValue(json, SchemaDoc.class);
+        SchemaDoc back = io.tesseraql.yaml.JsonMappers.constrained().readValue(json,
+                SchemaDoc.class);
         assertThat(back).isEqualTo(schema);
     }
 

@@ -1,8 +1,5 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.mcp.McpCallContext;
 import io.tesseraql.mcp.McpPrompt;
 import io.tesseraql.mcp.McpPromptResult;
@@ -19,6 +16,9 @@ import io.tesseraql.yaml.manifest.UiResourceFile;
 import io.tesseraql.yaml.model.UiSpec;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Builds the {@link McpServer} that serves an application's declared MCP tools, resources, and MCP

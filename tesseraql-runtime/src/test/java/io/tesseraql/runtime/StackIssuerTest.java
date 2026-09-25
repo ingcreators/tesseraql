@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.config.AppConfig;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +26,27 @@ class StackIssuerTest {
         assertThat(StackIssuer.enabled(Map.of("oauth", Map.of("enabled", "true")))).isTrue();
         assertThat(StackIssuer.enabled(Map.of("oauth", Map.of("enabled", true)))).isTrue();
         assertThat(StackIssuer.enabled(Map.of("oauth", Map.of("enabled", "false")))).isFalse();
+    }
+
+    /**
+     * docs/jackson-3.md decision 7: the stack file's switch reads through the configuration's
+     * spelling rule. Under YAML 1.2 `on` and `yes` arrive as text, and the Boolean.parseBoolean
+     * this replaced turned both into false — the issuer silently off.
+     */
+    @Test
+    void enablementAcceptsEveryConfigurationSpellingAndRefusesTheRest() {
+        for (String on : List.of("on", "yes", "True", "1")) {
+            assertThat(StackIssuer.enabled(Map.of("oauth", Map.of("enabled", on))))
+                    .as("enabled: %s", on).isTrue();
+        }
+        for (String off : List.of("off", "no", "0")) {
+            assertThat(StackIssuer.enabled(Map.of("oauth", Map.of("enabled", off))))
+                    .as("enabled: %s", off).isFalse();
+        }
+        assertThatThrownBy(() -> StackIssuer.enabled(Map.of("oauth", Map.of("enabled", "maybe"))))
+                .isInstanceOf(TqlException.class)
+                .hasMessageContaining("TQL-YAML-1107")
+                .hasMessageContaining("security.oauth.enabled");
     }
 
     @Test

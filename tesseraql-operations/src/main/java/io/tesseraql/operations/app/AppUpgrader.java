@@ -1,7 +1,6 @@
 package io.tesseraql.operations.app;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -14,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Upgrades an installed app with a preflight, snapshot, and rollback lifecycle (design ch. 31),

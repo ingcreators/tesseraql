@@ -61,7 +61,7 @@ public record PipelineStep(String id, Binding sql,
      * cannot bind the same object to both a nested component and the enclosing record, so the
      * arms are read here and folded into the step's {@link Binding}.
      */
-    @JsonCreator
+    @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     static PipelineStep of(
             @JsonProperty("id") String id,
             @JsonProperty("sql") Binding.SqlArm sql,

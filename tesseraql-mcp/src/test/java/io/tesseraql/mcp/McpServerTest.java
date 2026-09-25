@@ -2,19 +2,20 @@ package io.tesseraql.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class McpServerTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new JsonMapper();
 
     private McpServer server() {
         return McpServer.builder("test-server", "9.9")
@@ -22,7 +23,7 @@ class McpServerTest {
                 .tool(McpTool.builder("echo")
                         .description("echoes its text back")
                         .inputSchema(McpSchema.object().required("text", "string", "the text"))
-                        .handler((args, ctx) -> McpToolResult.text(args.path("text").asText()))
+                        .handler((args, ctx) -> McpToolResult.text(args.path("text").asString()))
                         .build())
                 .tool(McpTool.builder("info")
                         .handler((args, ctx) -> McpToolResult.json(Map.of("answer", 42)))
@@ -80,17 +81,17 @@ class McpServerTest {
     void initializeNegotiatesAKnownProtocolVersionAndAdvertisesTools() {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
                 + "\"params\":{\"protocolVersion\":\"2025-06-18\"}}").get("result");
-        assertThat(result.get("protocolVersion").asText()).isEqualTo("2025-06-18");
-        assertThat(result.get("serverInfo").get("name").asText()).isEqualTo("test-server");
+        assertThat(result.get("protocolVersion").asString()).isEqualTo("2025-06-18");
+        assertThat(result.get("serverInfo").get("name").asString()).isEqualTo("test-server");
         assertThat(result.get("capabilities").get("tools")).isNotNull();
-        assertThat(result.get("instructions").asText()).isEqualTo("be helpful");
+        assertThat(result.get("instructions").asString()).isEqualTo("be helpful");
     }
 
     @Test
     void initializeFallsBackToTheLatestVersionForAnUnknownRequest() {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\","
                 + "\"params\":{\"protocolVersion\":\"1999-01-01\"}}").get("result");
-        assertThat(result.get("protocolVersion").asText()).isEqualTo("2025-06-18");
+        assertThat(result.get("protocolVersion").asString()).isEqualTo("2025-06-18");
     }
 
     @Test
@@ -99,8 +100,8 @@ class McpServerTest {
                 .get("result").get("tools");
         assertThat(tools).hasSize(4);
         JsonNode echo = tools.get(0);
-        assertThat(echo.get("name").asText()).isEqualTo("echo");
-        assertThat(echo.get("inputSchema").get("required").get(0).asText()).isEqualTo("text");
+        assertThat(echo.get("name").asString()).isEqualTo("echo");
+        assertThat(echo.get("inputSchema").get("required").get(0).asString()).isEqualTo("text");
     }
 
     @Test
@@ -108,7 +109,7 @@ class McpServerTest {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\","
                 + "\"params\":{\"name\":\"echo\",\"arguments\":{\"text\":\"hi\"}}}").get("result");
         assertThat(result.get("isError").asBoolean()).isFalse();
-        assertThat(result.get("content").get(0).get("text").asText()).isEqualTo("hi");
+        assertThat(result.get("content").get(0).get("text").asString()).isEqualTo("hi");
     }
 
     @Test
@@ -116,7 +117,7 @@ class McpServerTest {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\","
                 + "\"params\":{\"name\":\"info\"}}").get("result");
         assertThat(result.get("structuredContent").get("answer").asInt()).isEqualTo(42);
-        assertThat(result.get("content").get(0).get("type").asText()).isEqualTo("text");
+        assertThat(result.get("content").get(0).get("type").asString()).isEqualTo("text");
     }
 
     @Test
@@ -133,7 +134,7 @@ class McpServerTest {
         assertThat(response.has("error")).isFalse();
         JsonNode result = response.get("result");
         assertThat(result.get("isError").asBoolean()).isTrue();
-        assertThat(result.get("content").get(0).get("text").asText()).contains("kaboom");
+        assertThat(result.get("content").get(0).get("text").asString()).contains("kaboom");
     }
 
     /**
@@ -146,7 +147,7 @@ class McpServerTest {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"tools/call\","
                 + "\"params\":{\"name\":\"denied\"}}").get("result");
         assertThat(result.get("isError").asBoolean()).isTrue();
-        assertThat(result.get("content").get(0).get("text").asText())
+        assertThat(result.get("content").get(0).get("text").asString())
                 .isEqualTo("TQL-MCP-4001: nope");
     }
 
@@ -155,7 +156,7 @@ class McpServerTest {
         JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"prompts/get\","
                 + "\"params\":{\"name\":\"refused\"}}").get("error");
         assertThat(error.get("code").asInt()).isEqualTo(-32603);
-        assertThat(error.get("message").asText()).isEqualTo("TQL-MCP-4001: refused");
+        assertThat(error.get("message").asString()).isEqualTo("TQL-MCP-4001: refused");
     }
 
     // ----- batches (docs/audit-low-leads.md, G3) -----
@@ -174,7 +175,7 @@ class McpServerTest {
         assertThat(responses).hasSize(2);
         assertThat(responses.get(0).get("id").asInt()).isEqualTo(2);
         assertThat(responses.get(1).get("id").asInt()).isEqualTo(3);
-        assertThat(responses.get(1).get("result").get("content").get(0).get("text").asText())
+        assertThat(responses.get(1).get("result").get("content").get(0).get("text").asString())
                 .isEqualTo("batched");
     }
 
@@ -197,7 +198,7 @@ class McpServerTest {
         JsonNode responses = call("[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"},"
                 + "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\"}]");
         assertThat(responses.get(0).get("error").get("code").asInt()).isEqualTo(-32600);
-        assertThat(responses.get(0).get("error").get("message").asText()).contains("batch");
+        assertThat(responses.get(0).get("error").get("message").asString()).contains("batch");
         assertThat(responses.get(1).has("result")).isTrue();
     }
 
@@ -260,10 +261,10 @@ class McpServerTest {
                 .get("result").get("prompts");
         assertThat(prompts).hasSize(2);
         JsonNode greet = prompts.get(0);
-        assertThat(greet.get("name").asText()).isEqualTo("greet");
-        assertThat(greet.get("title").asText()).isEqualTo("Greeting");
+        assertThat(greet.get("name").asString()).isEqualTo("greet");
+        assertThat(greet.get("title").asString()).isEqualTo("Greeting");
         JsonNode arg = greet.get("arguments").get(0);
-        assertThat(arg.get("name").asText()).isEqualTo("who");
+        assertThat(arg.get("name").asString()).isEqualTo("who");
         assertThat(arg.get("required").asBoolean()).isTrue();
     }
 
@@ -272,11 +273,11 @@ class McpServerTest {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"prompts/get\","
                 + "\"params\":{\"name\":\"greet\",\"arguments\":{\"who\":\"Sato\"}}}")
                 .get("result");
-        assertThat(result.get("description").asText()).isEqualTo("a greeting");
+        assertThat(result.get("description").asString()).isEqualTo("a greeting");
         JsonNode message = result.get("messages").get(0);
-        assertThat(message.get("role").asText()).isEqualTo("user");
-        assertThat(message.get("content").get("type").asText()).isEqualTo("text");
-        assertThat(message.get("content").get("text").asText()).isEqualTo("Say hello to Sato");
+        assertThat(message.get("role").asString()).isEqualTo("user");
+        assertThat(message.get("content").get("type").asString()).isEqualTo("text");
+        assertThat(message.get("content").get("text").asString()).isEqualTo("Say hello to Sato");
     }
 
     @Test
@@ -284,7 +285,7 @@ class McpServerTest {
         JsonNode error = call("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"prompts/get\","
                 + "\"params\":{\"name\":\"greet\",\"arguments\":{}}}").get("error");
         assertThat(error.get("code").asInt()).isEqualTo(-32602);
-        assertThat(error.get("message").asText()).contains("who");
+        assertThat(error.get("message").asString()).contains("who");
     }
 
     @Test
@@ -300,9 +301,9 @@ class McpServerTest {
                 .get("result").get("resources");
         assertThat(resources).hasSize(2);
         JsonNode catalog = resources.get(0);
-        assertThat(catalog.get("uri").asText()).isEqualTo("tesseraql://catalog");
-        assertThat(catalog.get("name").asText()).isEqualTo("catalog");
-        assertThat(catalog.get("mimeType").asText()).isEqualTo("application/json");
+        assertThat(catalog.get("uri").asString()).isEqualTo("tesseraql://catalog");
+        assertThat(catalog.get("name").asString()).isEqualTo("catalog");
+        assertThat(catalog.get("mimeType").asString()).isEqualTo("application/json");
     }
 
     @Test
@@ -310,9 +311,9 @@ class McpServerTest {
         JsonNode result = call("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/read\","
                 + "\"params\":{\"uri\":\"tesseraql://catalog\"}}").get("result");
         JsonNode entry = result.get("contents").get(0);
-        assertThat(entry.get("uri").asText()).isEqualTo("tesseraql://catalog");
-        assertThat(entry.get("mimeType").asText()).isEqualTo("application/json");
-        assertThat(entry.get("text").asText()).isEqualTo("{\"items\":3}");
+        assertThat(entry.get("uri").asString()).isEqualTo("tesseraql://catalog");
+        assertThat(entry.get("mimeType").asString()).isEqualTo("application/json");
+        assertThat(entry.get("text").asString()).isEqualTo("{\"items\":3}");
     }
 
     @Test
@@ -329,7 +330,7 @@ class McpServerTest {
         assertThat(response.has("result")).isFalse();
         JsonNode error = response.get("error");
         assertThat(error.get("code").asInt()).isEqualTo(-32603);
-        assertThat(error.get("message").asText()).isEqualTo("TQL-MCP-4001: denied");
+        assertThat(error.get("message").asString()).isEqualTo("TQL-MCP-4001: denied");
     }
 
     @Test
@@ -380,7 +381,7 @@ class McpServerTest {
         JsonNode caps = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}")
                 .get("result").get("capabilities");
         JsonNode ui = caps.get("extensions").get("io.modelcontextprotocol/ui");
-        assertThat(ui.get("mimeTypes").get(0).asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(ui.get("mimeTypes").get(0).asString()).isEqualTo("text/html;profile=mcp-app");
     }
 
     @Test
@@ -394,20 +395,21 @@ class McpServerTest {
     void toolsListAdvertisesTheLinkingToolsMeta() {
         JsonNode tool = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}")
                 .get("result").get("tools").get(0);
-        assertThat(tool.get("_meta").get("ui").get("resourceUri").asText()).isEqualTo("ui://board");
+        assertThat(tool.get("_meta").get("ui").get("resourceUri").asString())
+                .isEqualTo("ui://board");
     }
 
     @Test
     void resourcesListAndReadCarryTheUiResourceMeta() {
         JsonNode listed = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/list\"}")
                 .get("result").get("resources").get(0);
-        assertThat(listed.get("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(listed.get("mimeType").asString()).isEqualTo("text/html;profile=mcp-app");
         assertThat(listed.get("_meta").get("ui").get("prefersBorder").asBoolean()).isTrue();
 
         JsonNode entry = onUiServer("{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"resources/read\","
                 + "\"params\":{\"uri\":\"ui://board\"}}").get("result").get("contents").get(0);
-        assertThat(entry.get("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
-        assertThat(entry.get("text").asText()).contains("hc-card");
+        assertThat(entry.get("mimeType").asString()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(entry.get("text").asString()).contains("hc-card");
         assertThat(entry.get("_meta").get("ui").get("prefersBorder").asBoolean()).isTrue();
     }
 }

@@ -201,22 +201,22 @@ class OpenApiGeneratorTest {
 
     @Test
     void jsonResponseSchemaMirrorsTheBodyStructure() throws Exception {
-        com.fasterxml.jackson.databind.JsonNode schema = new com.fasterxml.jackson.databind.ObjectMapper()
+        tools.jackson.databind.JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained()
                 .readTree(new OpenApiGenerator().toJson(exampleApp()))
                 .path("paths").path("/api/users").path("get").path("responses").path("200")
                 .path("content").path("application/json").path("schema");
 
         // The response.json.body structure is mirrored with property names (not just {type:object}).
-        assertThat(schema.path("type").asText()).isEqualTo("object");
-        com.fasterxml.jackson.databind.JsonNode props = schema.path("properties");
+        assertThat(schema.path("type").asString()).isEqualTo("object");
+        tools.jackson.databind.JsonNode props = schema.path("properties");
         // data: main.rows -> an array of row objects
-        assertThat(props.path("data").path("type").asText()).isEqualTo("array");
-        assertThat(props.path("data").path("items").path("type").asText()).isEqualTo("object");
+        assertThat(props.path("data").path("type").asString()).isEqualTo("array");
+        assertThat(props.path("data").path("items").path("type").asString()).isEqualTo("object");
         // meta: a nested object; count is a row count (integer); limit/offset take their input types.
-        com.fasterxml.jackson.databind.JsonNode meta = props.path("meta").path("properties");
-        assertThat(meta.path("count").path("type").asText()).isEqualTo("integer");
-        assertThat(meta.path("limit").path("type").asText()).isEqualTo("integer");
-        assertThat(meta.path("offset").path("type").asText()).isEqualTo("integer");
+        tools.jackson.databind.JsonNode meta = props.path("meta").path("properties");
+        assertThat(meta.path("count").path("type").asString()).isEqualTo("integer");
+        assertThat(meta.path("limit").path("type").asString()).isEqualTo("integer");
+        assertThat(meta.path("offset").path("type").asString()).isEqualTo("integer");
     }
 
     @Test

@@ -2,7 +2,6 @@ package io.tesseraql.studio.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
 import java.net.URI;
@@ -25,6 +24,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The hot reload's content diff, end to end: an apply bounces only the route whose sources
@@ -39,7 +39,7 @@ class ReloadContentDiffIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    static final ObjectMapper MAPPER = new ObjectMapper();
+    static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -75,11 +75,11 @@ class ReloadContentDiffIntegrationTest {
         HttpResponse<String> apply = post(
                 "/_tesseraql/studio/apply?path=" + enc("web/api/alpha/alpha.sql"), "");
         assertThat(apply.statusCode()).isEqualTo(200);
-        com.fasterxml.jackson.databind.JsonNode reloaded = MAPPER.readTree(apply.body())
+        tools.jackson.databind.JsonNode reloaded = MAPPER.readTree(apply.body())
                 .get("reloaded");
         // Only the changed route bounced; the untouched neighbor was never stopped.
         assertThat(reloaded).hasSize(1);
-        assertThat(reloaded.get(0).asText()).isEqualTo("alpha.list");
+        assertThat(reloaded.get(0).asString()).isEqualTo("alpha.list");
         assertThat(get("/api/alpha").body()).contains("value");
         assertThat(get("/api/beta").statusCode()).isEqualTo(200);
 
@@ -89,7 +89,7 @@ class ReloadContentDiffIntegrationTest {
         assertThat(force.statusCode()).isEqualTo(200);
         List<String> forced = new java.util.ArrayList<>();
         MAPPER.readTree(force.body()).get("reloaded")
-                .forEach(id -> forced.add(id.asText()));
+                .forEach(id -> forced.add(id.asString()));
         assertThat(forced).containsExactlyInAnyOrder("alpha.list", "beta.list",
                 "thing.submit", "thing.cancel", "thing.finish");
 
@@ -112,7 +112,7 @@ class ReloadContentDiffIntegrationTest {
         assertThat(shared.statusCode()).isEqualTo(200);
         List<String> afterShared = new java.util.ArrayList<>();
         MAPPER.readTree(shared.body()).get("reloaded")
-                .forEach(id -> afterShared.add(id.asText()));
+                .forEach(id -> afterShared.add(id.asString()));
         assertThat(afterShared).containsExactlyInAnyOrder("alpha.list", "beta.list",
                 "thing.submit", "thing.cancel", "thing.finish");
 
@@ -126,7 +126,7 @@ class ReloadContentDiffIntegrationTest {
         assertThat(workflow.statusCode()).isEqualTo(200);
         List<String> afterWorkflow = new java.util.ArrayList<>();
         MAPPER.readTree(workflow.body()).get("reloaded")
-                .forEach(id -> afterWorkflow.add(id.asText()));
+                .forEach(id -> afterWorkflow.add(id.asString()));
         assertThat(afterWorkflow).containsExactlyInAnyOrder("thing.submit", "thing.cancel",
                 "thing.finish");
     }
@@ -148,11 +148,11 @@ class ReloadContentDiffIntegrationTest {
             Files.writeString(document, "version: tesseraql/v1\nid: [\n");
             HttpResponse<String> broken = post("/_tesseraql/studio/reload", "");
             assertThat(broken.statusCode()).isEqualTo(200);
-            com.fasterxml.jackson.databind.JsonNode result = MAPPER.readTree(broken.body());
+            tools.jackson.databind.JsonNode result = MAPPER.readTree(broken.body());
             assertThat(result.get("removed")).as("nothing is un-mounted").isEmpty();
             assertThat(result.get("failed")).singleElement().satisfies(failure -> {
-                assertThat(failure.get("path").asText()).isEqualTo("workflow/thing.yml");
-                assertThat(failure.get("error").asText()).contains("TQL-YAML-1001");
+                assertThat(failure.get("path").asString()).isEqualTo("workflow/thing.yml");
+                assertThat(failure.get("error").asString()).contains("TQL-YAML-1001");
             });
 
             // Fixing the document recompiles the held transitions in place: they are reloaded,
@@ -162,7 +162,7 @@ class ReloadContentDiffIntegrationTest {
             assertThat(fixed.statusCode()).isEqualTo(200);
             List<String> reloaded = new java.util.ArrayList<>();
             MAPPER.readTree(fixed.body()).get("reloaded")
-                    .forEach(id -> reloaded.add(id.asText()));
+                    .forEach(id -> reloaded.add(id.asString()));
             assertThat(reloaded).contains("thing.submit", "thing.cancel", "thing.finish");
             assertThat(MAPPER.readTree(fixed.body()).get("added")).isEmpty();
             assertThat(MAPPER.readTree(fixed.body()).get("failed")).isEmpty();
@@ -199,7 +199,7 @@ class ReloadContentDiffIntegrationTest {
             assertThat(apply.statusCode()).isEqualTo(200);
             List<String> reloaded = new java.util.ArrayList<>();
             MAPPER.readTree(apply.body()).get("reloaded")
-                    .forEach(id -> reloaded.add(id.asText()));
+                    .forEach(id -> reloaded.add(id.asString()));
             assertThat(reloaded).as("the reader, and only the reader")
                     .containsExactly("orders.detail");
             assertThat(get("/orders/detail").body()).as("serving the applied statement")

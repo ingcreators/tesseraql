@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.openapi;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -12,6 +10,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Diffs two OpenAPI 3 documents (the kind {@link OpenApiGenerator} emits) into a deterministic API
@@ -38,7 +39,7 @@ public final class OpenApiDiff {
     public ApiChangelog diff(String baselineJson, String currentJson) {
         try {
             return diff(MAPPER.readTree(baselineJson), MAPPER.readTree(currentJson));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(DIFF_ERROR,
                     "Failed to parse OpenAPI for diff: " + ex.getMessage());
         }
@@ -131,8 +132,8 @@ public final class OpenApiDiff {
                 if (oldReq != newReq) {
                     details.add(label + ": now " + (newReq ? "required" : "optional"));
                 }
-                String oldType = oldParam.path("schema").path("type").asText("");
-                String newType = newParam.path("schema").path("type").asText("");
+                String oldType = oldParam.path("schema").path("type").asString("");
+                String newType = newParam.path("schema").path("type").asString("");
                 if (!oldType.equals(newType)) {
                     details.add(label + ": type " + display(oldType) + " → " + display(newType));
                 }
@@ -200,8 +201,8 @@ public final class OpenApiDiff {
         JsonNode array = op.get("parameters");
         if (array != null && array.isArray()) {
             for (JsonNode parameter : array) {
-                parameters.put(parameter.path("name").asText("") + "|" + parameter.path("in")
-                        .asText(""), parameter);
+                parameters.put(parameter.path("name").asString("") + "|" + parameter.path("in")
+                        .asString(""), parameter);
             }
         }
         return parameters;
@@ -219,13 +220,13 @@ public final class OpenApiDiff {
     }
 
     private static String parameterLabel(JsonNode parameter) {
-        String in = parameter.path("in").asText("");
-        String name = parameter.path("name").asText("");
+        String in = parameter.path("in").asString("");
+        String name = parameter.path("name").asString("");
         return (in.isEmpty() ? "" : in + " ") + "parameter " + name;
     }
 
     private static String operationId(JsonNode op) {
-        return op == null ? null : op.path("operationId").asText(null);
+        return op == null ? null : op.path("operationId").asString(null);
     }
 
     private static String display(String type) {

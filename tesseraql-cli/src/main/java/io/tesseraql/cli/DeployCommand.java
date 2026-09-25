@@ -1,6 +1,5 @@
 package io.tesseraql.cli;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.TesseraqlVersion;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -22,6 +21,8 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@code tesseraql deploy}: the operator's pen for the install root's deploy protocol
@@ -230,7 +231,7 @@ final class DeployCommand implements Callable<Integer> {
             System.err.println("The stack refused it (HTTP " + response.statusCode() + "): "
                     + refusalMessage(response.body()));
             return 2;
-        } catch (IOException unreachable) {
+        } catch (JacksonException | IOException unreachable) {
             System.err.println("Could not reach " + target + ": " + unreachable.getMessage());
             return 2;
         } catch (InterruptedException interrupted) {
@@ -310,7 +311,7 @@ final class DeployCommand implements Callable<Integer> {
                     && error.get("message") != null) {
                 return error.get("code") + " " + error.get("message");
             }
-        } catch (IOException notJson) {
+        } catch (JacksonException notJson) {
             // fall through to the raw body
         }
         return body;
@@ -384,7 +385,7 @@ final class DeployCommand implements Callable<Integer> {
         Map<?, ?> status;
         try {
             status = MAPPER.readValue(json, Map.class);
-        } catch (IOException torn) {
+        } catch (JacksonException torn) {
             return null;
         }
         if (status == null || status.get("outcome") == null) {
@@ -598,7 +599,7 @@ final class DeployCommand implements Callable<Integer> {
                     return Optional.of("applied " + what + " at " + status.get("at"));
                 }
                 return Optional.of("refused " + what + ": " + status.get("message"));
-            } catch (IOException torn) {
+            } catch (JacksonException torn) {
                 return Optional.empty();
             }
         }

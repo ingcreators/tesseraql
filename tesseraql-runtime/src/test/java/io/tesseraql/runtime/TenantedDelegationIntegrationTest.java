@@ -49,7 +49,8 @@ class TenantedDelegationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final tools.jackson.databind.ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers
+            .constrained();
     private static final String JWT_SECRET = "0123456789abcdef0123456789abcdef";
     private static final String TENANT = "acme";
 

@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for SCIM inbound provisioning (design ch. 10.15): create, fetch, and list users
@@ -41,7 +41,7 @@ class ScimInboundIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -75,9 +75,9 @@ class ScimInboundIntegrationTest {
         HttpResponse<String> created = send("POST", "/scim/v2/Users", body);
         assertThat(created.statusCode()).isEqualTo(201);
         JsonNode createdUser = MAPPER.readTree(created.body());
-        String id = createdUser.get("id").asText();
+        String id = createdUser.get("id").asString();
         assertThat(id).isNotBlank();
-        assertThat(createdUser.get("userName").asText()).isEqualTo("asmith");
+        assertThat(createdUser.get("userName").asString()).isEqualTo("asmith");
         // RFC 7644 §3.3: the 201 identifies the created resource — the path plus the id, never
         // the query string an IdP may have appended to the create URL.
         assertThat(created.headers().firstValue("Location").orElse(""))
@@ -85,13 +85,13 @@ class ScimInboundIntegrationTest {
 
         HttpResponse<String> fetched = send("GET", "/scim/v2/Users/" + id, null);
         assertThat(fetched.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(fetched.body()).get("emails").get(0).get("value").asText())
+        assertThat(MAPPER.readTree(fetched.body()).get("emails").get(0).get("value").asString())
                 .isEqualTo("anne@example.com");
 
         HttpResponse<String> list = send("GET", "/scim/v2/Users", null);
         assertThat(list.statusCode()).isEqualTo(200);
         JsonNode listJson = MAPPER.readTree(list.body());
-        assertThat(listJson.get("schemas").get(0).asText())
+        assertThat(listJson.get("schemas").get(0).asString())
                 .isEqualTo("urn:ietf:params:scim:api:messages:2.0:ListResponse");
         assertThat(listJson.get("Resources")).isNotEmpty();
     }
@@ -104,7 +104,7 @@ class ScimInboundIntegrationTest {
         assertThat(send("POST", "/scim/v2/Users", body).statusCode()).isEqualTo(201);
         HttpResponse<String> conflict = send("POST", "/scim/v2/Users", body);
         assertThat(conflict.statusCode()).isEqualTo(409);
-        assertThat(MAPPER.readTree(conflict.body()).get("scimType").asText())
+        assertThat(MAPPER.readTree(conflict.body()).get("scimType").asString())
                 .isEqualTo("uniqueness");
     }
 
@@ -113,13 +113,13 @@ class ScimInboundIntegrationTest {
         String id = MAPPER.readTree(send("POST", "/scim/v2/Users",
                 "{\"userName\":\"rdel\",\"name\":{\"givenName\":\"R\",\"familyName\":\"D\"}}")
                 .body())
-                .get("id").asText();
+                .get("id").asString();
 
         HttpResponse<String> replaced = send("PUT", "/scim/v2/Users/" + id,
                 "{\"userName\":\"rdel\",\"name\":{\"givenName\":\"Renamed\",\"familyName\":\"D\"},"
                         + "\"active\":false}");
         assertThat(replaced.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(replaced.body()).get("name").get("givenName").asText())
+        assertThat(MAPPER.readTree(replaced.body()).get("name").get("givenName").asString())
                 .isEqualTo("Renamed");
 
         assertThat(send("DELETE", "/scim/v2/Users/" + id, null).statusCode()).isEqualTo(204);
@@ -132,7 +132,7 @@ class ScimInboundIntegrationTest {
         String id = MAPPER.readTree(send("POST", "/scim/v2/Users",
                 "{\"userName\":\"patchme\",\"name\":{\"givenName\":\"Pat\",\"familyName\":\"Ch\"},"
                         + "\"active\":true}")
-                .body()).get("id").asText();
+                .body()).get("id").asString();
 
         HttpResponse<String> patched = send("PATCH", "/scim/v2/Users/" + id, """
                 {"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
@@ -143,12 +143,12 @@ class ScimInboundIntegrationTest {
                 """);
         assertThat(patched.statusCode()).isEqualTo(200);
         JsonNode user = MAPPER.readTree(patched.body());
-        assertThat(user.get("name").get("givenName").asText()).isEqualTo("Patricia");
+        assertThat(user.get("name").get("givenName").asString()).isEqualTo("Patricia");
         assertThat(user.get("active").asBoolean()).isFalse();
 
         // The change is persisted (re-fetch reflects it).
         JsonNode refetched = MAPPER.readTree(send("GET", "/scim/v2/Users/" + id, null).body());
-        assertThat(refetched.get("name").get("givenName").asText()).isEqualTo("Patricia");
+        assertThat(refetched.get("name").get("givenName").asString()).isEqualTo("Patricia");
     }
 
     @Test
@@ -162,7 +162,7 @@ class ScimInboundIntegrationTest {
                     "manager":{"value":"u-mgr"}}}
                 """;
         String id = MAPPER.readTree(send("POST", "/scim/v2/Users", body).body())
-                .get("id").asText();
+                .get("id").asString();
         assertThat(attribute(id, "department")).isEqualTo("経理部");
         assertThat(attribute(id, "employeeNumber")).isEqualTo("E-7");
         assertThat(attribute(id, "manager")).isEqualTo("u-mgr");
@@ -216,7 +216,7 @@ class ScimInboundIntegrationTest {
         assertThat(list.statusCode()).isEqualTo(200);
         JsonNode json = MAPPER.readTree(list.body());
         assertThat(json.get("totalResults").asInt()).isEqualTo(1);
-        assertThat(json.get("Resources").get(0).get("userName").asText()).isEqualTo("filterme");
+        assertThat(json.get("Resources").get(0).get("userName").asString()).isEqualTo("filterme");
 
         String missing = java.net.URLEncoder.encode("userName eq \"nobody\"",
                 StandardCharsets.UTF_8);
@@ -234,10 +234,10 @@ class ScimInboundIntegrationTest {
         HttpResponse<String> created = send("POST", "/scim/v2/Groups", body);
         assertThat(created.statusCode()).isEqualTo(201);
         JsonNode group = MAPPER.readTree(created.body());
-        String id = group.get("id").asText();
+        String id = group.get("id").asString();
         assertThat(id).isNotBlank();
-        assertThat(group.get("displayName").asText()).isEqualTo("engineers");
-        assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("100");
+        assertThat(group.get("displayName").asString()).isEqualTo("engineers");
+        assertThat(group.get("members").get(0).get("value").asString()).isEqualTo("100");
 
         // PATCH adds a member and removes the original via a value-filter path.
         HttpResponse<String> patched = send("PATCH", "/scim/v2/Groups/" + id, """
@@ -250,7 +250,7 @@ class ScimInboundIntegrationTest {
         assertThat(patched.statusCode()).isEqualTo(200);
         JsonNode members = MAPPER.readTree(patched.body()).get("members");
         assertThat(members).hasSize(1);
-        assertThat(members.get(0).get("value").asText()).isEqualTo("200");
+        assertThat(members.get(0).get("value").asString()).isEqualTo("200");
 
         HttpResponse<String> list = send("GET", "/scim/v2/Groups", null);
         assertThat(list.statusCode()).isEqualTo(200);
@@ -264,7 +264,7 @@ class ScimInboundIntegrationTest {
     void replaceRenamesGroupAndReconcilesMembersBothWays() throws Exception {
         String id = MAPPER.readTree(send("POST", "/scim/v2/Groups", """
                 {"displayName":"reconcile","members":[{"value":"1"},{"value":"2"}]}
-                """).body()).get("id").asText();
+                """).body()).get("id").asString();
 
         // PUT keeps member 2, drops 1, and adds 3 -> membership reconciled in both directions.
         HttpResponse<String> replaced = send("PUT", "/scim/v2/Groups/" + id, """
@@ -272,9 +272,9 @@ class ScimInboundIntegrationTest {
                 """);
         assertThat(replaced.statusCode()).isEqualTo(200);
         JsonNode group = MAPPER.readTree(replaced.body());
-        assertThat(group.get("displayName").asText()).isEqualTo("reconciled");
+        assertThat(group.get("displayName").asString()).isEqualTo("reconciled");
         List<String> members = new java.util.ArrayList<>();
-        group.get("members").forEach(member -> members.add(member.get("value").asText()));
+        group.get("members").forEach(member -> members.add(member.get("value").asString()));
         assertThat(members).containsExactlyInAnyOrder("2", "3");
 
         // Replacing a missing group is a 404.
@@ -295,14 +295,14 @@ class ScimInboundIntegrationTest {
 
         JsonNode list = MAPPER.readTree(send("GET", "/scim/v2/Groups", null).body());
         list.get("Resources").forEach(
-                group -> assertThat(group.get("displayName").asText()).isNotEqualTo("atomic"));
+                group -> assertThat(group.get("displayName").asString()).isNotEqualTo("atomic"));
     }
 
     @Test
     void patchReplacesGroupDisplayName() throws Exception {
         String id = MAPPER.readTree(send("POST", "/scim/v2/Groups",
                 "{\"displayName\":\"before\",\"members\":[{\"value\":\"5\"}]}").body())
-                .get("id").asText();
+                .get("id").asString();
 
         HttpResponse<String> patched = send("PATCH", "/scim/v2/Groups/" + id, """
                 {"schemas":["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
@@ -310,13 +310,13 @@ class ScimInboundIntegrationTest {
                 """);
         assertThat(patched.statusCode()).isEqualTo(200);
         JsonNode group = MAPPER.readTree(patched.body());
-        assertThat(group.get("displayName").asText()).isEqualTo("after");
+        assertThat(group.get("displayName").asString()).isEqualTo("after");
         // The displayName change leaves existing members intact.
-        assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("5");
+        assertThat(group.get("members").get(0).get("value").asString()).isEqualTo("5");
 
         // The change is persisted (re-fetch reflects it).
         assertThat(MAPPER.readTree(send("GET", "/scim/v2/Groups/" + id, null).body())
-                .get("displayName").asText()).isEqualTo("after");
+                .get("displayName").asString()).isEqualTo("after");
     }
 
     @Test
@@ -325,7 +325,7 @@ class ScimInboundIntegrationTest {
         assertThat(send("POST", "/scim/v2/Groups", body).statusCode()).isEqualTo(201);
         HttpResponse<String> conflict = send("POST", "/scim/v2/Groups", body);
         assertThat(conflict.statusCode()).isEqualTo(409);
-        assertThat(MAPPER.readTree(conflict.body()).get("scimType").asText())
+        assertThat(MAPPER.readTree(conflict.body()).get("scimType").asString())
                 .isEqualTo("uniqueness");
     }
 

@@ -1,7 +1,5 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -15,6 +13,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The host's module refusals, raised per application before any runtime boots
@@ -95,8 +96,8 @@ final class ModulesGuard {
         List<String> locked = new ArrayList<>();
         try {
             JsonNode root = MAPPER.readTree(Files.readString(lock));
-            root.path("artifacts").forEach(node -> locked.add(node.path("sha256").asText()));
-        } catch (IOException ex) {
+            root.path("artifacts").forEach(node -> locked.add(node.path("sha256").asString("")));
+        } catch (JacksonException | IOException ex) {
             throw new TqlException(MODULES_DIVERGED, "Application '" + appName
                     + "' has an unreadable modules.lock (" + ex.getMessage()
                     + ") — re-run 'tesseraql modules resolve' against " + appHome);

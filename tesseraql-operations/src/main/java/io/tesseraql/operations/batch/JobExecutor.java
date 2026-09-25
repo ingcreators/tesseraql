@@ -1,6 +1,5 @@
 package io.tesseraql.operations.batch;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -15,6 +14,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Runs a batch job's steps sequentially, persisting lifecycle to the {@link JobRepository}
@@ -491,7 +491,7 @@ public final class JobExecutor {
             jobParams.forEach((name, value) -> stringified.put(name,
                     value == null ? null : String.valueOf(value)));
             return mapper.writeValueAsString(stringified);
-        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (RuntimeException ex) {
             LOG.warn("Job parameters not recorded (rerun will reuse the business date only): {}",
                     ex.getMessage());
             return null;

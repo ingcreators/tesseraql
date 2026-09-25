@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.tesseraql.core.outbox.OutboxEvent;
@@ -27,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for outbound SCIM provisioning driven by the outbox (design ch. 10.15, 39.2): a
@@ -38,7 +38,7 @@ class OutboxScimProvisioningIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final List<JsonNode> provisioned = new CopyOnWriteArrayList<>();
     private static final List<JsonNode> provisionedGroups = new CopyOnWriteArrayList<>();
 
@@ -86,7 +86,8 @@ class OutboxScimProvisioningIntegrationTest {
         assertThat(delivered).isGreaterThanOrEqualTo(1);
 
         assertThat(provisioned)
-                .anySatisfy(user -> assertThat(user.get("userName").asText()).isEqualTo("asmith"));
+                .anySatisfy(
+                        user -> assertThat(user.get("userName").asString()).isEqualTo("asmith"));
     }
 
     @Test
@@ -103,8 +104,8 @@ class OutboxScimProvisioningIntegrationTest {
         assertThat(delivered).isGreaterThanOrEqualTo(1);
 
         assertThat(provisionedGroups).anySatisfy(group -> {
-            assertThat(group.get("displayName").asText()).isEqualTo("engineers");
-            assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("100");
+            assertThat(group.get("displayName").asString()).isEqualTo("engineers");
+            assertThat(group.get("members").get(0).get("value").asString()).isEqualTo("100");
         });
     }
 
@@ -112,7 +113,7 @@ class OutboxScimProvisioningIntegrationTest {
         try {
             JsonNode body = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
             provisionedGroups.add(body);
-            byte[] response = ((com.fasterxml.jackson.databind.node.ObjectNode) body)
+            byte[] response = ((tools.jackson.databind.node.ObjectNode) body)
                     .put("id", "remote-g1").toString().getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(201, response.length);
             try (OutputStream out = exchange.getResponseBody()) {
@@ -127,7 +128,7 @@ class OutboxScimProvisioningIntegrationTest {
         try {
             JsonNode body = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
             provisioned.add(body);
-            byte[] response = ((com.fasterxml.jackson.databind.node.ObjectNode) body)
+            byte[] response = ((tools.jackson.databind.node.ObjectNode) body)
                     .put("id", "remote-1").toString().getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(201, response.length);
             try (OutputStream out = exchange.getResponseBody()) {

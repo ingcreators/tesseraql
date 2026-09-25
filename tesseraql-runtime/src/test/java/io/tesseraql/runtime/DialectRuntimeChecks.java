@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -14,6 +12,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Shared live checks for the dialect portability tests (design ch. 42): the outbox round trip
@@ -23,7 +23,7 @@ import java.time.Instant;
  */
 final class DialectRuntimeChecks {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     private DialectRuntimeChecks() {
@@ -480,12 +480,12 @@ final class DialectRuntimeChecks {
         String importId = startTransfer(runtime, "/api/items/import",
                 "name,qty\nalpha,1\nbeta,2\n");
         JsonNode imported = awaitTerminal(runtime, "/api/items/import/" + importId);
-        assertThat(imported.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(imported.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(imported.get("rowCount").asLong()).isEqualTo(2);
 
         String exportId = startTransfer(runtime, "/api/items/export", "");
         assertThat(awaitTerminal(runtime, "/api/items/export/" + exportId)
-                .get("status").asText()).isEqualTo("COMPLETED");
+                .get("status").asString()).isEqualTo("COMPLETED");
         HttpResponse<String> file = HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
                         + "/api/items/export/" + exportId + "/file"))
@@ -584,7 +584,7 @@ final class DialectRuntimeChecks {
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     private static JsonNode awaitTerminal(TesseraqlRuntime runtime, String statusPath)
@@ -595,7 +595,7 @@ final class DialectRuntimeChecks {
                     URI.create("http://localhost:" + runtime.port() + statusPath)).build(),
                     HttpResponse.BodyHandlers.ofString());
             JsonNode status = MAPPER.readTree(response.body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

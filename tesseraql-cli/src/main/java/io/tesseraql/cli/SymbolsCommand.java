@@ -1,8 +1,5 @@
 package io.tesseraql.cli;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.yaml.SimpleYamlParser;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.i18n.MessageCatalog;
@@ -26,6 +23,9 @@ import java.util.stream.Stream;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * {@code tesseraql symbols --app <dir>}: prints what the framework declares — security policies,

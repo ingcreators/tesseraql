@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Phase 22 acceptance (roadmap "internationalization"): the user-admin example serves a
@@ -46,7 +46,7 @@ class I18nIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -126,12 +126,12 @@ class I18nIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(422);
         JsonNode error = MAPPER.readTree(response.body()).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-FIELD-4220");
-        assertThat(error.path("message").asText()).isEqualTo("入力内容を確認してください");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-FIELD-4220");
+        assertThat(error.path("message").asString()).isEqualTo("入力内容を確認してください");
         JsonNode field = error.path("details").path("fields").get(0);
-        assertThat(field.path("messageKey").asText())
+        assertThat(field.path("messageKey").asString())
                 .isEqualTo("users.provision.unknown-user");
-        assertThat(field.path("message").asText()).isEqualTo("指定されたユーザーは存在しません。");
+        assertThat(field.path("message").asString()).isEqualTo("指定されたユーザーは存在しません。");
     }
 
     @Test

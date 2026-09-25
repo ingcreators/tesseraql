@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
 
 /** The {@code http:} step kind (roadmap Phase 26): one outbound REST call, read as rows. */
 final class HttpStepRunner {
@@ -101,7 +102,7 @@ final class HttpStepRunner {
                         .getBytes(StandardCharsets.UTF_8));
                 writer.incrementRows(1);
             }
-        } catch (IOException ex) {
+        } catch (JacksonException | IOException ex) {
             throw TqlException.builder(StepContext.STEP_ERROR)
                     .message("Step '" + context.step().id() + "': spooling the response failed: "
                             + ex.getMessage())

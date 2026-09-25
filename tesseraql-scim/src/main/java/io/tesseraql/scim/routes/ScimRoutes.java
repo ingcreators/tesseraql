@@ -1,6 +1,5 @@
 package io.tesseraql.scim.routes;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Exchange;
@@ -15,6 +14,7 @@ import io.tesseraql.scim.ScimGroup;
 import io.tesseraql.scim.ScimGroupService;
 import io.tesseraql.scim.ScimUser;
 import io.tesseraql.scim.ScimUserService;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Serves SCIM 2.0 inbound provisioning under {@code /scim/v2} (design ch. 10.15): users at
@@ -103,7 +103,7 @@ public final class ScimRoutes {
     }
 
     private void createUser(Exchange exchange) throws Exception {
-        com.fasterxml.jackson.databind.JsonNode payload = mapper.readTree(
+        tools.jackson.databind.JsonNode payload = mapper.readTree(
                 exchange.getBody(String.class));
         ScimUser request = mapper.treeToValue(payload, ScimUser.class);
         ScimUser created = users.create(request);
@@ -136,7 +136,7 @@ public final class ScimRoutes {
 
     private void replaceUser(Exchange exchange) throws Exception {
         String id = exchange.request().param("id");
-        com.fasterxml.jackson.databind.JsonNode payload = mapper.readTree(
+        tools.jackson.databind.JsonNode payload = mapper.readTree(
                 exchange.getBody(String.class));
         ScimUser request = mapper.treeToValue(payload, ScimUser.class);
         ScimUser replaced = users.replace(id, request);

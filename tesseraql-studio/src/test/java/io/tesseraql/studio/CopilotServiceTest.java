@@ -123,12 +123,13 @@ class CopilotServiceTest {
             try (OutputStream out = exchange.getResponseBody()) {
                 // One frame per character of content — the crudest possible delta split —
                 // and the whole tool_calls array in one frame.
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                com.fasterxml.jackson.databind.JsonNode canned = mapper.readTree(message);
-                String content = canned.path("content").asText(null);
+                tools.jackson.databind.ObjectMapper mapper = io.tesseraql.yaml.JsonMappers
+                        .constrained();
+                tools.jackson.databind.JsonNode canned = mapper.readTree(message);
+                String content = canned.path("content").asString(null);
                 if (content != null) {
                     for (char c : content.toCharArray()) {
-                        com.fasterxml.jackson.databind.node.ObjectNode root = mapper
+                        tools.jackson.databind.node.ObjectNode root = mapper
                                 .createObjectNode();
                         root.putArray("choices").addObject().putObject("delta")
                                 .put("content", String.valueOf(c));
@@ -138,19 +139,19 @@ class CopilotServiceTest {
                 }
                 if (canned.path("tool_calls").isArray()
                         && !canned.path("tool_calls").isEmpty()) {
-                    com.fasterxml.jackson.databind.node.ObjectNode root = mapper
+                    tools.jackson.databind.node.ObjectNode root = mapper
                             .createObjectNode();
-                    com.fasterxml.jackson.databind.node.ObjectNode delta = root
+                    tools.jackson.databind.node.ObjectNode delta = root
                             .putArray("choices").addObject().putObject("delta");
-                    com.fasterxml.jackson.databind.node.ArrayNode calls = delta
+                    tools.jackson.databind.node.ArrayNode calls = delta
                             .putArray("tool_calls");
                     int index = 0;
-                    for (com.fasterxml.jackson.databind.JsonNode call : canned
+                    for (tools.jackson.databind.JsonNode call : canned
                             .path("tool_calls")) {
-                        com.fasterxml.jackson.databind.node.ObjectNode part = calls
+                        tools.jackson.databind.node.ObjectNode part = calls
                                 .addObject();
                         part.put("index", index++);
-                        part.setAll((com.fasterxml.jackson.databind.node.ObjectNode) call);
+                        part.setAll((tools.jackson.databind.node.ObjectNode) call);
                     }
                     out.write(("data: " + mapper.writeValueAsString(root) + "\n\n")
                             .getBytes(StandardCharsets.UTF_8));

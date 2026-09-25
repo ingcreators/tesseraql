@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobStatus;
 import java.io.IOException;
@@ -29,6 +27,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * One codec set per application (docs/codec-discovery.md decision 1): a codec that arrives
@@ -49,7 +49,7 @@ class ModuleCodecIntegrationTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final List<String> WATCH_LINES = new CopyOnWriteArrayList<>();
 
     static TesseraqlRuntime runtime;
@@ -99,9 +99,9 @@ class ModuleCodecIntegrationTest {
                 HttpResponse.BodyHandlers.ofByteArray());
 
         assertThat(started.statusCode()).as(body(started)).isEqualTo(202);
-        String id = MAPPER.readTree(started.body()).get("transferId").asText();
+        String id = MAPPER.readTree(started.body()).get("transferId").asString();
         JsonNode status = awaitTerminal("/api/items/file/" + id);
-        assertThat(status.get("status").asText()).as(status.toString()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).as(status.toString()).isEqualTo("COMPLETED");
         HttpResponse<byte[]> file = get("/api/items/file/" + id + "/file");
         assertThat(file.statusCode()).isEqualTo(200);
         assertThat(body(file)).startsWith(MarkerFileCodec.MARKER + "\nname|qty\n");
@@ -171,7 +171,7 @@ class ModuleCodecIntegrationTest {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
             JsonNode status = MAPPER.readTree(body(get(statusPath)));
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

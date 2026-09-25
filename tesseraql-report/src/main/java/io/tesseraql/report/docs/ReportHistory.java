@@ -1,6 +1,5 @@
 package io.tesseraql.report.docs;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -10,6 +9,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Maintains the run history that feeds the portal's coverage trend (documentation portal v2). Each
@@ -76,7 +77,7 @@ public final class ReportHistory {
         try {
             return new ArrayList<>(Arrays.asList(MAPPER.readValue(historyFile.toFile(),
                     Entry[].class)));
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             // A corrupt or incompatible history must not fail the build; start a fresh ring.
             return new ArrayList<>();
         }
@@ -95,7 +96,7 @@ public final class ReportHistory {
         try {
             MAPPER.readValue(historyFile.toFile(), Entry[].class);
             return false;
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return true;
         }
     }
@@ -119,7 +120,7 @@ public final class ReportHistory {
             }
             Files.writeString(historyFile,
                     MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(entries));
-        } catch (IOException ex) {
+        } catch (JacksonException | IOException ex) {
             throw new TqlException(HISTORY_ERROR,
                     "Failed to write " + historyFile + ": " + ex.getMessage());
         }

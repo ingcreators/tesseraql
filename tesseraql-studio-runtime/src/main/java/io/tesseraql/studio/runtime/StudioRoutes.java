@@ -1,6 +1,5 @@
 package io.tesseraql.studio.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -19,6 +18,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Serves the TesseraQL Studio JSON API under {@code /_tesseraql/studio} (design ch. 16). Endpoints
@@ -121,7 +122,7 @@ final class StudioRoutes {
         pipelines.pipeline("studio.render")
                 .process(AUTH).process(json(exchange -> {
                     String path = requirePath(exchange);
-                    com.fasterxml.jackson.databind.JsonNode body = readBody(exchange);
+                    tools.jackson.databind.JsonNode body = readBody(exchange);
                     boolean live = "true".equals(text(body, "live")) && studioTests.isEnabled();
                     StudioService.RowSource rows = live ? studioTests::liveRows : null;
                     return studio.render(path, text(body, "content"), text(body, "sampleModel"),
@@ -247,26 +248,26 @@ final class StudioRoutes {
     }
 
     /** Parses the request body as a JSON object, or null when the body is blank or not JSON. */
-    private com.fasterxml.jackson.databind.JsonNode readBody(Exchange exchange) {
+    private tools.jackson.databind.JsonNode readBody(Exchange exchange) {
         String body = exchange.getBody(String.class);
         if (body == null || body.isBlank()) {
             return null;
         }
         try {
-            com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(body);
+            tools.jackson.databind.JsonNode node = mapper.readTree(body);
             return node.isObject() ? node : null;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             return null;
         }
     }
 
     /** A text field of a JSON object body, or null when absent. */
-    private static String text(com.fasterxml.jackson.databind.JsonNode body, String field) {
+    private static String text(tools.jackson.databind.JsonNode body, String field) {
         if (body == null) {
             return null;
         }
-        com.fasterxml.jackson.databind.JsonNode value = body.get(field);
-        return value == null || value.isNull() ? null : value.asText();
+        tools.jackson.databind.JsonNode value = body.get(field);
+        return value == null || value.isNull() ? null : value.asString("");
     }
 
     private Step json(Function<Exchange, Object> handler) {

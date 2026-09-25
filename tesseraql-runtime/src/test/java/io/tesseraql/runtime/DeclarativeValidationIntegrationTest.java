@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -34,6 +32,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Phase 19 acceptance (roadmap "declarative validation"): a unique-email SQL rule and a
@@ -50,7 +50,7 @@ class DeclarativeValidationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -98,16 +98,16 @@ class DeclarativeValidationIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(422);
         JsonNode error = MAPPER.readTree(response.body()).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-FIELD-4220");
-        assertThat(error.path("message").asText()).isEqualTo("Unprocessable Entity");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-FIELD-4220");
+        assertThat(error.path("message").asString()).isEqualTo("Unprocessable Entity");
         JsonNode field = error.path("details").path("fields").get(0);
-        assertThat(field.path("rule").asText()).isEqualTo("uniqueEmail");
-        assertThat(field.path("field").asText()).isEqualTo("email");
-        assertThat(field.path("code").asText()).isEqualTo("duplicate");
+        assertThat(field.path("rule").asString()).isEqualTo("uniqueEmail");
+        assertThat(field.path("field").asString()).isEqualTo("email");
+        assertThat(field.path("code").asString()).isEqualTo("duplicate");
         // The declared key rides as messageKey (roadmap Phase 22); message carries the
         // localized text, here the built-in tql.constraint.duplicate English fallback.
-        assertThat(field.path("messageKey").asText()).isEqualTo("members.email.duplicate");
-        assertThat(field.path("message").asText()).isEqualTo("Already exists.");
+        assertThat(field.path("messageKey").asString()).isEqualTo("members.email.duplicate");
+        assertThat(field.path("message").asString()).isEqualTo("Already exists.");
 
         assertThat(count()).isEqualTo(membersBefore); // the rule ran before the insert
     }
@@ -123,8 +123,8 @@ class DeclarativeValidationIntegrationTest {
         JsonNode fields = MAPPER.readTree(response.body())
                 .path("error").path("details").path("fields");
         assertThat(fields).hasSize(2);
-        assertThat(List.of(fields.get(0).path("rule").asText(),
-                fields.get(1).path("rule").asText()))
+        assertThat(List.of(fields.get(0).path("rule").asString(),
+                fields.get(1).path("rule").asString()))
                 .containsExactlyInAnyOrder("uniqueEmail", "dateOrder");
     }
 

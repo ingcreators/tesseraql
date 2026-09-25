@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -17,6 +16,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Pipeline step that renders the JSON response from the response template (design ch. 7.2, the
@@ -138,7 +138,7 @@ public final class JsonResponseRenderer implements Step {
         String json;
         try {
             json = mapper.writeValueAsString(body);
-        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (RuntimeException ex) {
             throw new TqlException(RENDER_ERROR,
                     "Failed to serialize JSON response: " + ex.getMessage());
         }

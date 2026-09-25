@@ -63,7 +63,7 @@ public record RouteDefinition(
         OutboxSpec outbox,
         // Written as an array of id-carrying steps, held as an insertion-ordered map: the order
         // is the syntax, the name is how everything downstream addresses a step (decision 9).
-        @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = StepsDeserializer.class) Map<String, Binding> steps,
+        @tools.jackson.databind.annotation.JsonDeserialize(using = StepsDeserializer.class) Map<String, Binding> steps,
         // Every named read acquisition: one map, whatever mechanism each entry names
         // (docs/unified-sources.md). Replaced queries: plus a parallel http: map, which made
         // the map the discriminator instead of the entry's own arm.

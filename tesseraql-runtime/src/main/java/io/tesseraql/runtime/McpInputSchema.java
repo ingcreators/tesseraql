@@ -1,10 +1,10 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.yaml.model.InputField;
 import java.util.Map;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Derives an MCP tool's JSON-Schema {@code inputSchema} from a route's declared {@code input:}

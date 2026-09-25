@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.identity.DefaultIdentityPack;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
 import java.io.IOException;
@@ -26,6 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A person can get a token (docs/stack-architecture.md Decision 20).
@@ -47,7 +47,7 @@ class TokenAcquisitionIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private static final String TOKEN_PAGE = "/_tesseraql/ops/console/token";
 
@@ -86,7 +86,7 @@ class TokenAcquisitionIntegrationTest {
 
         String cookie = sessionCookie(session);
         assertThat(cookie).as("the session cookie").isNotNull();
-        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asText(null);
+        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asString(null);
         assertThat(csrf).as("the CSRF token a non-browser caller cannot otherwise obtain")
                 .isNotBlank();
 
@@ -97,7 +97,7 @@ class TokenAcquisitionIntegrationTest {
         HttpResponse<String> api = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(base() + "/api/users"))
                         .header("Authorization",
-                                "Bearer " + MAPPER.readTree(minted.body()).path("token").asText())
+                                "Bearer " + MAPPER.readTree(minted.body()).path("token").asString())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(api.statusCode()).isEqualTo(200);
@@ -112,7 +112,7 @@ class TokenAcquisitionIntegrationTest {
         HttpResponse<String> session = post("/_tesseraql/login",
                 "{\"loginId\":\"admin\",\"password\":\"s3cret\"}", null, null);
         String cookie = sessionCookie(session);
-        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asText();
+        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asString();
 
         assertThat(post("/_tesseraql/token", "{}", cookie, csrf + "x").statusCode())
                 .as("a token that is nearly right is still refused")
@@ -131,7 +131,7 @@ class TokenAcquisitionIntegrationTest {
         HttpResponse<String> session = post("/_tesseraql/login",
                 "{\"loginId\":\"admin\",\"password\":\"s3cret\"}", null, null);
         String cookie = sessionCookie(session);
-        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asText();
+        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asString();
 
         HttpResponse<String> page = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(base() + TOKEN_PAGE))

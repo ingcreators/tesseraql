@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.icegreen.greenmail.util.GreenMail;
 import com.icegreen.greenmail.util.GreenMailUtil;
 import com.icegreen.greenmail.util.ServerSetupTest;
@@ -40,6 +38,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The Phase 20 acceptance flow against the example app: a command's {@code notify:} block
@@ -73,7 +73,7 @@ class NotificationIntegrationTest {
         return setup;
     }
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String WEBHOOK_SECRET = "dev-only-webhook-secret";
 
     record Delivery(String body, String signature, String timestamp) {
@@ -161,7 +161,7 @@ class NotificationIntegrationTest {
         HttpResponse<String> provision = post("/api/users/provision",
                 "{\"userName\":\"tanaka\",\"active\":false}");
         assertThat(provision.statusCode()).isEqualTo(200);
-        String eventId = MAPPER.readTree(provision.body()).path("auditEventId").asText();
+        String eventId = MAPPER.readTree(provision.body()).path("auditEventId").asString();
         assertThat(eventId).isNotBlank();
 
         // maxAttempts is 2 in this app's config: two failing dispatches dead-letter the event.
@@ -171,9 +171,9 @@ class NotificationIntegrationTest {
         // The delivery log shows the dead letter with its attempts and last error.
         JsonNode log = MAPPER.readTree(get("/_tesseraql/ops/outbox").body());
         JsonNode dead = find(log, eventId);
-        assertThat(dead.path("status").asText()).isEqualTo("DEAD");
+        assertThat(dead.path("status").asString()).isEqualTo("DEAD");
         assertThat(dead.path("attempts").asInt()).isEqualTo(2);
-        assertThat(dead.path("lastError").asText()).contains("HTTP 500");
+        assertThat(dead.path("lastError").asString()).contains("HTTP 500");
 
         // Dead letters raise an operational alert (TQL-OPS-9006).
         assertThat(runtime.opsDashboard().alerts())
@@ -186,7 +186,7 @@ class NotificationIntegrationTest {
         assertThat(redelivered.path("redelivered").asBoolean()).isTrue();
         runtime.dispatchOutboxOnce();
         JsonNode after = find(MAPPER.readTree(get("/_tesseraql/ops/outbox").body()), eventId);
-        assertThat(after.path("status").asText()).isEqualTo("SENT");
+        assertThat(after.path("status").asString()).isEqualTo("SENT");
         assertThat(deliveries.stream()
                 .filter(d -> d.body().contains("\"userName\":\"tanaka\""))).isNotEmpty();
     }
@@ -212,7 +212,7 @@ class NotificationIntegrationTest {
 
     private static JsonNode find(JsonNode log, String eventId) {
         for (JsonNode event : log) {
-            if (eventId.equals(event.path("id").asText())) {
+            if (eventId.equals(event.path("id").asString())) {
                 return event;
             }
         }
@@ -308,9 +308,14 @@ class NotificationIntegrationTest {
         // The provision route additionally exposes the audit notification's event id, so the
         // dead-letter test can follow that exact event through the operations API.
         Path provision = target.resolve("web/api/users/provision/post.yml");
-        Files.writeString(provision, Files.readString(provision).replace(
-                "      eventId: main.eventId",
-                "      eventId: main.eventId\n      auditEventId: notify.audit.eventId"));
+        String route = Files.readString(provision);
+        String exposed = route.replace(
+                "      eventId: outbox.eventId",
+                "      eventId: outbox.eventId\n      auditEventId: notify.audit.eventId");
+        // A replace that no longer matches is a silent no-op: the example's binding moved once
+        // (docs/jackson-3.md row 19c) and this fixture kept passing its old text along.
+        assertThat(exposed).as("the provision route's eventId line").isNotEqualTo(route);
+        Files.writeString(provision, exposed);
 
         // A job whose SQL fails, to assert the job-failure alert.
         Path broken = target.resolve("batch/broken");

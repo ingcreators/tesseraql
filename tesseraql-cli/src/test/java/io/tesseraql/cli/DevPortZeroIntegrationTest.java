@@ -2,7 +2,6 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
 import java.io.IOException;
 import java.net.URI;
@@ -16,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@code dev --port 0} gives its applications the port its socket got (docs/host-development.md
@@ -36,7 +36,7 @@ class DevPortZeroIntegrationTest {
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .build();
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     @Test
     void theOriginTheApplicationsAreGivenIsThePortTheSocketGot(@TempDir Path dir)
@@ -60,7 +60,7 @@ class DevPortZeroIntegrationTest {
             assertThat(port).as("a bound port, not the number asked for").isPositive();
             HttpResponse<String> metadata = get(origin + "/.well-known/oauth-authorization-server");
             assertThat(metadata.statusCode()).as(metadata.body()).isEqualTo(200);
-            assertThat(MAPPER.readTree(metadata.body()).get("issuer").asText())
+            assertThat(MAPPER.readTree(metadata.body()).get("issuer").asString())
                     .as("the stack issuer is the gateway's own address; it was http://localhost:0")
                     .isEqualTo(origin);
             assertThat(Files.readString(marker).strip())

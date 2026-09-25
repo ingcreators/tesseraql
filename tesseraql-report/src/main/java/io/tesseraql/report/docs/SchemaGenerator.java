@@ -1,7 +1,5 @@
 package io.tesseraql.report.docs;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -12,6 +10,8 @@ import java.sql.SQLException;
 import java.util.Map;
 import java.util.TreeMap;
 import javax.sql.DataSource;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Builds the schema-layer model ({@link SchemaDoc} / {@code schema.json}, documentation portal v3) by
@@ -58,7 +58,7 @@ public final class SchemaGenerator {
     public String toJson(SchemaDoc schema) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(schema);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(GEN_ERROR,
                     "Failed to serialize schema.json: " + ex.getMessage());
         }

@@ -1,8 +1,12 @@
 package io.tesseraql.yaml;
 
-import com.fasterxml.jackson.core.StreamReadConstraints;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.json.JsonLimits;
+import tools.jackson.core.StreamReadConstraints;
+import tools.jackson.core.json.JsonFactory;
+import tools.jackson.core.json.JsonFactoryBuilder;
+import tools.jackson.core.json.JsonWriteFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Builds the JSON {@link ObjectMapper} every parse path shares, with explicit
@@ -13,9 +17,10 @@ import io.tesseraql.core.json.JsonLimits;
  * carried no declared bound at all.
  *
  * <p>Each call returns a fresh mapper, so a caller that configures its instance (lenient
- * unknowns, indented output) affects nobody else. The bounds come from
- * {@link JsonLimits}, shared with the YAML factory and with the local factories in the modules
- * below this one.
+ * unknowns, indented output) — through {@code rebuild()}, a Jackson 3 mapper being immutable —
+ * affects nobody else. The bounds come from {@link JsonLimits}, shared with the YAML factory
+ * and with the local factories in the modules below this one; the mapper carries Jackson 2's
+ * observable defaults ({@link JacksonDefaults}).
  */
 public final class JsonMappers {
 
@@ -24,7 +29,7 @@ public final class JsonMappers {
 
     /** A JSON mapper with explicit read constraints, for every parse path. */
     public static ObjectMapper constrained() {
-        return new ObjectMapper(constrainedFactory().build());
+        return JacksonDefaults.pin(JsonMapper.builder(constrainedFactory().build())).build();
     }
 
     /**
@@ -34,13 +39,13 @@ public final class JsonMappers {
      * folds anything above U+00FF to {@code ?} (docs/edge-hygiene.md E3).
      */
     public static ObjectMapper constrainedAscii() {
-        return new ObjectMapper(constrainedFactory()
-                .enable(com.fasterxml.jackson.core.json.JsonWriteFeature.ESCAPE_NON_ASCII)
-                .build());
+        return JacksonDefaults.pin(JsonMapper.builder(constrainedFactory()
+                .enable(JsonWriteFeature.ESCAPE_NON_ASCII)
+                .build())).build();
     }
 
-    private static com.fasterxml.jackson.core.JsonFactoryBuilder constrainedFactory() {
-        return new com.fasterxml.jackson.core.JsonFactoryBuilder()
+    private static JsonFactoryBuilder constrainedFactory() {
+        return JsonFactory.builder()
                 .streamReadConstraints(StreamReadConstraints.builder()
                         .maxNestingDepth(JsonLimits.MAX_NESTING_DEPTH)
                         .maxStringLength(JsonLimits.MAX_STRING_LENGTH)

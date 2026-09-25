@@ -2,8 +2,6 @@ package io.tesseraql.studio.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.identity.DefaultIdentityPack;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
@@ -29,6 +27,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for the Studio backend (design ch. 16): the explorer and source endpoints require
@@ -40,7 +40,7 @@ class StudioIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -160,7 +160,7 @@ class StudioIntegrationTest {
         JsonNode explorer = MAPPER.readTree(response.body());
         assertThat(explorer.get("readOnly").asBoolean()).isFalse();
         assertThat(explorer.get("routes")).anySatisfy(
-                route -> assertThat(route.get("id").asText()).isEqualTo("users.search"));
+                route -> assertThat(route.get("id").asString()).isEqualTo("users.search"));
     }
 
     @Test
@@ -173,7 +173,7 @@ class StudioIntegrationTest {
         JsonNode routes = filtered.get("routes");
         assertThat(routes.size()).isLessThan(all).isPositive();
         assertThat(routes).allSatisfy(route -> assertThat(
-                (route.get("id").asText() + route.get("source").asText()).toLowerCase())
+                (route.get("id").asString() + route.get("source").asString()).toLowerCase())
                 .contains("search"));
     }
 
@@ -346,7 +346,7 @@ class StudioIntegrationTest {
         HttpResponse<String> response = get(
                 "/_tesseraql/studio/source?path=" + enc("web/api/users/search.sql"), true);
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(response.body()).get("content").asText()).contains("select");
+        assertThat(MAPPER.readTree(response.body()).get("content").asString()).contains("select");
     }
 
     @Test
@@ -354,7 +354,7 @@ class StudioIntegrationTest {
         HttpResponse<String> response = post(
                 "/_tesseraql/studio/drafts?path=" + enc("web/api/users/get.yml"), "edited", true);
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(response.body()).get("saved").asText())
+        assertThat(MAPPER.readTree(response.body()).get("saved").asString())
                 .isEqualTo("web/api/users/get.yml");
     }
 
@@ -404,16 +404,17 @@ class StudioIntegrationTest {
                 "/_tesseraql/studio/apply?path=" + enc(path) + "&confirm=true", "", true);
         assertThat(apply.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(apply.body()).get("added"))
-                .anySatisfy(id -> assertThat(id.asText()).isEqualTo("extra.list"));
+                .anySatisfy(id -> assertThat(id.asString()).isEqualTo("extra.list"));
         assertThat(get("/api/extra", true).statusCode()).isEqualTo(200);
 
         HttpResponse<String> reload = post("/_tesseraql/studio/reload", "", true);
         assertThat(reload.statusCode()).isEqualTo(200);
         // Already mounted by the apply above, so this pass rebuilds it as a kept route.
         assertThat(MAPPER.readTree(reload.body()).get("reloaded"))
-                .anySatisfy(id -> assertThat(id.asText()).isEqualTo("extra.list"));
+                .anySatisfy(id -> assertThat(id.asString()).isEqualTo("extra.list"));
         assertThat(MAPPER.readTree(reload.body()).get("explorer").get("routes"))
-                .anySatisfy(route -> assertThat(route.get("id").asText()).isEqualTo("extra.list"));
+                .anySatisfy(
+                        route -> assertThat(route.get("id").asString()).isEqualTo("extra.list"));
     }
 
     @Test
@@ -495,7 +496,7 @@ class StudioIntegrationTest {
         // The JSON overview includes the draft, not in conflict, as an edit (the source exists).
         assertThat(MAPPER.readTree(get("/_tesseraql/studio/drafts", true).body()))
                 .anySatisfy(draft -> {
-                    assertThat(draft.get("path").asText()).isEqualTo(path);
+                    assertThat(draft.get("path").asString()).isEqualTo(path);
                     assertThat(draft.get("conflict").asBoolean()).isFalse();
                     assertThat(draft.get("isNew").asBoolean()).isFalse();
                 });
@@ -504,7 +505,7 @@ class StudioIntegrationTest {
         Files.writeString(appHome.resolve(path), "select 3\n");
         assertThat(MAPPER.readTree(get("/_tesseraql/studio/drafts", true).body()))
                 .anySatisfy(draft -> {
-                    assertThat(draft.get("path").asText()).isEqualTo(path);
+                    assertThat(draft.get("path").asString()).isEqualTo(path);
                     assertThat(draft.get("conflict").asBoolean()).isTrue();
                 });
 
@@ -583,10 +584,10 @@ class StudioIntegrationTest {
         // The audit trail records the apply with the authenticated caller as the actor.
         assertThat(MAPPER.readTree(get("/_tesseraql/studio/audit", true).body()))
                 .anySatisfy(entry -> {
-                    assertThat(entry.get("action").asText()).isEqualTo("apply");
-                    assertThat(entry.get("target").asText()).isEqualTo(path);
-                    assertThat(entry.get("actor").asText()).isEqualTo("studio-user");
-                    assertThat(entry.get("at").asText()).isNotBlank();
+                    assertThat(entry.get("action").asString()).isEqualTo("apply");
+                    assertThat(entry.get("target").asString()).isEqualTo(path);
+                    assertThat(entry.get("actor").asString()).isEqualTo("studio-user");
+                    assertThat(entry.get("at").asString()).isNotBlank();
                 });
 
         // The audit page renders the entry, with the filter chrome (H5), the total caption (I3), and
@@ -755,7 +756,7 @@ class StudioIntegrationTest {
 
         assertThat(preview.statusCode()).isEqualTo(200);
         var body = MAPPER.readTree(preview.body());
-        assertThat(body.get("kind").asText()).isEqualTo("template");
+        assertThat(body.get("kind").asString()).isEqualTo("template");
         assertThat(body.get("valid").asBoolean()).isTrue();
 
         // Malformed markup is rejected through the same endpoint.
@@ -1169,7 +1170,7 @@ class StudioIntegrationTest {
                 .contains("attachment").contains("openapi.json");
         // The body is the real OpenAPI document, generated live from the manifest, byte-for-byte.
         JsonNode doc = MAPPER.readTree(response.body());
-        assertThat(doc.path("openapi").asText()).isEqualTo("3.0.3");
+        assertThat(doc.path("openapi").asString()).isEqualTo("3.0.3");
         assertThat(doc.path("paths").has("/api/users")).isTrue();
     }
 
@@ -1412,8 +1413,8 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).isTrue();
-        assertThat(render.get("kind").asText()).isEqualTo("html");
-        assertThat(render.get("output").asText()).contains("Renderbot").contains("active")
+        assertThat(render.get("kind").asString()).isEqualTo("html");
+        assertThat(render.get("output").asString()).contains("Renderbot").contains("active")
                 .doesNotContain("No matching users");
     }
 
@@ -1452,8 +1453,8 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).isTrue();
-        assertThat(render.get("kind").asText()).isEqualTo("html");
-        assertThat(render.get("output").asText()).contains("Alice").contains("active");
+        assertThat(render.get("kind").asString()).isEqualTo("html");
+        assertThat(render.get("output").asString()).contains("Alice").contains("active");
     }
 
     @Test
@@ -1467,8 +1468,8 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).isTrue();
-        assertThat(render.get("kind").asText()).isEqualTo("json");
-        assertThat(render.get("output").asText()).contains("Sato").contains("\"count\" : 1");
+        assertThat(render.get("kind").asString()).isEqualTo("json");
+        assertThat(render.get("output").asString()).contains("Sato").contains("\"count\" : 1");
     }
 
     @Test
@@ -1485,7 +1486,7 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).isTrue();
-        assertThat(render.get("output").asText()).contains("Sato").contains("[MASKED]")
+        assertThat(render.get("output").asString()).contains("Sato").contains("[MASKED]")
                 .doesNotContain("2026-06-18T00:00:00Z");
     }
 
@@ -1501,8 +1502,8 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).isTrue();
-        assertThat(render.get("kind").asText()).isEqualTo("pdf");
-        assertThat(render.get("output").asText()).startsWith("data:application/pdf;base64,");
+        assertThat(render.get("kind").asString()).isEqualTo("pdf");
+        assertThat(render.get("output").asString()).startsWith("data:application/pdf;base64,");
     }
 
     /**
@@ -1524,8 +1525,8 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).as(render.toString()).isTrue();
-        assertThat(render.get("kind").asText()).isEqualTo("pdf");
-        assertThat(pdfText(render.get("output").asText())).contains("ACME").contains("widget");
+        assertThat(render.get("kind").asString()).isEqualTo("pdf");
+        assertThat(pdfText(render.get("output").asString())).contains("ACME").contains("widget");
 
         // Live: both sources run in the sandbox, header lands under its name, the template reads it.
         String live = MAPPER.writeValueAsString(Map.of("sampleModel", "{}", "live", "true"));
@@ -1533,7 +1534,8 @@ class StudioIntegrationTest {
                 "/_tesseraql/studio/render?path=" + enc("web/api/orders/print/get.yml"), live,
                 true).body());
         assertThat(liveRender.get("ok").asBoolean()).as(liveRender.toString()).isTrue();
-        assertThat(pdfText(liveRender.get("output").asText())).contains("ACME").contains("widget");
+        assertThat(pdfText(liveRender.get("output").asString())).contains("ACME")
+                .contains("widget");
     }
 
     /** The text of a {@code data:application/pdf;base64,} preview. */
@@ -1620,7 +1622,7 @@ class StudioIntegrationTest {
         assertThat(result.get("total").asInt()).isEqualTo(3);
         // The q=sato case passes against the seeded row; the runner reports a genuine result.
         assertThat(result.get("cases")).anySatisfy(testCase -> {
-            assertThat(testCase.get("name").asText()).isEqualTo("search finds sato by name");
+            assertThat(testCase.get("name").asString()).isEqualTo("search finds sato by name");
             assertThat(testCase.get("passed").asBoolean()).isTrue();
         });
     }
@@ -1634,7 +1636,7 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode result = MAPPER.readTree(response.body());
         assertThat(result.get("ran").asBoolean()).isFalse();
-        assertThat(result.get("note").asText()).contains("No runnable test cases");
+        assertThat(result.get("note").asString()).contains("No runnable test cases");
     }
 
     @Test
@@ -1649,10 +1651,10 @@ class StudioIntegrationTest {
         assertThat(result.get("ran").asBoolean()).isTrue();
         assertThat(result.get("total").asInt()).isEqualTo(4);
         assertThat(result.get("cases"))
-                .anySatisfy(testCase -> assertThat(testCase.get("name").asText())
+                .anySatisfy(testCase -> assertThat(testCase.get("name").asString())
                         .contains("violates the userExists rule"));
         assertThat(result.get("cases"))
-                .anySatisfy(testCase -> assertThat(testCase.get("name").asText())
+                .anySatisfy(testCase -> assertThat(testCase.get("name").asString())
                         .contains("notifies the confirmation mail"));
         assertThat(result.get("allPassed").asBoolean()).isTrue();
     }
@@ -1669,9 +1671,9 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).isTrue();
-        assertThat(render.get("kind").asText()).isEqualTo("json");
+        assertThat(render.get("kind").asString()).isEqualTo("json");
         // Real rows from the seeded users table, not a hand-authored fixture.
-        assertThat(render.get("output").asText()).contains("sato").contains("\"count\" : 1");
+        assertThat(render.get("output").asString()).contains("sato").contains("\"count\" : 1");
     }
 
     @Test
@@ -1686,7 +1688,7 @@ class StudioIntegrationTest {
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).isTrue();
         // Both bindings ran live: the main query's row and the named query's row are in the JSON.
-        assertThat(render.get("output").asText()).contains("main-live").contains("query-live");
+        assertThat(render.get("output").asString()).contains("main-live").contains("query-live");
     }
 
     @Test
@@ -1703,7 +1705,7 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode render = MAPPER.readTree(response.body());
         assertThat(render.get("ok").asBoolean()).as(render.toString()).isTrue();
-        String output = render.get("output").asText();
+        String output = render.get("output").asString();
         assertThat(output).contains("\"sku\" : \"A-1\"")
                 .contains("\"ordered_on\" : \"2026-01-15\"")
                 .contains("\"shipped_on\" : \"2026-01-20\"")
@@ -1722,7 +1724,7 @@ class StudioIntegrationTest {
         JsonNode result = MAPPER.readTree(response.body());
         assertThat(result.get("ran").asBoolean()).isTrue();
         assertThat(result.get("cases")).anySatisfy(testCase -> {
-            assertThat(testCase.get("name").asText()).contains("allow-listed directory API");
+            assertThat(testCase.get("name").asString()).contains("allow-listed directory API");
             assertThat(testCase.get("passed").asBoolean()).isTrue();
         });
         assertThat(result.get("allPassed").asBoolean()).isTrue();
@@ -1760,10 +1762,10 @@ class StudioIntegrationTest {
         JsonNode model = MAPPER.readTree(response.body());
         assertThat(model.get("enabled").asBoolean()).isTrue();
         assertThat(model.get("tables")).anySatisfy(table -> {
-            assertThat(table.get("name").asText()).isEqualTo("widgets");
-            assertThat(table.get("type").asText()).isEqualTo("TABLE");
+            assertThat(table.get("name").asString()).isEqualTo("widgets");
+            assertThat(table.get("type").asString()).isEqualTo("TABLE");
             assertThat(table.get("scaffoldable").asBoolean()).isTrue();
-            assertThat(table.get("primaryKey").asText()).isEqualTo("id");
+            assertThat(table.get("primaryKey").asString()).isEqualTo("id");
         });
     }
 
@@ -1780,15 +1782,15 @@ class StudioIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode model = MAPPER.readTree(response.body());
         assertThat(model.get("enabled").asBoolean()).isTrue();
-        assertThat(model.get("table").asText()).isEqualTo("widgets");
+        assertThat(model.get("table").asString()).isEqualTo("widgets");
         // A fresh table generates a full CRUD slice with no on-disk conflicts.
         assertThat(model.get("conflictCount").asInt()).isZero();
         assertThat(model.get("writeCount").asInt()).isEqualTo(model.get("total").asInt());
         assertThat(model.get("total").asInt()).isGreaterThan(1);
         assertThat(model.get("files")).anySatisfy(file -> {
-            assertThat(file.get("path").asText()).isEqualTo("web/widgets/get.yml");
-            assertThat(file.get("status").asText()).isEqualTo("new");
-            assertThat(file.get("contentHtml").asText()).isNotBlank();
+            assertThat(file.get("path").asString()).isEqualTo("web/widgets/get.yml");
+            assertThat(file.get("status").asString()).isEqualTo("new");
+            assertThat(file.get("contentHtml").asString()).isNotBlank();
         });
     }
 
@@ -1825,7 +1827,7 @@ class StudioIntegrationTest {
         JsonNode first = applyGadgets(false);
         assertThat(first.get("blocked").asBoolean()).isFalse();
         assertThat(first.get("written")).anySatisfy(
-                file -> assertThat(file.get("path").asText()).isEqualTo("web/gadgets/get.yml"));
+                file -> assertThat(file.get("path").asString()).isEqualTo("web/gadgets/get.yml"));
         assertThat(first.get("needsRestart").asBoolean()).isTrue();
         assertThat(first.get("newRouteCount").asInt()).isGreaterThan(0);
         assertThat(Files.isRegularFile(appHome.resolve("web/gadgets/get.yml"))).isTrue();
@@ -1842,13 +1844,13 @@ class StudioIntegrationTest {
         JsonNode third = applyGadgets(false);
         assertThat(third.get("blocked").asBoolean()).isTrue();
         assertThat(third.get("skipped"))
-                .anySatisfy(path -> assertThat(path.asText()).isEqualTo("web/gadgets/get.yml"));
+                .anySatisfy(path -> assertThat(path.asString()).isEqualTo("web/gadgets/get.yml"));
         assertThat(Files.readString(edited)).isEqualTo("hand-written, no scaffold marker\n");
 
         // 4. force overwrites the edited file with freshly generated, checksum-stamped content.
         JsonNode forced = applyGadgets(true);
         assertThat(forced.get("written")).anySatisfy(
-                file -> assertThat(file.get("path").asText()).isEqualTo("web/gadgets/get.yml"));
+                file -> assertThat(file.get("path").asString()).isEqualTo("web/gadgets/get.yml"));
         assertThat(Files.readString(edited)).contains("tesseraql-scaffold-checksum");
     }
 
@@ -2046,7 +2048,8 @@ class StudioIntegrationTest {
         assertThat(result.get("ran").asBoolean()).isTrue();
         assertThat(result.get("allPassed").asBoolean()).isTrue();
         assertThat(result.get("cases")).anySatisfy(testCase -> {
-            assertThat(testCase.get("name").asText()).contains("probe update returns the affected");
+            assertThat(testCase.get("name").asString())
+                    .contains("probe update returns the affected");
             assertThat(testCase.get("passed").asBoolean()).isTrue();
         });
 
@@ -2073,7 +2076,7 @@ class StudioIntegrationTest {
         assertThat(result.get("ran").asBoolean()).isTrue();
         assertThat(result.get("allPassed").asBoolean()).isTrue();
         assertThat(result.get("cases")).anySatisfy(testCase -> {
-            assertThat(testCase.get("name").asText()).contains("list-users contract");
+            assertThat(testCase.get("name").asString()).contains("list-users contract");
             assertThat(testCase.get("passed").asBoolean()).isTrue();
         });
     }

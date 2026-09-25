@@ -2,7 +2,6 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.files.ExportModel;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileCodecs;
@@ -61,8 +60,8 @@ class CliModuleSetTest {
                     app.toString(), "--format", "json");
             assertThat(exit).isZero();
             String stdout = captured.toString(StandardCharsets.UTF_8);
-            assertThat(new ObjectMapper().readTree(stdout).get("findings"))
-                    .noneMatch(finding -> "TQL-YAML-1408".equals(finding.get("code").asText()));
+            assertThat(io.tesseraql.yaml.JsonMappers.constrained().readTree(stdout).get("findings"))
+                    .noneMatch(finding -> "TQL-YAML-1408".equals(finding.get("code").asString()));
         } finally {
             System.setOut(out);
             release(before);

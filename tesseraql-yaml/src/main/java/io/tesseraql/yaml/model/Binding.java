@@ -158,7 +158,7 @@ public record Binding(String file, String contract, String mode, Map<String, Str
      * sequence allocation has no body beyond its name. None of the four is a question for the
      * mechanism.
      */
-    @com.fasterxml.jackson.annotation.JsonCreator
+    @com.fasterxml.jackson.annotation.JsonCreator(mode = com.fasterxml.jackson.annotation.JsonCreator.Mode.PROPERTIES)
     static Binding of(
             @com.fasterxml.jackson.annotation.JsonProperty("sql") SqlArm sql,
             @com.fasterxml.jackson.annotation.JsonProperty("contract") ContractCall contract,

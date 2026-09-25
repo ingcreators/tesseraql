@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A held source end to end (docs/caching.md decisions 1-7, 10): the rows a statement produced
@@ -37,7 +37,7 @@ class ResultHoldIntegrationTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
             .withCommand("postgres", "-c", "log_statement=all");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 
     static TesseraqlRuntime runtime;
@@ -176,12 +176,12 @@ class ResultHoldIntegrationTest {
         assertThat(status.get("maxEntries").asInt()).isEqualTo(1000);
         JsonNode items = null;
         for (JsonNode source : status.get("sources")) {
-            if ("items.list".equals(source.get("route").asText())) {
+            if ("items.list".equals(source.get("route").asString())) {
                 items = source;
             }
         }
         assertThat(items).isNotNull();
-        assertThat(items.get("tables").get(0).asText()).isEqualTo("items");
+        assertThat(items.get("tables").get(0).asString()).isEqualTo("items");
         assertThat(items.get("hits").asLong()).isGreaterThanOrEqualTo(1);
         assertThat(items.get("misses").asLong()).isGreaterThanOrEqualTo(1);
         assertThat(status.get("stamps").toString()).contains("\"table\":\"items\"");
@@ -239,8 +239,8 @@ class ResultHoldIntegrationTest {
                 "note,stock\nalpha-imported,3\n");
         assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(202);
         JsonNode done = awaitTerminal(runtime, "/items/import/"
-                + MAPPER.readTree(accepted.body()).get("transferId").asText());
-        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+                + MAPPER.readTree(accepted.body()).get("transferId").asString());
+        assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");
         assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
                 .contains("alpha-imported");
         assertThat(statements(marker)).isEqualTo(2);
@@ -259,7 +259,7 @@ class ResultHoldIntegrationTest {
         HttpResponse<String> parked = upload(runtime, "/items/reviewed",
                 "note,stock\nalpha-reviewed,4\n");
         assertThat(parked.statusCode()).as(parked.body()).isEqualTo(200);
-        String token = MAPPER.readTree(parked.body()).get("token").asText();
+        String token = MAPPER.readTree(parked.body()).get("token").asString();
         assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
                 .doesNotContain("alpha-reviewed");
         assertThat(statements(marker)).as("parked: nothing written, nothing dropped")
@@ -268,8 +268,8 @@ class ResultHoldIntegrationTest {
         HttpResponse<String> committed = commit(runtime, "/items/reviewed", token);
         assertThat(committed.statusCode()).as(committed.body()).isEqualTo(202);
         JsonNode done = awaitTerminal(runtime, "/items/reviewed/"
-                + MAPPER.readTree(committed.body()).get("transferId").asText());
-        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+                + MAPPER.readTree(committed.body()).get("transferId").asString());
+        assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");
         assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
                 .contains("alpha-reviewed");
         assertThat(statements(marker)).isEqualTo(2);
@@ -290,7 +290,7 @@ class ResultHoldIntegrationTest {
 
         JsonNode done = awaitTerminal(runtime, "/items/export/" + startExport(runtime,
                 "/items/export"));
-        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");
         assertThat(get(runtime, "/items?tag=" + marker, "alpha").body())
                 .as("the follow-up's mark reaches the next read").contains("\"extracted\":true");
         assertThat(statements(marker)).isEqualTo(2);
@@ -309,7 +309,7 @@ class ResultHoldIntegrationTest {
 
         String transferId = startExport(runtime, "/items/export-on-download");
         JsonNode done = awaitTerminal(runtime, "/items/export-on-download/" + transferId);
-        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");
         get(runtime, "/items?tag=" + marker, "alpha");
         assertThat(statements(marker)).as("completed, nothing fetched: nothing written")
                 .isEqualTo(1);
@@ -342,7 +342,7 @@ class ResultHoldIntegrationTest {
 
         String transferId = startExport(runtime, "/items/export-on-download");
         JsonNode done = awaitTerminal(runtime, "/items/export-on-download/" + transferId);
-        assertThat(done.get("status").asText()).as(done.toString()).isEqualTo("COMPLETED");
+        assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");
         get(runtime, "/items?tag=" + marker, "alpha");
         assertThat(statements(marker)).as("completed, nothing fetched: nothing written")
                 .isEqualTo(1);
@@ -431,7 +431,7 @@ class ResultHoldIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString("")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(202);
-        return MAPPER.readTree(accepted.body()).get("transferId").asText();
+        return MAPPER.readTree(accepted.body()).get("transferId").asString();
     }
 
     /** The confirm leg of a reviewed import: an empty POST to the batch's commit address. */
@@ -457,7 +457,7 @@ class ResultHoldIntegrationTest {
                     HttpResponse.BodyHandlers.ofString());
             assertThat(polled.statusCode()).as(polled.body()).isEqualTo(200);
             JsonNode status = MAPPER.readTree(polled.body());
-            String value = status.path("status").asText();
+            String value = status.path("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

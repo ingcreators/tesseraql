@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -20,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * What a temporal or vendor column becomes on a JSON route (docs/temporal-semantics.md T0): a
@@ -36,7 +36,7 @@ class TemporalJsonIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static TesseraqlRuntime runtime;
@@ -113,8 +113,8 @@ class TemporalJsonIntegrationTest {
 
     private static String first(String path) throws Exception {
         JsonNode value = rows(path).get(0).get("v");
-        assertThat(value.isTextual()).as(path + " answers text, got " + value).isTrue();
-        return value.asText();
+        assertThat(value.isString()).as(path + " answers text, got " + value).isTrue();
+        return value.asString();
     }
 
     private static JsonNode rows(String path) throws Exception {

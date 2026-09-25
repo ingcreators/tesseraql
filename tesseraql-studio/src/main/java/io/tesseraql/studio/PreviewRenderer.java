@@ -1,6 +1,5 @@
 package io.tesseraql.studio;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -29,6 +28,8 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Does this draft parse, and what does it look like when it runs?
@@ -468,7 +469,7 @@ final class PreviewRenderer {
         try {
             return RenderResult.ok("json",
                     jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(body));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             return RenderResult.invalid("json", "Failed to serialize JSON: " + ex.getMessage());
         }
     }

@@ -124,7 +124,12 @@
       Arrived under camel-ftp; declared here for the same reason jsch is.
     -->
     <commons-net.version>3.13.0</commons-net.version>
-    <jackson.version>2.22.2</jackson.version>
+    <!--
+      Jackson 3.1, the long-term-support line (docs/jackson-3.md decision 1): patches flow through
+      Dependabot, minors do not — .github/dependabot.yml ignores them until Jackson names the next
+      LTS. jackson-annotations stays on the 2.x line and package; this BOM manages it.
+    -->
+    <jackson.version>3.1.7</jackson.version>
     <hikaricp.version>7.1.0</hikaricp.version>
     <postgresql.version>42.7.13</postgresql.version>
     <mysql.version>26.7.0</mysql.version>
@@ -222,7 +227,7 @@
 
       <!-- Jackson (imported BOM) -->
       <dependency>
-        <groupId>com.fasterxml.jackson</groupId>
+        <groupId>tools.jackson</groupId>
         <artifactId>jackson-bom</artifactId>
         <version>${jackson.version}</version>
         <type>pom</type>

@@ -1,9 +1,9 @@
 package io.tesseraql.scim;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Normalizes a SCIM PATCH request into a full user (design ch. 10.15): it applies each operation to
@@ -66,7 +66,8 @@ public final class ScimPatch {
         switch (normalized) {
             case "username" -> flat.put("userName", remove ? null : text(value));
             case "externalid" -> flat.put("externalId", remove ? null : text(value));
-            case "active" -> flat.put("active", remove ? null : value != null && value.asBoolean());
+            case "active" ->
+                flat.put("active", remove ? null : value != null && value.asBoolean(false));
             case "name.givenname" -> flat.put("givenName", remove ? null : text(value));
             case "name.familyname" -> flat.put("familyName", remove ? null : text(value));
             case "name" -> {
@@ -110,7 +111,7 @@ public final class ScimPatch {
     }
 
     private static String text(JsonNode value) {
-        return value == null || value.isNull() ? null : value.asText();
+        return value == null || value.isNull() ? null : value.asString("");
     }
 
     /** Extracts a single email from an {@code emails} value (array of objects, or a scalar). */
@@ -131,6 +132,6 @@ public final class ScimPatch {
             }
             return chosen == null ? null : text(chosen.get("value"));
         }
-        return value.isObject() ? text(value.get("value")) : value.asText();
+        return value.isObject() ? text(value.get("value")) : value.asString("");
     }
 }

@@ -1,6 +1,5 @@
 package io.tesseraql.oidc;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -23,6 +22,7 @@ import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The OIDC relying-party web endpoints under {@code /_tesseraql/oidc} (design ch. 10.14, roadmap
@@ -241,7 +241,7 @@ final class OidcRoutes {
         }
         try {
             String body = http.postForm(metadata.tokenEndpoint(), form, authorization);
-            String idToken = mapper.readTree(body).path("id_token").asText(null);
+            String idToken = mapper.readTree(body).path("id_token").asString(null);
             if (idToken == null || idToken.isBlank()) {
                 throw new OidcException("Token response did not contain an id_token");
             }

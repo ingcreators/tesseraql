@@ -29,11 +29,11 @@ class BundledEmailTemplatesTest {
 
     @Test
     void bundledLibraryMatchesThePublishedContract() throws IOException {
-        com.fasterxml.jackson.databind.JsonNode contract = new com.fasterxml.jackson.databind.ObjectMapper()
+        tools.jackson.databind.JsonNode contract = io.tesseraql.yaml.JsonMappers.constrained()
                 .readTree(bundled("contract.json"));
         assertThat(contract.get("flavors").toString()).contains("thymeleaf");
         Set<String> contractNames = new java.util.HashSet<>();
-        contract.get("fragments").forEach(f -> contractNames.add(f.get("name").asText()));
+        contract.get("fragments").forEach(f -> contractNames.add(f.get("name").asString()));
 
         String library = bundled("hc-email.html");
         String layout = bundled("hc-email-layout.html");
@@ -45,10 +45,10 @@ class BundledEmailTemplatesTest {
         Map<String, java.util.List<String>> signatures = EmailFragments.bundled(
                 EmailFragments.LIBRARY);
         contract.get("fragments").forEach(fragment -> {
-            String name = fragment.get("name").asText();
+            String name = fragment.get("name").asString();
             if (signatures.containsKey(name)) {
                 java.util.List<String> params = new java.util.ArrayList<>();
-                fragment.get("params").forEach(p -> params.add(p.asText()));
+                fragment.get("params").forEach(p -> params.add(p.asString()));
                 assertThat(signatures.get(name)).as(name).isEqualTo(params);
             }
         });

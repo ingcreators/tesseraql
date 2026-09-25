@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The bundled "My exports" page (docs/job-inbox.md decisions 4, 5 and 6): the signed-in user's
@@ -44,7 +44,7 @@ class ExportsPageIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static TesseraqlRuntime runtime;
@@ -238,7 +238,7 @@ class ExportsPageIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString("", StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).as(response.body()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     private static JsonNode awaitTerminal(TesseraqlRuntime target, String statusPath,
@@ -250,7 +250,7 @@ class ExportsPageIntegrationTest {
                     .header("Cookie", session.cookie())
                     .header("Accept", "application/json")
                     .build(), HttpResponse.BodyHandlers.ofString()).body());
-            if (!"RUNNING".equals(status.get("status").asText())) {
+            if (!"RUNNING".equals(status.get("status").asString())) {
                 return status;
             }
             if (Instant.now().isAfter(deadline)) {

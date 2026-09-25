@@ -1,13 +1,13 @@
 package io.tesseraql.yaml.release;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.Signatures;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A detached Ed25519 signature over a release evidence document (design ch. 49). The envelope
@@ -40,7 +40,7 @@ public record EvidenceSignature(String algorithm, String publicKey, String publi
         doc.put("signature", signature);
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(doc);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ERROR, "Failed to serialize evidence signature: "
                     + ex.getMessage());
         }
@@ -51,7 +51,7 @@ public record EvidenceSignature(String algorithm, String publicKey, String publi
             Map<?, ?> doc = MAPPER.readValue(json, Map.class);
             return new EvidenceSignature(text(doc, "algorithm"), text(doc, "publicKey"),
                     text(doc, "publicKeySha256"), text(doc, "signature"));
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ERROR, "Invalid evidence signature document: "
                     + ex.getMessage());
         }

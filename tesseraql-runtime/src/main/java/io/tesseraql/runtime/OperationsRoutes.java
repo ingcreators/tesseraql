@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -21,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Predicate;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Builds the Operations API for batch jobs under {@code /_tesseraql/ops/batch} (design ch. 26.7,
@@ -783,7 +784,7 @@ final class OperationsRoutes {
             @SuppressWarnings("unchecked")
             Map<String, Object> parsed = mapper.readValue(raw, Map.class);
             return parsed == null ? Map.of() : parsed;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             // A present-but-unparseable body was silently dropped, launching the job with no
             // params (e.g. a typo'd businessDate) while answering 202 Accepted.
             throw new io.tesseraql.core.error.TqlException(BAD_RUN_BODY,

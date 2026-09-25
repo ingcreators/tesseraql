@@ -1,12 +1,12 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Exchange;
 import io.tesseraql.pipeline.Headers;
 import io.tesseraql.pipeline.Step;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The default result renderer for an application-declared MCP tool (roadmap Phase 24 follow-on):
@@ -26,7 +26,7 @@ public final class McpToolResultRenderer implements Step {
         String json;
         try {
             json = mapper.writeValueAsString(body);
-        } catch (RuntimeException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (RuntimeException ex) {
             throw new TqlException(RENDER_ERROR, "Failed to serialize MCP tool result: "
                     + ex.getMessage());
         }

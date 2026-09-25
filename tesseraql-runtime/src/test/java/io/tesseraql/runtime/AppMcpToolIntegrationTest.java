@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * End-to-end test for application-declared MCP endpoints (roadmap Phase 24): an app declares MCP
@@ -45,7 +45,7 @@ class AppMcpToolIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 
     static TesseraqlRuntime runtime;
@@ -73,8 +73,8 @@ class AppMcpToolIntegrationTest {
     @Test
     void initializeReportsTheApplicationAsTheServer() throws Exception {
         JsonNode result = rpc(initializeBody(), null, null).path("result");
-        assertThat(result.path("serverInfo").path("name").asText()).isEqualTo("user-admin");
-        assertThat(result.path("protocolVersion").asText()).isNotBlank();
+        assertThat(result.path("serverInfo").path("name").asString()).isEqualTo("user-admin");
+        assertThat(result.path("protocolVersion").asString()).isNotBlank();
     }
 
     @Test
@@ -82,11 +82,13 @@ class AppMcpToolIntegrationTest {
         JsonNode tools = rpc(rpcBody("tools/list", null), session, null).path("result")
                 .path("tools");
         List<String> names = new java.util.ArrayList<>();
-        tools.forEach(tool -> names.add(tool.path("name").asText()));
+        tools.forEach(tool -> names.add(tool.path("name").asString()));
         assertThat(names).contains("find-users", "deactivate-user");
-        JsonNode findUsers = stream(tools).filter(t -> t.path("name").asText().equals("find-users"))
+        JsonNode findUsers = stream(tools)
+                .filter(t -> t.path("name").asString().equals("find-users"))
                 .findFirst().orElseThrow();
-        assertThat(findUsers.path("inputSchema").path("properties").path("q").path("type").asText())
+        assertThat(
+                findUsers.path("inputSchema").path("properties").path("q").path("type").asString())
                 .isEqualTo("string");
     }
 
@@ -96,7 +98,7 @@ class AppMcpToolIntegrationTest {
         assertThat(result.path("isError").asBoolean()).isFalse();
         JsonNode rows = result.path("structuredContent").path("rows");
         assertThat(rows).hasSize(1);
-        assertThat(rows.get(0).path("name").asText()).isEqualTo("sato");
+        assertThat(rows.get(0).path("name").asString()).isEqualTo("sato");
     }
 
     @Test
@@ -119,7 +121,7 @@ class AppMcpToolIntegrationTest {
         // The write is visible through the query tool: suzuki is now INACTIVE.
         JsonNode rows = call("find-users", Map.of("q", "suzuki"), token(List.of("USER_READ")))
                 .path("structuredContent").path("rows");
-        assertThat(rows.get(0).path("status").asText()).isEqualTo("INACTIVE");
+        assertThat(rows.get(0).path("status").asString()).isEqualTo("INACTIVE");
     }
 
     @Test
@@ -131,7 +133,7 @@ class AppMcpToolIntegrationTest {
                 .path("structuredContent");
 
         List<String> answered = new java.util.ArrayList<>();
-        structured.fieldNames().forEachRemaining(answered::add);
+        structured.propertyNames().iterator().forEachRemaining(answered::add);
         assertThat(answered).containsExactly("main", "audit", "notify", "stamp");
     }
 
@@ -147,22 +149,22 @@ class AppMcpToolIntegrationTest {
         JsonNode resources = rpc(rpcBody("resources/list", null), session, null).path("result")
                 .path("resources");
         JsonNode active = stream(resources)
-                .filter(r -> r.path("uri").asText().equals("tesseraql://users/active"))
+                .filter(r -> r.path("uri").asString().equals("tesseraql://users/active"))
                 .findFirst().orElseThrow();
-        assertThat(active.path("name").asText()).isEqualTo("active-users");
-        assertThat(active.path("mimeType").asText()).isEqualTo("application/json");
-        assertThat(active.path("description").asText()).isNotBlank();
+        assertThat(active.path("name").asString()).isEqualTo("active-users");
+        assertThat(active.path("mimeType").asString()).isEqualTo("application/json");
+        assertThat(active.path("description").asString()).isNotBlank();
     }
 
     @Test
     void aResourceReadRunsItsSqlForAnAuthorizedCaller() throws Exception {
         JsonNode entry = readResource("tesseraql://users/active", token(List.of("USER_READ")))
                 .path("result").path("contents").get(0);
-        assertThat(entry.path("uri").asText()).isEqualTo("tesseraql://users/active");
-        assertThat(entry.path("mimeType").asText()).isEqualTo("application/json");
-        JsonNode rows = MAPPER.readTree(entry.path("text").asText()).path("rows");
+        assertThat(entry.path("uri").asString()).isEqualTo("tesseraql://users/active");
+        assertThat(entry.path("mimeType").asString()).isEqualTo("application/json");
+        JsonNode rows = MAPPER.readTree(entry.path("text").asString()).path("rows");
         List<String> names = new java.util.ArrayList<>();
-        rows.forEach(row -> names.add(row.path("name").asText()));
+        rows.forEach(row -> names.add(row.path("name").asString()));
         assertThat(names).contains("sato");
     }
 
@@ -183,16 +185,17 @@ class AppMcpToolIntegrationTest {
     void initializeAdvertisesTheMcpAppsUiExtension() throws Exception {
         JsonNode ui = rpc(initializeBody(), null, null).path("result").path("capabilities")
                 .path("extensions").path("io.modelcontextprotocol/ui");
-        assertThat(ui.path("mimeTypes").get(0).asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(ui.path("mimeTypes").get(0).asString()).isEqualTo("text/html;profile=mcp-app");
     }
 
     @Test
     void toolsListLinksALinkingToolToItsUiResource() throws Exception {
         JsonNode tools = rpc(rpcBody("tools/list", null), session, null).path("result")
                 .path("tools");
-        JsonNode findUsers = stream(tools).filter(t -> t.path("name").asText().equals("find-users"))
+        JsonNode findUsers = stream(tools)
+                .filter(t -> t.path("name").asString().equals("find-users"))
                 .findFirst().orElseThrow();
-        assertThat(findUsers.path("_meta").path("ui").path("resourceUri").asText())
+        assertThat(findUsers.path("_meta").path("ui").path("resourceUri").asString())
                 .isEqualTo("ui://users/board");
     }
 
@@ -201,9 +204,9 @@ class AppMcpToolIntegrationTest {
         JsonNode resources = rpc(rpcBody("resources/list", null), session, null).path("result")
                 .path("resources");
         JsonNode board = stream(resources)
-                .filter(r -> r.path("uri").asText().equals("ui://users/board"))
+                .filter(r -> r.path("uri").asString().equals("ui://users/board"))
                 .findFirst().orElseThrow();
-        assertThat(board.path("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(board.path("mimeType").asString()).isEqualTo("text/html;profile=mcp-app");
         assertThat(board.path("_meta").path("ui").path("prefersBorder").asBoolean()).isTrue();
     }
 
@@ -211,10 +214,10 @@ class AppMcpToolIntegrationTest {
     void aUiResourceReadRendersTheHcFragmentForAnAuthorizedCaller() throws Exception {
         JsonNode entry = readResource("ui://users/board", token(List.of("USER_READ")))
                 .path("result").path("contents").get(0);
-        assertThat(entry.path("uri").asText()).isEqualTo("ui://users/board");
-        assertThat(entry.path("mimeType").asText()).isEqualTo("text/html;profile=mcp-app");
+        assertThat(entry.path("uri").asString()).isEqualTo("ui://users/board");
+        assertThat(entry.path("mimeType").asString()).isEqualTo("text/html;profile=mcp-app");
         // The fragment is server-rendered hc-* markup carrying the active users.
-        String html = entry.path("text").asText();
+        String html = entry.path("text").asString();
         assertThat(html).contains("hc-list").contains("sato");
     }
 
@@ -237,16 +240,16 @@ class AppMcpToolIntegrationTest {
         JsonNode prompts = rpc(rpcBody("prompts/list", null), session, null).path("result")
                 .path("prompts");
         JsonNode draft = stream(prompts)
-                .filter(p -> p.path("name").asText().equals("draft-welcome"))
+                .filter(p -> p.path("name").asString().equals("draft-welcome"))
                 .findFirst().orElseThrow();
-        assertThat(draft.path("description").asText()).isNotBlank();
+        assertThat(draft.path("description").asString()).isNotBlank();
         // An MCP prompt argument is name/description/required, and all three come from the route's
         // input: — the description is the input field's own, so what is advertised is what the
         // binder validates plus what the author said it is.
         JsonNode name = stream(draft.path("arguments"))
-                .filter(a -> a.path("name").asText().equals("name")).findFirst().orElseThrow();
+                .filter(a -> a.path("name").asString().equals("name")).findFirst().orElseThrow();
         assertThat(name.path("required").asBoolean()).isTrue();
-        assertThat(name.path("description").asText()).isEqualTo("The new user's name.");
+        assertThat(name.path("description").asString()).isEqualTo("The new user's name.");
     }
 
     @Test
@@ -255,8 +258,8 @@ class AppMcpToolIntegrationTest {
                 "arguments", Map.of("name", "sato", "tone", "warm")));
         JsonNode result = rpc(rpcBody("prompts/get", params), session, null).path("result");
         JsonNode message = result.path("messages").get(0);
-        assertThat(message.path("role").asText()).isEqualTo("user");
-        assertThat(message.path("content").path("text").asText())
+        assertThat(message.path("role").asString()).isEqualTo("user");
+        assertThat(message.path("content").path("text").asString())
                 .isEqualTo("Write a warm welcome message for sato.");
     }
 
@@ -265,12 +268,12 @@ class AppMcpToolIntegrationTest {
         JsonNode prompts = rpc(rpcBody("prompts/list", null), session, null).path("result")
                 .path("prompts");
         JsonNode brief = stream(prompts)
-                .filter(p -> p.path("name").asText().equals("brief-user"))
+                .filter(p -> p.path("name").asString().equals("brief-user"))
                 .findFirst().orElseThrow();
-        assertThat(brief.path("description").asText()).isNotBlank();
+        assertThat(brief.path("description").asString()).isNotBlank();
         // The arguments are the route's input:, so what is advertised is what the binder validates.
         JsonNode name = stream(brief.path("arguments"))
-                .filter(a -> a.path("name").asText().equals("name")).findFirst().orElseThrow();
+                .filter(a -> a.path("name").asString().equals("name")).findFirst().orElseThrow();
         assertThat(name.path("required").asBoolean()).isTrue();
     }
 
@@ -281,9 +284,9 @@ class AppMcpToolIntegrationTest {
         JsonNode result = rpc(rpcBody("prompts/get", params), session, token(List.of("USER_READ")))
                 .path("result");
         JsonNode message = result.path("messages").get(0);
-        assertThat(message.path("role").asText()).isEqualTo("user");
+        assertThat(message.path("role").asString()).isEqualTo("user");
         // The argument bound into the SQL, and the row it returned, are both in the message.
-        assertThat(message.path("content").path("text").asText())
+        assertThat(message.path("content").path("text").asString())
                 .isEqualTo("Brief on tanaka: tanaka is INACTIVE.");
     }
 

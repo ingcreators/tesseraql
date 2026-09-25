@@ -1,7 +1,5 @@
 package io.tesseraql.report;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -12,6 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Renders a {@link TestReport} as Allure 2 result files (design ch. 15): one
@@ -55,7 +55,7 @@ public final class AllureReporter {
     private static String write(Map<String, Object> entry) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(entry);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(REPORT_ERROR,
                     "Failed to render Allure result: " + ex.getMessage());
         }

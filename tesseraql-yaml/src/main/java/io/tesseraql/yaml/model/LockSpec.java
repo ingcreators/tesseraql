@@ -31,7 +31,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 public record LockSpec(String column, String type) {
 
     /** {@code lock: version} — the bare column, compared opaquely. */
-    @JsonCreator
+    @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static LockSpec of(String column) {
         return new LockSpec(column, null);
     }

@@ -1,7 +1,5 @@
 package io.tesseraql.report;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +9,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Renders a {@link TestReport} as JSON (design ch. 15).
@@ -41,7 +41,7 @@ public final class JsonReporter {
 
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(REPORT_ERROR,
                     "Failed to render JSON report: " + ex.getMessage());
         }

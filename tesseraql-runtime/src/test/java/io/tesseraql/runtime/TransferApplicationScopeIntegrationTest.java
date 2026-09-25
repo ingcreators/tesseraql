@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -25,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The application half of the transfer scope, end to end (docs/edge-hygiene.md E0;
@@ -42,7 +42,7 @@ class TransferApplicationScopeIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static TesseraqlRuntime shop;
@@ -81,7 +81,7 @@ class TransferApplicationScopeIntegrationTest {
     void anotherApplicationsSubtreeAnswersATransferAsUnknown() throws Exception {
         String transferId = startTransfer(shop, "/api/orders/export-public");
         JsonNode own = awaitTerminal(shop, "/api/orders/export-public/" + transferId);
-        assertThat(own.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(own.get("status").asString()).isEqualTo("COMPLETED");
 
         // The same route id, the same table, another application: the bytes first.
         HttpResponse<String> file = get(warehouse,
@@ -116,7 +116,7 @@ class TransferApplicationScopeIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString("", StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     private static JsonNode awaitTerminal(TesseraqlRuntime runtime, String statusPath)
@@ -124,7 +124,7 @@ class TransferApplicationScopeIntegrationTest {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
         while (true) {
             JsonNode status = MAPPER.readTree(get(runtime, statusPath).body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

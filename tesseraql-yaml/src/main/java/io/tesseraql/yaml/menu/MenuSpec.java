@@ -1,12 +1,9 @@
 package io.tesseraql.yaml.menu;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
+import io.tesseraql.yaml.JacksonDefaults;
 import io.tesseraql.yaml.SimpleYamlParser;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -18,6 +15,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.dataformat.yaml.YAMLFactory;
+import tools.jackson.dataformat.yaml.YAMLMapper;
+import tools.jackson.dataformat.yaml.YAMLWriteFeature;
 
 /**
  * The application's declarative sidebar menu ({@code config/menu.yml}) with per-item role/permission
@@ -50,8 +52,9 @@ public final class MenuSpec {
     private static final TqlErrorCode INVALID_DOCUMENT = new TqlErrorCode(TqlDomain.YAML, 1110);
 
     /** Writes clean block YAML with no leading document marker, matching hand-authored menus. */
-    private static final ObjectMapper YAML = new ObjectMapper(
-            new YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
+    private static final ObjectMapper YAML = JacksonDefaults.pin(YAMLMapper.builder(
+            YAMLFactory.builder().disable(YAMLWriteFeature.WRITE_DOC_START_MARKER).build()))
+            .build();
 
     private static final MenuSpec EMPTY = new MenuSpec(List.of());
 
@@ -159,7 +162,7 @@ public final class MenuSpec {
         doc.put("menu", out);
         try {
             return YAML.writeValueAsString(doc);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(INVALID_DOCUMENT, "Failed to serialize menu.yml");
         }
     }

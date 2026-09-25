@@ -1,8 +1,5 @@
 package io.tesseraql.yaml.app;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.JsonMappers;
 import java.util.AbstractList;
 import java.util.AbstractMap;
@@ -11,6 +8,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A JSON value parsed from a column declared {@code type: json} (docs/temporal-semantics.md
@@ -28,8 +28,9 @@ import java.util.Set;
  */
 public final class JsonValues {
 
-    private static final ObjectMapper MAPPER = JsonMappers.constrained()
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+    private static final ObjectMapper MAPPER = JsonMappers.constrained().rebuild()
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .build();
 
     private JsonValues() {
     }
@@ -44,7 +45,7 @@ public final class JsonValues {
         Object tree;
         try {
             tree = MAPPER.readValue(text, Object.class);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalArgumentException(ex.getOriginalMessage(), ex);
         }
         return wrap(tree);
@@ -71,7 +72,7 @@ public final class JsonValues {
     static String text(Object value) {
         try {
             return MAPPER.writeValueAsString(value);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalStateException(ex);
         }
     }

@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -13,6 +12,8 @@ import io.tesseraql.pipeline.Exchange;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A response's declared {@code headers:} block, compiled once and applied per request.
@@ -93,7 +94,7 @@ final class ResponseHeaders {
                 } else {
                     exchange.response().header(name, headerValue);
                 }
-            } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+            } catch (JacksonException ex) {
                 throw new TqlException(RENDER_ERROR, "Failed to serialize header " + name);
             }
         });

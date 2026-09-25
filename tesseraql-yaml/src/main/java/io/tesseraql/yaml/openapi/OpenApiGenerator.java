@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.openapi;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -16,6 +14,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Generates a deterministic OpenAPI 3 document from the route manifest (design ch. 22.18). The
@@ -79,7 +79,7 @@ public final class OpenApiGenerator {
     public String toJson(AppManifest manifest) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(generate(manifest));
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(GEN_ERROR, "Failed to serialize OpenAPI: " + ex.getMessage());
         }
     }

@@ -44,4 +44,4 @@ response:
     status: 200
     body:
       affected: steps.main.affectedRows
-      eventId: main.eventId
+      eventId: outbox.eventId
