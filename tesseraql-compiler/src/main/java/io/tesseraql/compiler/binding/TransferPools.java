@@ -28,7 +28,9 @@ final class TransferPools {
                 .getProperty(TesseraqlProperties.TENANT) instanceof TenantContext tenant
                         ? tenant.id()
                         : null;
-        return new FileTransferService.TransferPool(TenantRouting.dataSource(exchange, "main"),
-                tenantId);
+        // The file-transfer role (docs/capacity-defaults.md decision 5): main's fileTransferPool,
+        // or the tenant's, where one is declared; main's own pool, as before, where none is.
+        return new FileTransferService.TransferPool(TenantRouting.dataSource(exchange, "main",
+                io.tesseraql.pipeline.tenant.PoolRole.FILE_TRANSFERS), tenantId);
     }
 }

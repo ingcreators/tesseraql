@@ -29,7 +29,7 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
         io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog,
         io.tesseraql.core.diag.PinningMonitor pinningMonitor,
         io.tesseraql.core.diag.JfrPinningSource pinningSource,
-        TenantDataSources tenantDataSources) {
+        TenantDataSources tenantDataSources, MainRoles mainRoles) {
 
     private static final Logger LOG = LoggerFactory.getLogger(RuntimePools.class);
 
@@ -42,6 +42,7 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
         io.tesseraql.core.diag.JfrPinningSource pinningSource = null;
         io.tesseraql.core.threading.ExecutionLanes lanes = null;
         TenantDataSources tenantDataSources = null;
+        MainRoles mainRoles = null;
         try {
             // Every datasource declared under tesseraql.datasources gets a pool, registered by name
             // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
@@ -49,6 +50,11 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
                     override, appHome, modules.present() ? modules.loader() : null);
             HikariDataSource dataSource = dataSources.get("main");
             dataSources.forEach((name, pool) -> context.bind(name, pool));
+            // main's role pools (docs/capacity-defaults.md decision 5): bound as one object, never
+            // by name, so no route can name one and nothing that walks the named pools finds one.
+            mainRoles = MainRoles.create(manifest.config(), override,
+                    modules.present() ? modules.loader() : null);
+            context.bind(TesseraqlProperties.MAIN_ROLE_POOLS_BEAN, mainRoles);
             // Ambient framework state - sessions, tokens, replay guards, rate leases, audit,
             // preferences - may ride its own pool or database (docs/framework-datasource.md).
             // Transactionally- and integrity-coupled stores (outbox, workflow, idempotency,
@@ -224,7 +230,7 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             }
             return new RuntimePools(dataSources, dataSource, frameworkDataSource,
                     aggregatingMeter, effectiveTracer, effectiveMeter, otelSdk, lanes,
-                    slowSqlLog, pinningMonitor, pinningSource, tenantDataSources);
+                    slowSqlLog, pinningMonitor, pinningSource, tenantDataSources, mainRoles);
         } catch (RuntimeException | Error failure) {
             // This phase owns what it built until the record is handed back: released here in
             // the same order the boot's catch and close() release — executors before the pools
@@ -235,6 +241,7 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             TesseraqlRuntime.closeQuietly(otelSdk);
             TesseraqlRuntime.closeQuietly(lanes);
             TesseraqlRuntime.closeQuietly(tenantDataSources);
+            TesseraqlRuntime.closeQuietly(mainRoles);
             if (dataSources != null) {
                 dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
             }

@@ -88,6 +88,17 @@ shared pool. Tenant routing replaces **only** `main`: an explicit non-main `data
 route is deployment-shared infrastructure and is never tenant-routed
 ([multi-datasource routes](multi-datasource.md)).
 
+**main's role pools come with it.** Where `main` declares a `jobPool` or a `fileTransferPool`
+([deployment](deployment.md#role-pools-jobs-and-file-transfers-off-the-online-pool)), each
+tenant gets the same role. It is a second pool onto the tenant's own coordinate, sized by main's
+block, or by the tenant block's own `jobPool:` / `fileTransferPool:` when it declares one. A
+`perTenant` job runs on its tenant's `jobPool`, and a transfer started for a tenant runs on that
+tenant's `fileTransferPool`. Each role pool is one more HikariCP pool per tenant, so declare them
+with `minimumIdle: 0`: they hold no connection while idle. `shared-schema` has no tenant pools,
+so its tenants use main's role pools. Tenants cannot be grouped onto one pool (A, B and C on one,
+D, E and F on another). Each tenant id is its own pool, and a tenant block's
+`maximumPoolSize` / `minimumIdle` is the lever when there are many.
+
 A **file transfer** is that request's SQL too ([file transfers](file-transfers.md)): a
 `file-export` extracts from the tenant's pool and a `file-import` writes its rows there, both
 refused for an unknown tenant before any transfer row exists. An export's `after:` statement

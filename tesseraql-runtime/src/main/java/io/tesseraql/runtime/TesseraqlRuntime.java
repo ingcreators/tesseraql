@@ -701,6 +701,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
         io.tesseraql.core.diag.PinningMonitor pinningMonitor = pools.pinningMonitor();
         io.tesseraql.core.diag.JfrPinningSource pinningSource = pools.pinningSource();
         TenantDataSources tenantDataSources = pools.tenantDataSources();
+        MainRoles mainRoles = pools.mainRoles();
+        // The pools the scrape and the dashboard report: the named ones, and main's role pools as
+        // main.jobPool and main.fileTransferPool, so a saturated role pool pages like any other
+        // (docs/capacity-defaults.md decision 5). Not the pools a readiness probe walks: a role
+        // pool is main's database, which main's own probe already answers for.
+        Map<String, HikariDataSource> reportedPools = new LinkedHashMap<>(dataSources);
+        reportedPools.putAll(mainRoles.byMetricName());
         // From here every failure releases the record above through the catch at the end -
         // the half of the boot leak that ownership inside RuntimePools does not cover
         // (docs/boot-phases.md slice 4): the boot has exactly two failure behaviours, the
@@ -1119,6 +1126,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
             long reviewTtlMillis = io.tesseraql.core.util.Durations.toMillis(manifest.config()
                     .getString("tesseraql.transfers.reviewTtl").orElse("30m"));
             fileTransfers.reviewTtlMillis(reviewTtlMillis);
+            // main's role pools are main's database (docs/capacity-defaults.md decision 5b): a
+            // transfer on one keeps its record and verdict on its work connection, and a
+            // tenant's transfer takes its record connection from the file-transfer pool.
+            fileTransfers.mainRoles(
+                    mainRoles.of(io.tesseraql.pipeline.tenant.PoolRole.FILE_TRANSFERS),
+                    mainRoles.of(io.tesseraql.pipeline.tenant.PoolRole.JOBS));
             fileTransfers.ensureSchema();
             context.bind(TesseraqlProperties.FILE_TRANSFER_BEAN, fileTransfers);
             // Unlike the retention sweep below, this one is not opt-in: a parked batch holds
@@ -1434,7 +1447,9 @@ public final class TesseraqlRuntime implements AutoCloseable {
             // The manual/scheduled runner, with light after-chaining
             // (docs/batch-platform.md track D; docs/boot-phases.md slice 3).
             OpsActions.JobRunner jobRunner = JobRunners.chained(jobs, jobOwners, appName,
-                    dataSource, dataSources, manifest.config(), tenantDataSources, jobExecutor);
+                    dataSource, dataSources,
+                    mainRoles.of(io.tesseraql.pipeline.tenant.PoolRole.JOBS),
+                    manifest.config(), tenantDataSources, jobExecutor);
 
             // Business-day calendars (docs/batch-platform.md track B): loaded at startup so a
             // broken calendars/ dir fails fast. One decision helper answers both the scheduling
@@ -1464,8 +1479,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.opsui.OpsDashboard opsDashboard = OpsDashboards.assemble(manifest.config(),
                     jobRepository, lanes, slowSqlLog, effectiveTracer,
                     pinningMonitor, outboxStore, eventChannelStore,
-                    pollSourceStatus, calendarStatus, dataSource, dataSources, aggregatingMeter,
-                    alertPeriod);
+                    pollSourceStatus, calendarStatus, dataSource, dataSources, reportedPools,
+                    aggregatingMeter, alertPeriod);
             // One memo per runtime: the member's own readiness path and the origin's roll-up
             // read the same state and keep it fresh (docs/deployment-maturity.md decision 3).
             ReadinessMemo readiness = ReadinessMemo.over(opsDashboard);
@@ -1694,7 +1709,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                     manifest.config().getString("tesseraql.metrics.unauthenticated")
                             .map(Boolean::parseBoolean).orElse(false),
                     aggregatingMeter, pollSourceStatus,
-                    new io.tesseraql.opsui.RuntimeMetrics(() -> poolStats(dataSources)),
+                    new io.tesseraql.opsui.RuntimeMetrics(() -> poolStats(reportedPools)),
                     edgeMetrics);
             Map<String, io.tesseraql.yaml.model.JobDefinition> jobDefinitions = new LinkedHashMap<>();
             jobs.forEach((id, jobFile) -> jobDefinitions.put(id, jobFile.definition()));
@@ -2180,6 +2195,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             closeQuietly(otelSdk);
             closeQuietly(lanes);
             closeQuietly(tenantDataSources);
+            closeQuietly(mainRoles);
             dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
             closeQuietly(modules);
             // A refusal keeps its code and its key-naming message on every path — the contract
@@ -2517,7 +2533,16 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JobFile jobFile = JobRunners.require(jobs, jobId);
         return JobRunners.runOne(jobFile, jobOwners.getOrDefault(jobId, appName),
                 bindJobParams(jobFile, params), "manual", null,
-                mainDataSource, dataSources, config, tenantDataSources, jobExecutor);
+                mainDataSource, dataSources, mainJobPool(), config, tenantDataSources,
+                jobExecutor);
+    }
+
+    /** main's job pool, or {@code null} when it declares none (docs/capacity-defaults.md decision 5). */
+    private javax.sql.DataSource mainJobPool() {
+        io.tesseraql.pipeline.tenant.MainRolePools roles = runtimeContext.lookup(
+                TesseraqlProperties.MAIN_ROLE_POOLS_BEAN,
+                io.tesseraql.pipeline.tenant.MainRolePools.class);
+        return roles == null ? null : roles.of(io.tesseraql.pipeline.tenant.PoolRole.JOBS);
     }
 
     /**
@@ -2529,12 +2554,13 @@ public final class TesseraqlRuntime implements AutoCloseable {
         JobFile jobFile = JobRunners.require(jobs, jobId);
         List<JobExecution> executions = new java.util.ArrayList<>();
         javax.sql.DataSource jobPool = JobRunners.jobDataSource(jobFile, mainDataSource,
-                dataSources);
+                dataSources, mainJobPool());
         for (String tenantId : TenantRegistry.tenantIds(config, mainDataSource,
                 tenantDataSources)) {
             executions.add(jobExecutor.run(jobFile,
-                    jobPool == mainDataSource
-                            ? tenantDataSources.dataSourceFor(tenantId, mainDataSource)
+                    JobRunners.onMain(jobFile)
+                            ? tenantDataSources.dataSourceFor(tenantId, jobPool,
+                                    io.tesseraql.pipeline.tenant.PoolRole.JOBS)
                             : jobPool,
                     io.tesseraql.core.tenant.TenantContext.of(tenantId),
                     jobOwners.getOrDefault(jobId, appName), bindJobParams(jobFile, params),
@@ -2674,6 +2700,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             } finally {
                 try {
                     tenantDataSources.close();
+                    // main's role pools (docs/capacity-defaults.md decision 5), bound rather
+                    // than held: the work that borrows from them has stopped above.
+                    closeQuietly(runtimeContext.lookup(TesseraqlProperties.MAIN_ROLE_POOLS_BEAN,
+                            MainRoles.class));
                 } finally {
                     try {
                         dataSources.values().forEach(HikariDataSource::close);

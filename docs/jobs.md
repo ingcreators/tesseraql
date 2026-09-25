@@ -618,6 +618,24 @@ On a multi-tenant app, `perTenant: true` makes each firing run the job once per 
 tenant, each run on that tenant's own datasource with `tenant.id` available as a SQL bind.
 Every tenant run is a separate execution record.
 
+## The pool a job runs on
+
+A job on `main` borrows from main's pool, the one requests are served on, unless `main` declares
+a **`jobPool`**. With one declared, every execution of a job runs on that second pool onto
+main's own database:
+- a scheduled firing
+- an external scheduler's `tesseraql job run`
+- a manual run from the ops console
+- an `after:` chain
+- a poll-triggered import
+
+Such a job then cannot hold a page's connection while it runs
+([deployment](deployment.md#role-pools-jobs-and-file-transfers-off-the-online-pool)).
+
+A job that names `datasource: main` is a job on `main`. One that names another datasource runs
+on that datasource's pool. On a per-tenant app, a `perTenant` job runs on its tenant's
+`jobPool`, which each tenant gets when `main` declares one.
+
 ## Cluster safety and failure behavior
 
 On a multi-node deployment every node hosts every scheduled job, but **exactly one node runs

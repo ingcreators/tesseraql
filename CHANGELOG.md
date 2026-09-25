@@ -8,6 +8,23 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Role pools: jobs and file transfers off the online pool.** `tesseraql.datasources.main` may
+  declare a `jobPool`, which every execution of a `kind: job` runs on: scheduled, external,
+  manual, an `after:` chain, a poll-triggered import. It may also declare a `fileTransferPool`,
+  which every transfer a `file-export` or `file-import` route starts runs on: a list page's
+  export, My exports, a CSV import. Each is a second pool onto main's own database, with main's
+  coordinate and its own sizing, under every pool's keys. Undeclared, the work stays on `main`,
+  as before. Route transfers had no bound on how many run at once, so the file-transfer pool's
+  size now is one. A transfer on a role pool still commits its rows and its verdict in one
+  transaction: the bookkeeping now asks whether the pool is main's database, not whether it is
+  main's pool object. In a per-tenant mode each tenant's pool gets the same roles, sized by main's
+  block or by the tenant block's own. A tenant transfer now opens the connection its verdict is
+  written on at the end of the run, where it used to hold an online `main` connection for the
+  whole run. The scrape reports `main.jobPool` and `main.fileTransferPool`, and a role pool with
+  waiters pages `TQL-OPS-9011`. A role pool under another datasource, or on a duckdb `main`,
+  refuses the boot with `TQL-YAML-1115`. `docs/capacity-defaults.md` decisions 5-5b;
+  `docs/deployment.md` "Role pools".
+
 - **`dev --port 0`.** The development gateway binds a free port before its applications boot,
   gives them that origin — the stack issuer, the session tokens and the MCP surface all name it
   — prints it, and records it in each application's `work/dev.origin`, so several `dev` runs

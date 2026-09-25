@@ -365,6 +365,15 @@ a missing `order by` is a build warning (`TQL-LD-5311`).
 
 ## Asynchronous export: file-export
 
+**Both asynchronous recipes run on the pool requests are served on, unless `main` declares a
+`fileTransferPool`.** With one declared, every transfer a `file-export` or `file-import` route
+starts runs on that second pool onto main's own database: a list page's export, **My exports**,
+a CSV import. Nothing else bounds how many run at once, so the pool's size is that bound. A
+transfer beyond it waits for a connection, then fails, and a user's minutes-long export no
+longer holds a page's connection
+([deployment](deployment.md#role-pools-jobs-and-file-transfers-off-the-online-pool)). The
+synchronous `query-export` is a request, and stays on `main`.
+
 A `file-export` route (typically `post.yml`) declares its extraction as `sources.main`, exactly
 as the synchronous recipe does. Bound request parameters are captured at start and feed the
 extraction query. The start request answers `202` with the transfer URLs, and the route owns its

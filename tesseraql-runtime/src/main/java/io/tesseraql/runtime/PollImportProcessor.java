@@ -71,9 +71,21 @@ final class PollImportProcessor implements Step {
             }
             // startImport spools the stream off-heap before returning, so a large file never
             // materializes in memory and the consumer can safely move it afterwards.
-            String transferId = transfers.startImport(new FileTransferService.ImportRequest(
+            // A poll import is a job's work, so it runs on main's job pool where one is declared
+            // (docs/capacity-defaults.md decision 5); with none, on main, as it always has.
+            FileTransferService.ImportRequest request = new FileTransferService.ImportRequest(
                     jobId, appName, format, readSpec, rowSqlFile, onError)
-                    .invalidating(invalidates), content);
+                    .invalidating(invalidates);
+            io.tesseraql.pipeline.tenant.MainRolePools roles = exchange.beans().lookup(
+                    TesseraqlProperties.MAIN_ROLE_POOLS_BEAN,
+                    io.tesseraql.pipeline.tenant.MainRolePools.class);
+            javax.sql.DataSource jobPool = roles == null
+                    ? null
+                    : roles.of(io.tesseraql.pipeline.tenant.PoolRole.JOBS);
+            if (jobPool != null) {
+                request = request.on(new FileTransferService.TransferPool(jobPool, null));
+            }
+            String transferId = transfers.startImport(request, content);
             awaitImport(transfers, transferId, fileName);
             LOG.log(System.Logger.Level.INFO,
                     "Polled file {0} ingested for job {1} as transfer {2}",

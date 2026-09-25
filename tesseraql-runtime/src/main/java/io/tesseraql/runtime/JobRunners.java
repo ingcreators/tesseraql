@@ -34,12 +34,25 @@ final class JobRunners {
         return jobFile;
     }
 
-    /** The pool a job's declared {@code datasource:} selects; {@code main} absent a declaration. */
-    static javax.sql.DataSource jobDataSource(JobFile jobFile, javax.sql.DataSource main,
-            Map<String, HikariDataSource> dataSources) {
+    /**
+     * Whether a job runs on {@code main}: it names no datasource, or names {@code main}. The two
+     * spellings mean the same thing (docs/capacity-defaults.md decision 5).
+     */
+    static boolean onMain(JobFile jobFile) {
         String declared = jobFile.definition().datasource();
-        if (declared == null || declared.isBlank() || "main".equals(declared)) {
-            return main;
+        return declared == null || declared.isBlank() || "main".equals(declared);
+    }
+
+    /**
+     * The pool a job's declared {@code datasource:} selects. A job on {@code main} runs on main's
+     * {@code jobPool} where one is declared ({@code mainJobPool}), on {@code main} otherwise
+     * (docs/capacity-defaults.md decision 5).
+     */
+    static javax.sql.DataSource jobDataSource(JobFile jobFile, javax.sql.DataSource main,
+            Map<String, HikariDataSource> dataSources, javax.sql.DataSource mainJobPool) {
+        String declared = jobFile.definition().datasource();
+        if (onMain(jobFile)) {
+            return mainJobPool != null ? mainJobPool : main;
         }
         javax.sql.DataSource pool = dataSources.get(declared);
         if (pool == null) {
@@ -55,14 +68,16 @@ final class JobRunners {
      * configured tenant, each on its tenant pool and tenant context (design ch. 30.3),
      * returning the last execution. Per-tenant pool routing applies only to main-datasource
      * jobs — a duckdb engine is one per node, tenant isolation there comes from
-     * tenant-partitioned file scopes. A {@code perTenant} app with no tenants configured runs
-     * once, like any other job.
+     * tenant-partitioned file scopes. A job on {@code main} runs on the job pool: main's, or in a
+     * per-tenant mode its tenant's (docs/capacity-defaults.md decisions 5 and 5a). A
+     * {@code perTenant} app with no tenants configured runs once, like any other job.
      */
     static JobExecution runOne(JobFile jobFile, String owner, Map<String, Object> boundParams,
             String triggerType, String triggeredBy, javax.sql.DataSource dataSource,
-            Map<String, HikariDataSource> dataSources, AppConfig runtimeConfig,
-            TenantDataSources tenantPools, JobExecutor jobExecutor) {
-        javax.sql.DataSource jobPool = jobDataSource(jobFile, dataSource, dataSources);
+            Map<String, HikariDataSource> dataSources, javax.sql.DataSource mainJobPool,
+            AppConfig runtimeConfig, TenantDataSources tenantPools, JobExecutor jobExecutor) {
+        javax.sql.DataSource jobPool = jobDataSource(jobFile, dataSource, dataSources,
+                mainJobPool);
         if (jobFile.definition().perTenant()) {
             List<String> tenants = TenantRegistry.tenantIds(runtimeConfig, dataSource,
                     tenantPools);
@@ -70,8 +85,9 @@ final class JobRunners {
                 JobExecution last = null;
                 for (String tenantId : tenants) {
                     last = jobExecutor.run(jobFile,
-                            jobPool == dataSource
-                                    ? tenantPools.dataSourceFor(tenantId, dataSource)
+                            onMain(jobFile)
+                                    ? tenantPools.dataSourceFor(tenantId, jobPool,
+                                            io.tesseraql.pipeline.tenant.PoolRole.JOBS)
                                     : jobPool,
                             io.tesseraql.core.tenant.TenantContext.of(tenantId),
                             owner, boundParams, triggerType, triggeredBy);
@@ -96,13 +112,14 @@ final class JobRunners {
      */
     static OpsActions.JobRunner chained(Map<String, JobFile> jobs, Map<String, String> jobOwners,
             String appName, javax.sql.DataSource dataSource,
-            Map<String, HikariDataSource> dataSources, AppConfig runtimeConfig,
-            TenantDataSources tenantPools, JobExecutor jobExecutor) {
+            Map<String, HikariDataSource> dataSources, javax.sql.DataSource mainJobPool,
+            AppConfig runtimeConfig, TenantDataSources tenantPools, JobExecutor jobExecutor) {
         OpsActions.JobRunner runOne = (jobId, params, triggerType, triggeredBy) -> {
             JobFile jobFile = require(jobs, jobId);
             return runOne(jobFile, jobOwners.getOrDefault(jobId, appName),
                     TesseraqlRuntime.bindJobParams(jobFile, params), triggerType, triggeredBy,
-                    dataSource, dataSources, runtimeConfig, tenantPools, jobExecutor);
+                    dataSource, dataSources, mainJobPool, runtimeConfig, tenantPools,
+                    jobExecutor);
         };
         return (jobId, params, triggerType, triggeredBy) -> {
             JobExecution execution = runOne.run(jobId, params, triggerType, triggeredBy);

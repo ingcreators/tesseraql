@@ -14,4 +14,12 @@ public interface TenantDataSourceResolver {
 
     /** Returns the datasource for {@code tenantId}, or {@code null} to fall back to the default. */
     DataSource resolve(String tenantId);
+
+    /**
+     * The tenant's pool for {@code role}: its role pool where it has one, its own pool otherwise
+     * (docs/capacity-defaults.md decision 5a).
+     */
+    default DataSource resolve(String tenantId, PoolRole role) {
+        return resolve(tenantId);
+    }
 }
