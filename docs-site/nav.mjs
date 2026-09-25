@@ -376,4 +376,11 @@ export const EXCLUDED = [
   // defaults pinned at the factories, YAML 1.2 read with the editor's core schema, one Jackson
   // line on the runtime - designed 2026-09-25.
   'jackson-3.md',
+  // The gateway hop measured against a standalone runtime, Spring Boot and nginx, the ways of
+  // lightening it measured or costed, and why the request path stays - measured 2026-09-25.
+  'gateway-performance.md',
+  // Capacity defaults: the front door admits what a member admits, no bound derives from the
+  // worker pool, jobs name their pool, and a new application's production profile separates
+  // its pools - designed 2026-09-25.
+  'capacity-defaults.md',
 ];
