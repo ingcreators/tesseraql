@@ -637,6 +637,15 @@ Add a build check that the stack-application modules never acquire a dependency 
 application upgrade and canary reach production, where `AppUpgrader` and canary weights already
 exist; or per-application resource limits are required. None of these is present today.
 
+#### What the hop costs, measured — 2026-09-25
+
+The loopback hop this decision chose was measured against a standalone runtime, Spring Boot and
+nginx in [gateway-performance.md](gateway-performance.md). It costs 27-47% of throughput on a
+33-byte answer and 15-23% on 22 KB, which is two to three times an nginx hop in the same place.
+Lightening it in place stops at a Vert.x relay's own floor. Only an in-process handoff removes it,
+and that record lists what a handoff would regress. The decision stands: speed is not among its
+revisit triggers, and the record adds its own.
+
 ### 16. Settings only the host can know correctly belong to the host, and that includes migrating the shared schema
 
 The framework already made this call once and did not generalise it. `CookiePath`'s own
