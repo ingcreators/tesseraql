@@ -25,6 +25,19 @@ All notable changes to TesseraQL are documented here. The format follows
   refuses the boot with `TQL-YAML-1115`. `docs/capacity-defaults.md` decisions 5-5b;
   `docs/deployment.md` "Role pools".
 
+- **A new application carries a production profile that separates its pools.** `tesseraql new`
+  writes `config/env/prod.yml` and `config/env/staging.yml` with one layout. `main` keeps its
+  size and waits 10 s for a connection, so a request that has lost its reader fails and frees its
+  permit. A `fileTransferPool` of 5 waits 2 minutes, and a `jobPool` of 3 waits 5 minutes. Both
+  hold nothing while idle and take main's coordinate, so the files repeat no credentials. The
+  base configuration, which `tesseraql dev` runs, is unchanged. An application with these files
+  declares its environments, so a profile it has no file for refuses to start, as for any
+  application with `config/env/`. The generated README says so. The stack marker recommends
+  `framework.datasource` for production and shows `maximumPoolSize: 5`. The editor's
+  configuration schema describes `jobPool`, `fileTransferPool` and the pool keys the profiles
+  write. Its `maximumPoolSize` description no longer says HikariCP's default applies.
+  `docs/capacity-defaults.md` decisions 7-8; `docs/deployment.md` "Environment profiles".
+
 - **`dev --port 0`.** The development gateway binds a free port before its applications boot,
   gives them that origin — the stack issuer, the session tokens and the MCP surface all name it
   — prints it, and records it in each application's `work/dev.origin`, so several `dev` runs

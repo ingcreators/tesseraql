@@ -42,6 +42,10 @@ public final class AppScaffolder {
                         APPLICATION_YML.replace("__APP_DB__", dbName)),
                 new ScaffoldedFile("config/tesseraql.yml",
                         TESSERAQL_YML.replace("__APP_NAME__", appName)),
+                // The deployed environments separate their pools; the development loop runs
+                // the base configuration's one pool (docs/capacity-defaults.md decision 7).
+                new ScaffoldedFile("config/env/prod.yml", PROD_YML),
+                new ScaffoldedFile("config/env/staging.yml", STAGING_YML),
                 new ScaffoldedFile("db/migration/V1__create_items.sql", MIGRATION_SQL),
                 new ScaffoldedFile("templates/nav.html", NAV_HTML),
                 new ScaffoldedFile("config/menu.yml", MENU_YML),
@@ -261,6 +265,43 @@ public final class AppScaffolder {
                 maximumPoolSize: 10
             """;
 
+    /**
+     * The pool layout both deployed profiles carry (docs/capacity-defaults.md decision 7):
+     * requests keep main, and the two role pools hold nothing while idle.
+     */
+    private static final String PROFILE_POOLS = """
+            tesseraql:
+              datasources:
+                main:                                   # online: requests
+                  maximumPoolSize: ${db.main.maximumPoolSize:10}
+                  connectionTimeoutMillis: 10000        # a request that waited 10 s has lost its reader
+                  fileTransferPool:                     # the online batch: a list page's export, My exports,
+                    maximumPoolSize: 5                  # a CSV import. Its size is how many run at once
+                    minimumIdle: 0
+                    idleTimeoutMillis: 600000
+                    connectionTimeoutMillis: 120000     # a queued transfer waits two minutes, then fails
+                  jobPool:                              # every kind: job run: scheduled, external, manual
+                    maximumPoolSize: 3
+                    minimumIdle: 0
+                    idleTimeoutMillis: 600000
+                    connectionTimeoutMillis: 300000     # jobs that fire together queue, then fail visibly
+            """;
+
+    private static final String PROD_YML = """
+            # The production profile: selected by TESSERAQL_ENV=prod (docs/deployment.md, "Environment
+            # profiles"). Pools are fixed-size unless minimumIdle is lower, so the connection budget is a
+            # standing number: per node, every pool of every member, plus the stack's own. Keep it under the
+            # database's max_connections (PostgreSQL's default is 100). docs/capacity.md has the arithmetic.
+            """
+            + PROFILE_POOLS;
+
+    private static final String STAGING_YML = """
+            # The staging profile: selected by TESSERAQL_ENV=staging. Staging rehearses production
+            # (docs/promotion.md), so it carries production's pool layout. The connection budget is the
+            # same standing number: docs/capacity.md has the arithmetic.
+            """
+            + PROFILE_POOLS;
+
     private static final String TESSERAQL_YML = """
             tesseraql:
               app:
@@ -268,7 +309,8 @@ public final class AppScaffolder {
                 work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
 
               # Environment profiles overlay this file from config/env/<profile>.yml, selected
-              # by TESSERAQL_ENV (or -Dtesseraql.env) — see docs/deployment.md.
+              # by TESSERAQL_ENV (or -Dtesseraql.env) — see docs/deployment.md. prod and staging
+              # are declared, so any other profile refuses to start.
 
               datasources:
                 main:
@@ -652,6 +694,14 @@ public final class AppScaffolder {
             ./mvnw tesseraql:migrate tesseraql:test \\
                 -Dtesseraql.jdbcUrl=jdbc:postgresql://localhost:5432/__APP_DB__
             ```
+
+            ## Environments
+
+            Without `--env`, `tesseraql dev` runs the base configuration: one connection pool.
+            `config/env/prod.yml` and `config/env/staging.yml` apply with `TESSERAQL_ENV=prod` or
+            `TESSERAQL_ENV=staging` (`--env` on `tesseraql dev`), and give jobs and file transfers
+            pools of their own beside the requests' pool. With those two declared, a profile that
+            has no file here refuses to start.
 
             ## Layout
 

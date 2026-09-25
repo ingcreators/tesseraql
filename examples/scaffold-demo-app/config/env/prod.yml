@@ -1,0 +1,19 @@
+# The production profile: selected by TESSERAQL_ENV=prod (docs/deployment.md, "Environment
+# profiles"). Pools are fixed-size unless minimumIdle is lower, so the connection budget is a
+# standing number: per node, every pool of every member, plus the stack's own. Keep it under the
+# database's max_connections (PostgreSQL's default is 100). docs/capacity.md has the arithmetic.
+tesseraql:
+  datasources:
+    main:                                   # online: requests
+      maximumPoolSize: ${db.main.maximumPoolSize:10}
+      connectionTimeoutMillis: 10000        # a request that waited 10 s has lost its reader
+      fileTransferPool:                     # the online batch: a list page's export, My exports,
+        maximumPoolSize: 5                  # a CSV import. Its size is how many run at once
+        minimumIdle: 0
+        idleTimeoutMillis: 600000
+        connectionTimeoutMillis: 120000     # a queued transfer waits two minutes, then fails
+      jobPool:                              # every kind: job run: scheduled, external, manual
+        maximumPoolSize: 3
+        minimumIdle: 0
+        idleTimeoutMillis: 600000
+        connectionTimeoutMillis: 300000     # jobs that fire together queue, then fail visibly
