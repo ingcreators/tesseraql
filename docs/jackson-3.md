@@ -23,7 +23,13 @@
 > file or fixture carried trailing content.
 >
 > **S3 (one Jackson line on the runtime).** Jackson 2 leaves the runtime closure, and a tripwire
-> keeps it out.
+> keeps it out. **Shipped, #1456**, as designed: the exclusion sits on vertx-core in the root
+> dependencyManagement and reaches every path, test scope included; Vert.x selects its Jackson 3
+> `DatabindCodec` (`VertxJsonCodecTest`); a revert probe that dropped the exclusion was refused by
+> `no-workshop-on-the-runtime`. The runtime closure went from 148 artifacts and 36,972,142 bytes
+> to 147 and 36,377,846. vertx-core 5.2.0 declares the same shape. module-channel.md's
+> `jackson-databind` line records what was verified then and stays as history (decision 16).
+> **The campaign is complete.**
 >
 > The campaign goes before Phase 34. Reading YAML 1.2 is a change to the authored contract, and
 > it should land before the compatibility contract freezes that contract.

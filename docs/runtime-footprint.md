@@ -314,9 +314,9 @@ The pattern has two shapes, and which one a module takes follows from what its b
 
 | Module | Rule | Shape and what it refuses |
 | --- | --- | --- |
-| `tesseraql-runtime` | `no-workshop-on-the-runtime` (exists) | deny-list: studio, studio-runtime, test-core, greenmail, junit |
+| `tesseraql-runtime` | `no-workshop-on-the-runtime` (exists) | deny-list: studio, studio-runtime, test-core, greenmail, junit; since docs/jackson-3.md S3, Jackson 2's `jackson-core` and `jackson-databind` |
 | `tesseraql-cli` | `no-bundled-database-binaries` (new) | deny-list: `io.zonky.test.postgres:*` — the supervisor stays, binaries resolve on demand; the declared test-scope linux-amd64 is untouched |
-| `tesseraql-host` | `no-workshop-in-the-deployment` (new) | deny-list: studio, studio-runtime, test-core, greenmail, junit, `io.zonky.test:*`, `io.zonky.test.postgres:*`, `org.jboss.shrinkwrap.resolver:*`, report, coverage-core — plus tripwire artifacts from the resolver closure (`org.apache.maven.resolver:maven-resolver-api`, `com.google.inject:guice`) so the stack cannot return under a different root |
+| `tesseraql-host` | `no-workshop-in-the-deployment` (new) | deny-list: studio, studio-runtime, test-core, greenmail, junit, Jackson 2's `jackson-core` and `jackson-databind` (since docs/jackson-3.md S3), `io.zonky.test:*`, `io.zonky.test.postgres:*`, `org.jboss.shrinkwrap.resolver:*`, report, coverage-core — plus tripwire artifacts from the resolver closure (`org.apache.maven.resolver:maven-resolver-api`, `com.google.inject:guice`) so the stack cannot return under a different root |
 | `tesseraql-core` | `core-is-dependency-free` (new) | allow-list: every declared dependency except test scope, direct declarations only. No `io.tesseraql:*` exception — core's contract is no dependency at all, not merely no third-party one (docs/module-boundary-guards.md decision 6) |
 
 The four rules the module-channel campaign added — `weightless-on-the-runtime` on `tesseraql-oidc`,
