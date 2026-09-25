@@ -400,6 +400,12 @@
                     <exclude>com.icegreen:greenmail:*:*:runtime</exclude>
                     <exclude>junit:junit:*:*:compile</exclude>
                     <exclude>junit:junit:*:*:runtime</exclude>
+                    <!-- One Jackson line (docs/jackson-3.md decision 12): Jackson 2's core and
+                         databind stay off the runtime, whatever root would bring them. -->
+                    <exclude>com.fasterxml.jackson.core:jackson-core:*:*:compile</exclude>
+                    <exclude>com.fasterxml.jackson.core:jackson-core:*:*:runtime</exclude>
+                    <exclude>com.fasterxml.jackson.core:jackson-databind:*:*:compile</exclude>
+                    <exclude>com.fasterxml.jackson.core:jackson-databind:*:*:runtime</exclude>
                   </excludes>
                   <searchTransitive>true</searchTransitive>
                 </bannedDependencies>

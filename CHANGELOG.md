@@ -455,6 +455,15 @@ All notable changes to TesseraQL are documented here. The format follows
   `TQL-FIELD-4620`'s warning widens: a table "no catalog and no held source reads". A reload
   that rebuilds a route drops the hold. Pre-1.0 internal.
 
+### Removed
+
+- **Jackson 2 no longer ships in the runtime.** vertx-core brought Jackson 2's core (and, on
+  JDK 21+, Jackson 3 as well), and preferred Jackson 2 while it was present, so the runtime
+  carried two JSON libraries. It is excluded; Vert.x's own JSON now runs on the framework's
+  Jackson 3.1, and the runtime and host footprint rules refuse Jackson 2 returning under another
+  dependency. `jackson-annotations` stays: Jackson 3 uses the 2.x annotations. An application
+  module that needs Jackson 2 brings its own. `docs/jackson-3.md` decision 12.
+
 ### Fixed
 
 - **The stack file's `security.oauth.enabled` reads every configuration spelling.** It went
