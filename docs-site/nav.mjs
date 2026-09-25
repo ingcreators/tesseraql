@@ -372,4 +372,8 @@ export const EXCLUDED = [
   // on (ports, the local Maven repository, a full verify), the Dev Container retires with its
   // agent state carried out - designed 2026-09-23.
   'host-development.md',
+  // Jackson 3: the move to the 3.1 LTS line in one reviewed slice, Jackson 2's observable
+  // defaults pinned at the factories, YAML 1.2 read with the editor's core schema, one Jackson
+  // line on the runtime - designed 2026-09-25.
+  'jackson-3.md',
 ];
