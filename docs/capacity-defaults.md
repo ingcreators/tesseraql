@@ -8,7 +8,7 @@
 > the minimum is 0, and whether a new application could start from best-practice pool settings,
 > batch included. They chose every recommended option.
 >
-> There are four slices:
+> There are six slices, the last two added after S3:
 >
 > **S1 (the front door and the bounds).** The front door's per-member share defaults to what a
 > member's own gate admits. Assets and health pass the share, as they already pass the member's
@@ -34,7 +34,7 @@
 > still supplies the sizing. A revert probe that restored the bare HikariCP configuration turned
 > the integration test red. Two pools built from an override still read no sizing keys: an
 > application's `main` under `--embedded-db`, and the stack surface runtime's `main`, a fixed 10
-> in production. Neither is in this record's decisions, so both are left open.
+> in production. Neither was in this record's decisions; decisions 11 and 12 take them up.
 >
 > **S3 (the skeleton).** `tesseraql new` writes a production profile that separates the online pool
 > from the two role pools. The stack marker states the production posture. **Shipped, #1462**, as
@@ -43,7 +43,15 @@
 > that declares `prod` and `staging` refuses any other profile. A freshly generated application
 > boots under `prod` against PostgreSQL with the layout above, and a job holds its connection on
 > `tesseraql-main-jobs`. The same test without the profile turns all three cases red. The two
-> override pools S2b left open are still open.
+> override pools S2b left open are taken up by the amendment below.
+>
+> **Amended 2026-09-25, after S3: decisions 11 and 12 are new, with slices S4 and S5.** The
+> maintainer asked for both override pools to be settled as recommended. A pool built from an
+> override is sized by its datasource's declaration, as a role pool already is (S4). Reading what
+> the stack surface runs on its own `main` showed that it is sign-in: the credential check, the
+> TOTP check and IAM Admin. Its sessions ride the framework pool, so one sign-in was split across
+> two pools on one database. So where the host holds a framework pool, the surface borrows it as
+> its `main` and holds no pool of its own (S5). That takes 10 standing connections off every node.
 >
 > **Amended 2026-09-25, after S1: decisions 5 and 7 are replaced, and decisions 5a and 5b are
 > new.** The record first designed `tesseraql.batch.datasource`, a key naming another datasource
@@ -88,6 +96,17 @@
 | 14 | What a job's SQL runs on | `JobExecutor` runs each step on the `DataSource` that `JobRunners` hands it (`runStepTracked`). Its bookkeeping (`JobRepository`) is short writes on its own datasource. A job's `export:` step extracts on the job's datasource through `exportInline` (`ExportStepRunner.java:52`). **A poll-triggered import job** goes through `FileTransferService.startImport` with no pool, which means `main` (`PollImportProcessor.java:74`). |
 | 15 | Route-started transfers are not jobs | A `file-export` or `file-import` route starts a transfer on the request's `main`, tenant-routed (`TransferPools.java:31`). That is where a list page's export and a CSV import go, not the job platform. The transfer service runs each one on its own virtual thread, **with no bound on how many run at once** (`JdbcFileTransferService.java:115`). Only the pool they borrow from limits them, and today that is the online pool. |
 | 16 | Transfer bookkeeping splits on the pool object | `Bookkeeping` writes the transfer's record and verdict on the work connection when the work pool **is** the service's `main`, and on a second connection otherwise (`pool != dataSource`, `JdbcFileTransferService.java:216`). The second connection is opened **with the work connection, at the start of the run** (`:1193`, `:1905`). It is used only at the end (`recordRows`/`recordSpool` and the verdict's compare-and-set, `:1288`, `:1962`). **So in a per-tenant mode, every running transfer pins one online `main` connection for its whole duration.** A different pool object onto main's own database would be split the same way. |
+
+### Amended facts (2026-09-25, after S3)
+
+Read against main `ffaddbce2`.
+
+| # | Subject | Finding |
+| --- | --- | --- |
+| 17 | A pool built from an override reads no sizing | `createAll` builds `main` from an override with `create(override)` (`DataSources.java:169`, `:175`), which is a bare `HikariConfig` (`:104`). So under `dev --embedded-db` nothing reads an application's declared `tesseraql.datasources.main.maximumPoolSize`, `connectionTimeoutMillis` or the other pool keys. The pool takes HikariCP's defaults, which match TesseraQL's numbers only by inheritance. The role pools S2a builds under the same override do read their sizing (`createRole`, `:266`). So under `--embedded-db` a job pool honours its declaration and `main` does not. [cli-surface.md](cli-surface.md) decision 4b promised the opposite: "`maximumPoolSize` and its neighbours are read from configuration as usual, because the pool is no longer built from three fields". Half of it was built: the declared query parameters carry over to the embedded URL (`carryingDeclaredQuery`, `MultiAppHost.java:654`), but the pool is still built from the override alone. The embedded server sets no `max_connections`, so PostgreSQL's 100 applies. |
+| 18 | The stack surface's own `main` | The surface runtime's `main` is built from an override too (`surfaceMainOverride`, `MultiAppHost.java:676`, passed at `:321`). Its coordinate is the stack's framework coordinate, or the embedded server's under `--embedded-db`, or, when the stack supplies no framework datasource, the coordinate the applications agreed on. So it is a fixed 10 with no key to change it (row 17). Under a supplied stack it sits beside the stack's framework pool on the same database, adding 10 standing connections per node to the budget. |
+| 19 | What the surface runs on its `main` | Sign-in. The identity service looks its realm's datasource up by name, and the realm defaults to `main` (`IdentityConfigFactory.java:21`, `TesseraqlRuntime.java:1882`). So the credential check, IAM Admin and the account page's password change all run there, and so does the TOTP check the login route enforces (`:1900`). The portal's own routes call services, not SQL. At boot the operations tables are migrated there (`:820`). Two sweeps run on it whatever an application declares: the job reaper (`:1806`) and the import-review sweep (`:1140`), each a short query a minute. The portal declares no jobs, topics, consumers or retention, so nothing else runs there. **Sessions, tokens and preferences ride the framework pool. One sign-in therefore touches two pools on one database, and the pool that [framework-datasource.md](framework-datasource.md) decision 2 isolates carries only half of it.** |
+| 20 | Who closes a pool | A runtime closes every pool in its named map, on three paths: the pools phase's own failure (`RuntimePools.java:246`), the boot's catch (`TesseraqlRuntime.java:2199`) and `close()` (`:2709`). The host closes the surface after the members, and the stack's framework pool last (`MultiAppHost.java:1036`, `:1041`). The shared Vert.x sets the precedent: a runtime closes only what it built ([http-threading.md](http-threading.md) decision 4). |
 
 ## The decisions
 
@@ -318,6 +337,7 @@ names a real coordinate.
 | Role pools under a datasource other than `main` | Jobs on another datasource take that datasource's pool, and transfers run only on `main`, so the block would configure nothing. Refused with `TQL-YAML-1115` | A route transfer that runs on a named datasource, or jobs on one needing isolation from its routes |
 | Grouping tenants onto one pool (A, B and C on one, D, E and F on another) | One pool per tenant id, the mode is application-wide, and structural isolation has no `tenant.id` predicate to separate tenants that share tables (row 13). Grouping would be a shard mode of its own, with its own routing, lint and migrations | A deployment whose tenant count makes a pool per tenant unaffordable. Tenant pools already take `maximumPoolSize` / `minimumIdle` per block in the meantime |
 | A lint of lanes against a job pool | Lanes do not govern jobs (row 9) | Jobs gaining lanes |
+| Sizing the surface's own `main` from the `framework.datasource` block (decision 12's alternative) | It would keep two pools of one size on one database for one sign-in, and leave in place the split row 19 found | Surface work that is not sign-in, such as a portal route running SQL at request rate, which would then compete with sign-in on one pool |
 | epoll, an in-process handoff, process separation | [gateway-performance.md](gateway-performance.md) | The triggers recorded there |
 
 ### 10 — Docs, CHANGELOG, codes
@@ -342,7 +362,59 @@ names a real coordinate.
   `maximumPoolSize` description, which still says HikariCP's default applies, is corrected. Both
   schema copies are regenerated with the dogfood ritual that S3 runs anyway. S2a left the schema
   alone: its `additionalProperties: true` already accepts the keys.
+- **S4:** [deployment.md](deployment.md)'s pool section says the keys apply under
+  `--embedded-db` too. [cli-surface.md](cli-surface.md) decision 4b gets a dated note: its second
+  property now holds.
+- **S5:** [hosting.md](hosting.md) says the surface signs in on the stack's framework pool, which
+  is therefore sized for the whole of sign-in. [capacity.md](capacity.md)'s budget drops the
+  surface's own `main` where `framework.datasource` is declared.
+  [root-portal.md](root-portal.md)'s "Datasources" paragraph gets a dated note: where the host
+  holds a framework pool, the surface's `main` is that pool.
 - **CHANGELOG:** each slice, under Changed or Added.
+
+### 11 — A pool built from an override is sized by its datasource's declaration (amended)
+
+An overridden `main` takes its coordinate from the override and its sizing from
+`tesseraql.datasources.main`, with every pool's keys and TesseraQL's defaults. It is built by
+`createRole`, the builder the role pools and the stack's framework pool already use. Under
+`--embedded-db`, a declared `maximumPoolSize` is then the size of the pool the development loop
+opens, as in production, and `main` reads its declaration the way its role pools do. With nothing
+declared, the pool keeps 10 connections and 30 s, now declared rather than inherited. This is
+[cli-surface.md](cli-surface.md) decision 4b's second property, made true.
+
+- The public `create(MainDatasourceOverride)` loses its last caller and is removed.
+  `create(poolName, override)` stays, for the pools a migration opens and closes.
+- The surface's `main` in agreement mode (row 18) is built here too. Its configuration declares no
+  `main`, so it takes the defaults.
+
+### 12 — Where the host holds a framework pool, the surface borrows it as its `main` (amended)
+
+The host builds a framework pool when the stack file supplies `framework.datasource`, or when
+`--embedded-db` supplies the coordinate. Then the surface runtime binds that pool as its `main`
+and builds none of its own. Sign-in rides one pool: the credential check and the session write,
+the TOTP check and the token. That is the pool decision 6 sizes and
+[framework-datasource.md](framework-datasource.md) decision 2 isolates.
+
+- **The surface does not close what it borrowed.** The pool is the host's. It is left out of what
+  the runtime owns on all three close paths (row 20), and the host closes it after the surface, as
+  it does now.
+- **It is still `main` to the surface.** It is bound under that name, and walked by the per-datasource
+  migrations (the portal has none) and the operations-table migration, on the same database as
+  before. The surface's scrape reports it as `main`, and its readiness probes it. So the stack's
+  framework pool appears in a scrape, as the surface's `main`.
+- **Its size covers the whole of sign-in.** Every step is a point query, and the password hash is
+  checked in the JVM rather than in the database, so the 5 that decision 8 recommends stays. The
+  surface's two sweeps add a query a minute each.
+- **Where the stack supplies no framework datasource, nothing changes.** There is no host pool to
+  borrow, so the surface builds its own `main` on the agreed coordinate, at decision 11's
+  defaults. Declaring `framework.datasource` is how that pool is sized, and the marker already
+  recommends it for production.
+- **Members are unchanged.** A member's `main` is its business database, and its framework state
+  already rides the stack's pool.
+
+The alternative was to size the surface's own `main` from the `framework.datasource` block. It is
+less code, but it keeps two pools of one size on one database for one sign-in, and leaves the
+split row 19 found in place. Decision 9 records the refusal and its trigger.
 
 ## What this breaks
 
@@ -363,6 +435,12 @@ names a real coordinate.
 - **Where a role pool is declared, a transfer's rows and verdict commit in one transaction on the
   role pool, as they did on `main`.** A tenant transfer opens its record connection at the end of
   the run instead of at the start.
+- **Under `--embedded-db`, an application's declared `main` sizing takes effect (S4).** One that
+  declares more than 10 now opens that many against the embedded server, whose ceiling is
+  PostgreSQL's 100.
+- **A stack that declares `framework.datasource` opens 10 fewer connections per node (S5).** The
+  framework pool now carries the whole of sign-in. A stack that sized it for sessions alone reads
+  the surface's `main` on the scrape to see whether sign-in waits.
 
 ## The slices
 
@@ -423,6 +501,31 @@ Decisions 7 and 8.
   - A generated application boots under `TESSERAQL_ENV=prod` against Testcontainers PostgreSQL with
     `main` fixed at 10 and both role pools at 0 idle, and a job lands on `tesseraql-main-jobs`.
 - **Docs:** deployment.md's profile section and the `new` command's next steps.
+
+### S4 — an overridden `main` is sized by its declaration (S)
+
+Decision 11.
+
+- **Tests:**
+  - Under an override, `main` connects to the override's coordinate and honours
+    `maximumPoolSize`, `minimumIdle` and `connectionTimeoutMillis` from `tesseraql.datasources.main`.
+  - Undeclared, it has 10 connections and 30 s.
+  - A revert probe that restores the bare builder turns the test red.
+- **Docs:** as decision 10 lists for S4.
+
+### S5 — the surface borrows the framework pool (M)
+
+Decision 12.
+
+- **Tests:** Testcontainers, on `MultiAppHostIntegrationTest`'s supplied stack.
+  - The surface runtime's `main` is the host's framework pool, the same object.
+  - Signing in at the origin works end to end.
+  - A runtime started on a borrowed `main` leaves the pool open when it closes, and the host's own
+    close closes it.
+  - With no framework datasource supplied, the surface holds its own `main` at decision 11's
+    defaults.
+  - A revert probe that builds the surface its own pool again turns the identity assertion red.
+- **Docs:** as decision 10 lists for S5.
 
 ## Error codes
 
