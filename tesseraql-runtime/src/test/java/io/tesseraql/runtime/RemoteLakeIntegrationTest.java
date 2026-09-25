@@ -46,7 +46,7 @@ class RemoteLakeIntegrationTest {
 
     @Container
     @SuppressWarnings("resource") // lifecycle is managed by the @Container extension
-    static final S3MockContainer S3MOCK = new S3MockContainer("4.12.4")
+    static final S3MockContainer S3MOCK = new S3MockContainer("5.2.3")
             .withInitialBuckets("lake,other");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
