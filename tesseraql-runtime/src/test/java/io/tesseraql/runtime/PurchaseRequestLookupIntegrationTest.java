@@ -42,7 +42,8 @@ class PurchaseRequestLookupIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final tools.jackson.databind.ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers
+            .constrained();
     /** The gallery app's dev default (config: {@code ${JWT_SECRET:...}}). */
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 

@@ -2,7 +2,6 @@ package io.tesseraql.studio.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.runtime.TesseraqlRuntime;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -27,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for live route hot-reload (design ch. 16.8). After Studio applies an edit to an
@@ -38,7 +38,7 @@ class LiveRouteReloadIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -205,7 +205,7 @@ class LiveRouteReloadIntegrationTest {
                 HttpRequest.newBuilder(URI.create(
                         "http://localhost:" + runtime.port() + "/api/ping")));
         assertThat(response.statusCode()).isEqualTo(200);
-        return MAPPER.readTree(response.body()).get("data").get(0).get("version").asText();
+        return MAPPER.readTree(response.body()).get("data").get(0).get("version").asString();
     }
 
     private static HttpResponse<String> studioPost(String path, String body) throws Exception {

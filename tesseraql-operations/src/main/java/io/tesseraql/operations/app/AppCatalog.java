@@ -1,6 +1,5 @@
 package io.tesseraql.operations.app;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -12,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The catalog of installed apps, persisted as {@code catalog.json} under the install root
@@ -50,7 +51,7 @@ public final class AppCatalog {
             for (InstalledApp app : loaded) {
                 apps.put(app.name(), app);
             }
-        } catch (IOException ex) {
+        } catch (JacksonException | IOException ex) {
             // The cause is worth carrying: an entry keyed "id" (the pre-rename format) fails
             // construction with a message naming the rename, and this is where it surfaces.
             throw new TqlException(CATALOG_ERROR,

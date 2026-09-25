@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -29,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for the large-data materialization guard (design ch. 28.7): a query that would
@@ -40,7 +40,7 @@ class MaterializationGuardIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -66,7 +66,7 @@ class MaterializationGuardIntegrationTest {
     void overBudgetQueryIsRejected() throws Exception {
         HttpResponse<String> response = get("/api/users"); // 3 rows, maxRows is 2
         assertThat(response.statusCode()).isEqualTo(500);
-        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-LD-0001");
     }
 
@@ -84,7 +84,7 @@ class MaterializationGuardIntegrationTest {
         HttpResponse<String> response = get("/api/contract-users"); // 3 identity rows, maxRows 2
 
         assertThat(response.statusCode()).isEqualTo(500);
-        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-LD-0001");
     }
 

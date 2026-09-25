@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The reviewed upload, end to end over HTTP (docs/csv-import.md slice 1): an
@@ -45,7 +45,7 @@ class ImportReviewIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String JWT_SECRET = "review-secret-for-tests-only-not-a-real-key";
 
@@ -85,12 +85,12 @@ class ImportReviewIntegrationTest {
         assertThat(report.get("rowCount").asLong()).isEqualTo(2);
         assertThat(report.get("ready").asLong()).isEqualTo(2);
         assertThat(report.get("rejected").asLong()).isZero();
-        assertThat(report.get("token").asText()).isNotBlank();
+        assertThat(report.get("token").asString()).isNotBlank();
         assertThat(itemCount()).isZero();
 
-        JsonNode status = commitAndAwait("/api/items/import", report.get("token").asText(),
+        JsonNode status = commitAndAwait("/api/items/import", report.get("token").asString(),
                 "importer");
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("rowCount").asLong()).isEqualTo(2);
         assertThat(itemCount()).isEqualTo(2);
     }
@@ -108,12 +108,12 @@ class ImportReviewIntegrationTest {
         assertThat(error.get("row").asLong()).isEqualTo(2);
         // The report is a Row / Field / Message table, so the field and the rejected text ride
         // as data rather than only inside an English sentence.
-        assertThat(error.get("field").asText()).isEqualTo("qty");
-        assertThat(error.get("value").asText()).isEqualTo("not-a-number");
+        assertThat(error.get("field").asString()).isEqualTo("qty");
+        assertThat(error.get("value").asString()).isEqualTo("not-a-number");
 
         JsonNode status = commitAndAwait("/api/items/import-lenient",
-                report.get("token").asText(), "importer");
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+                report.get("token").asString(), "importer");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(itemCount()).isEqualTo(1);
     }
 
@@ -141,7 +141,7 @@ class ImportReviewIntegrationTest {
         assertThat(upload.statusCode()).isEqualTo(422);
         JsonNode report = MAPPER.readTree(upload.body());
         assertThat(report.has("token")).isFalse();
-        assertThat(report.get("fileError").asText()).contains("qty");
+        assertThat(report.get("fileError").asString()).contains("qty");
     }
 
     @Test
@@ -159,9 +159,9 @@ class ImportReviewIntegrationTest {
         assertThat(report.get("ready").asLong()).isEqualTo(2);
 
         JsonNode status = commitAndAwait("/api/items/import-lenient",
-                report.get("token").asText(), "importer");
+                report.get("token").asString(), "importer");
 
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("errors").get(0).get("row").asLong()).isEqualTo(2);
         // The write pass has no column to blame, and says so with an absence.
         assertThat(status.get("errors").get(0).has("field")).isFalse();
@@ -183,13 +183,13 @@ class ImportReviewIntegrationTest {
         assertThat(report.get("rejected").asLong()).isEqualTo(3);
         JsonNode first = report.get("errors").get(0);
         assertThat(first.get("row").asLong()).isEqualTo(2);
-        assertThat(first.get("field").asText()).isEqualTo("qty");
-        assertThat(first.get("value").asText()).isEqualTo("0");
-        assertThat(first.get("message").asText()).contains("minimum 1");
+        assertThat(first.get("field").asString()).isEqualTo("qty");
+        assertThat(first.get("value").asString()).isEqualTo("0");
+        assertThat(first.get("message").asString()).contains("minimum 1");
 
         JsonNode status = commitAndAwait("/api/items/import-checked",
-                report.get("token").asText(), "importer");
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+                report.get("token").asString(), "importer");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         // Exactly the reviewed row, and the commit re-checked the same contract to get there.
         assertThat(itemCount()).isEqualTo(1);
     }
@@ -205,8 +205,8 @@ class ImportReviewIntegrationTest {
         assertThat(upload.statusCode()).isEqualTo(422);
         JsonNode report = MAPPER.readTree(upload.body());
         assertThat(report.get("rejected").asLong()).isEqualTo(1);
-        assertThat(report.get("errors").get(0).get("field").asText()).isEqualTo("qty");
-        assertThat(report.get("errors").get(0).get("message").asText()).contains("minimum 1");
+        assertThat(report.get("errors").get(0).get("field").asString()).isEqualTo("qty");
+        assertThat(report.get("errors").get(0).get("message").asString()).contains("minimum 1");
     }
 
     @Test
@@ -302,16 +302,16 @@ class ImportReviewIntegrationTest {
         // Unchanged: 202, a transfer id, and a Location pointing at the status resource.
         assertThat(response.statusCode()).isEqualTo(202);
         assertThat(response.headers().firstValue("Location")).isPresent();
-        String transferId = MAPPER.readTree(response.body()).get("transferId").asText();
+        String transferId = MAPPER.readTree(response.body()).get("transferId").asString();
         assertThat(awaitTerminal("/api/items/import-direct/" + transferId)
-                .get("status").asText()).isEqualTo("COMPLETED");
+                .get("status").asString()).isEqualTo("COMPLETED");
         assertThat(itemCount()).isEqualTo(1);
     }
 
     private static String tokenFor(String path, String body, String subject) throws Exception {
         HttpResponse<String> upload = upload(path, body, subject);
         assertThat(upload.statusCode()).isEqualTo(200);
-        return MAPPER.readTree(upload.body()).get("token").asText();
+        return MAPPER.readTree(upload.body()).get("token").asString();
     }
 
     private static HttpResponse<String> upload(String path, String body, String subject)
@@ -337,7 +337,7 @@ class ImportReviewIntegrationTest {
             throws Exception {
         HttpResponse<String> response = commit(path, token, subject);
         assertThat(response.statusCode()).isEqualTo(202);
-        String transferId = MAPPER.readTree(response.body()).get("transferId").asText();
+        String transferId = MAPPER.readTree(response.body()).get("transferId").asString();
         return awaitTerminal(path + "/" + transferId);
     }
 
@@ -349,7 +349,7 @@ class ImportReviewIntegrationTest {
                     .header("Authorization", "Bearer " + jwt("importer"))
                     .build(), HttpResponse.BodyHandlers.ofString());
             JsonNode status = MAPPER.readTree(response.body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

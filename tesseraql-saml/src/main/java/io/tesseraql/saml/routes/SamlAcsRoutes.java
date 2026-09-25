@@ -1,6 +1,5 @@
 package io.tesseraql.saml.routes;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.pipeline.Exchange;
@@ -28,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * SAML 2.0 SP web endpoints under {@code /_tesseraql/saml} (design ch. 10.14): the Assertion Consumer

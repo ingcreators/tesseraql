@@ -1,6 +1,5 @@
 package io.tesseraql.cli;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import java.net.URI;
@@ -21,6 +20,7 @@ import javax.crypto.spec.SecretKeySpec;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Obtains a bearer token, from a config on disk or from a running application.
@@ -228,7 +228,7 @@ public final class TokenCommand implements Callable<Integer> {
             throw new ExchangeFailed("Signed in, but the response carried no session cookie — "
                     + base + " may not be a TesseraQL application.");
         }
-        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asText(null);
+        String csrf = MAPPER.readTree(session.body()).path("csrfToken").asString(null);
         if (csrf == null || csrf.isBlank()) {
             throw new ExchangeFailed("Signed in, but the response carried no csrfToken. The"
                     + " exchange endpoint requires it, and this application is older than the"
@@ -262,8 +262,8 @@ public final class TokenCommand implements Callable<Integer> {
                     + summarize(minted.body()));
         }
         var answer = MAPPER.readTree(minted.body());
-        return new Minted(base, answer.path("token").asText(),
-                answer.path("expiresAt").asText());
+        return new Minted(base, answer.path("token").asString(""),
+                answer.path("expiresAt").asString(""));
     }
 
     /** The options that only mean something when minting locally, as the user spelled them. */
@@ -435,7 +435,7 @@ public final class TokenCommand implements Callable<Integer> {
                 || "false".equals(trimmed) || trimmed.matches("-?\\d+(\\.\\d+)?")) {
             try {
                 return MAPPER.readValue(trimmed, Object.class);
-            } catch (com.fasterxml.jackson.core.JacksonException notJson) {
+            } catch (tools.jackson.core.JacksonException notJson) {
                 return value;
             }
         }

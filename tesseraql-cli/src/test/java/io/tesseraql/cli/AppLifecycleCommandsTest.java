@@ -2,8 +2,6 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.manifest.ManifestLoader;
 import io.tesseraql.yaml.release.ReleaseEvidence;
 import java.io.ByteArrayOutputStream;
@@ -16,6 +14,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The database-free app-lifecycle CLI surface — {@code lint}, {@code generate}, {@code governance},
@@ -35,7 +34,7 @@ class AppLifecycleCommandsTest {
         Path app = scaffold(dir);
         Captured clean = executeCapturing("lint", "--app", app.toString(), "--format", "json");
         assertThat(clean.exitCode()).isZero();
-        JsonNode document = new ObjectMapper().readTree(clean.stdout());
+        JsonNode document = io.tesseraql.yaml.JsonMappers.constrained().readTree(clean.stdout());
         assertThat(document.get("errors").asLong()).isZero();
         assertThat(document.get("warnings").asLong()).isEqualTo(document.get("findings").size());
 
@@ -64,18 +63,18 @@ class AppLifecycleCommandsTest {
                 """);
         Captured broken = executeCapturing("lint", "--app", app.toString(), "--format", "json");
         assertThat(broken.exitCode()).isOne();
-        JsonNode report = new ObjectMapper().readTree(broken.stdout());
+        JsonNode report = io.tesseraql.yaml.JsonMappers.constrained().readTree(broken.stdout());
         assertThat(report.get("errors").asLong()).isPositive();
         JsonNode finding = null;
         for (JsonNode candidate : report.get("findings")) {
-            if (candidate.get("message").asText().contains("missing.sql")) {
+            if (candidate.get("message").asString().contains("missing.sql")) {
                 finding = candidate;
             }
         }
         assertThat(finding).as("a finding about the missing SQL file").isNotNull();
-        assertThat(finding.get("severity").asText()).isEqualTo("error");
-        assertThat(finding.get("source").asText()).isEqualTo("web/broken/get.yml");
-        assertThat(finding.get("code").asText()).startsWith("TQL-");
+        assertThat(finding.get("severity").asString()).isEqualTo("error");
+        assertThat(finding.get("source").asString()).isEqualTo("web/broken/get.yml");
+        assertThat(finding.get("code").asString()).startsWith("TQL-");
         assertThat(finding.has("line")).isTrue();
         assertThat(finding.has("column")).isTrue();
     }
@@ -110,12 +109,12 @@ class AppLifecycleCommandsTest {
         Captured broken = executeCapturing("lint", "--app", app.toString(), "--format", "json");
 
         assertThat(broken.exitCode()).isOne();
-        JsonNode report = new ObjectMapper().readTree(broken.stdout());
+        JsonNode report = io.tesseraql.yaml.JsonMappers.constrained().readTree(broken.stdout());
         assertThat(report.get("errors").asLong()).isGreaterThanOrEqualTo(2);
         java.util.List<String> sources = new java.util.ArrayList<>();
         for (JsonNode candidate : report.get("findings")) {
-            if ("TQL-YAML-1001".equals(candidate.get("code").asText())) {
-                sources.add(candidate.get("source").asText());
+            if ("TQL-YAML-1001".equals(candidate.get("code").asString())) {
+                sources.add(candidate.get("source").asString());
             }
         }
         assertThat(sources).containsExactlyInAnyOrder("batch/report/job.yml",
@@ -132,7 +131,7 @@ class AppLifecycleCommandsTest {
         Captured captured = executeCapturing("symbols", "--app", app.toString());
 
         assertThat(captured.exitCode()).isZero();
-        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        JsonNode document = io.tesseraql.yaml.JsonMappers.constrained().readTree(captured.stdout());
         assertThat(document.get("routes").size()).isPositive();
         assertThat(brokenSources(document)).containsExactly("batch/report/job.yml");
     }
@@ -219,86 +218,86 @@ class AppLifecycleCommandsTest {
         Files.writeString(app.resolve("batch/close/close.sql"), "select 1\n");
         Captured captured = executeCapturing("symbols", "--app", app.toString());
         assertThat(captured.exitCode()).isZero();
-        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        JsonNode document = io.tesseraql.yaml.JsonMappers.constrained().readTree(captured.stdout());
 
         assertThat(document.get("calendars")).hasSize(1);
         JsonNode calendar = document.get("calendars").get(0);
-        assertThat(calendar.get("name").asText()).isEqualTo("jp-banking");
-        assertThat(calendar.get("source").asText()).isEqualTo("calendars/jp.yml");
+        assertThat(calendar.get("name").asString()).isEqualTo("jp-banking");
+        assertThat(calendar.get("source").asString()).isEqualTo("calendars/jp.yml");
         assertThat(calendar.get("line").asInt()).isEqualTo(3);
 
         JsonNode close = null;
         for (JsonNode job : document.get("jobs")) {
-            if (job.get("id").asText().equals("nightly.close")) {
+            if (job.get("id").asString().equals("nightly.close")) {
                 close = job;
             }
         }
         assertThat(close).as("the declared nightly.close job").isNotNull();
-        assertThat(close.get("source").asText()).isEqualTo("batch/close/job.yml");
+        assertThat(close.get("source").asString()).isEqualTo("batch/close/job.yml");
         assertThat(close.get("line").asInt()).isEqualTo(2);
-        assertThat(close.get("trigger").asText())
+        assertThat(close.get("trigger").asString())
                 .isEqualTo("cron 0 0 2 * * ?, calendar jp-banking (day 5)");
 
         assertThat(document.get("workflows")).hasSize(1);
         JsonNode workflow = document.get("workflows").get(0);
-        assertThat(workflow.get("id").asText()).isEqualTo("purchase_request");
-        assertThat(workflow.get("source").asText()).isEqualTo("workflow/purchase_request.yml");
+        assertThat(workflow.get("id").asString()).isEqualTo("purchase_request");
+        assertThat(workflow.get("source").asString()).isEqualTo("workflow/purchase_request.yml");
         assertThat(workflow.get("line").asInt()).isEqualTo(2);
-        assertThat(workflow.get("transitions")).extracting(JsonNode::asText)
+        assertThat(workflow.get("transitions")).extracting(JsonNode::asString)
                 .containsExactly("approve", "escalate");
-        assertThat(workflow.get("dispatches")).extracting(JsonNode::asText)
+        assertThat(workflow.get("dispatches")).extracting(JsonNode::asString)
                 .containsExactly("decide_next");
 
         JsonNode appRead = null;
         for (JsonNode policy : document.get("policies")) {
-            if (policy.get("name").asText().equals("app.read")) {
+            if (policy.get("name").asString().equals("app.read")) {
                 appRead = policy;
             }
         }
         assertThat(appRead).as("the scaffolded app.read policy").isNotNull();
-        assertThat(appRead.get("source").asText()).isEqualTo("config/tesseraql.yml");
+        assertThat(appRead.get("source").asString()).isEqualTo("config/tesseraql.yml");
         assertThat(appRead.get("line").asInt()).isPositive();
 
         assertThat(document.get("messages")).hasSize(1);
         JsonNode message = document.get("messages").get(0);
-        assertThat(message.get("key").asText()).isEqualTo("users.list.title");
+        assertThat(message.get("key").asString()).isEqualTo("users.list.title");
         assertThat(message.get("line").asInt()).isEqualTo(3);
 
         JsonNode sku = null;
         for (JsonNode domain : document.get("domains")) {
-            if (domain.get("name").asText().equals("sku")) {
+            if (domain.get("name").asString().equals("sku")) {
                 sku = domain;
             }
         }
         assertThat(sku).as("the declared sku domain").isNotNull();
-        assertThat(sku.get("source").asText()).isEqualTo("domains/catalog.yml");
+        assertThat(sku.get("source").asString()).isEqualTo("domains/catalog.yml");
         assertThat(sku.get("line").asInt()).isEqualTo(3);
 
         JsonNode rule = null;
         for (JsonNode candidate : document.get("rules")) {
-            if (candidate.get("name").asText().equals("editableStatus")) {
+            if (candidate.get("name").asString().equals("editableStatus")) {
                 rule = candidate;
             }
         }
         assertThat(rule).as("the declared editableStatus rule").isNotNull();
-        assertThat(rule.get("source").asText()).isEqualTo("rules/inventory.yml");
+        assertThat(rule.get("source").asString()).isEqualTo("rules/inventory.yml");
         assertThat(rule.get("line").asInt()).isEqualTo(3);
 
         JsonNode decision = null;
         for (JsonNode candidate : document.get("decisions")) {
-            if (candidate.get("name").asText().equals("approvalRoute")) {
+            if (candidate.get("name").asString().equals("approvalRoute")) {
                 decision = candidate;
             }
         }
         assertThat(decision).as("the declared approvalRoute decision").isNotNull();
-        assertThat(decision.get("source").asText()).isEqualTo("decisions/approval.yml");
+        assertThat(decision.get("source").asString()).isEqualTo("decisions/approval.yml");
         assertThat(decision.get("line").asInt()).isEqualTo(3);
 
         assertThat(document.get("routes").size()).isPositive();
         JsonNode route = document.get("routes").get(0);
-        assertThat(route.get("id").asText()).isNotBlank();
-        assertThat(route.get("source").asText()).endsWith(".yml");
-        assertThat(route.get("recipe").asText()).isNotBlank();
+        assertThat(route.get("id").asString()).isNotBlank();
+        assertThat(route.get("source").asString()).endsWith(".yml");
+        assertThat(route.get("recipe").asString()).isNotBlank();
         assertThat(document.get("broken")).isEmpty();
     }
 
@@ -382,39 +381,39 @@ class AppLifecycleCommandsTest {
                 """);
         Captured captured = executeCapturing("symbols", "--app", app.toString());
         assertThat(captured.exitCode()).isZero();
-        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        JsonNode document = io.tesseraql.yaml.JsonMappers.constrained().readTree(captured.stdout());
         assertThat(brokenSources(document)).isEmpty();
 
         JsonNode dashboard = routeNamed(document, "demo.dashboard");
-        assertThat(dashboard.get("view").asText()).isEqualTo("demo.dashboard.view");
+        assertThat(dashboard.get("view").asString()).isEqualTo("demo.dashboard.view");
         assertThat(dashboard.get("views")).isEmpty();
         assertThat(dashboard.get("embeds")).as("the views the bound document embeds")
-                .extracting(JsonNode::asText).containsExactly("demo.recent.view");
+                .extracting(JsonNode::asString).containsExactly("demo.recent.view");
         JsonNode sources = dashboard.get("sources");
         assertThat(sources).as("the declared sources, in authored order")
-                .extracting(source -> source.get("name").asText())
+                .extracting(source -> source.get("name").asString())
                 .containsExactly("main", "byStatus", "directory");
         assertThat(sources).extracting(source -> source.get("line").asInt())
                 .containsExactly(8, 12, 15);
-        assertThat(sources).extracting(source -> source.get("arm").asText())
+        assertThat(sources).extracting(source -> source.get("arm").asString())
                 .containsExactly("sql", "sql", "service");
-        assertThat(sources.get(0).get("file").asText()).isEqualTo("totals.sql");
-        assertThat(sources.get(1).get("file").asText()).isEqualTo("by-status.sql");
+        assertThat(sources.get(0).get("file").asString()).isEqualTo("totals.sql");
+        assertThat(sources.get(1).get("file").asString()).isEqualTo("by-status.sql");
         assertThat(sources.get(2).get("file").isNull()).as("a service arm has no file").isTrue();
 
         JsonNode report = routeNamed(document, "demo.report");
         assertThat(report.get("sources")).as("a route without a sources: block").isEmpty();
         assertThat(report.get("view").isNull()).isTrue();
-        assertThat(report.get("views")).extracting(JsonNode::asText)
+        assertThat(report.get("views")).extracting(JsonNode::asString)
                 .containsExactly("demo.dashboard.view");
         // A views: part embeds too — the template route hosts what its parts embed.
-        assertThat(report.get("embeds")).extracting(JsonNode::asText)
+        assertThat(report.get("embeds")).extracting(JsonNode::asString)
                 .containsExactly("demo.recent.view");
     }
 
     private static JsonNode routeNamed(JsonNode document, String id) {
         for (JsonNode route : document.get("routes")) {
-            if (route.get("id").asText().equals(id)) {
+            if (route.get("id").asString().equals(id)) {
                 return route;
             }
         }
@@ -424,8 +423,8 @@ class AppLifecycleCommandsTest {
     private static List<String> brokenSources(JsonNode document) {
         List<String> sources = new ArrayList<>();
         document.get("broken").forEach(entry -> {
-            sources.add(entry.get("source").asText());
-            assertThat(entry.get("error").asText()).isNotBlank();
+            sources.add(entry.get("source").asString());
+            assertThat(entry.get("error").asString()).isNotBlank();
         });
         return sources;
     }
@@ -445,7 +444,7 @@ class AppLifecycleCommandsTest {
         Captured captured = executeCapturing("symbols", "--app", app.toString());
 
         assertThat(captured.exitCode()).isZero();
-        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        JsonNode document = io.tesseraql.yaml.JsonMappers.constrained().readTree(captured.stdout());
         assertThat(document.get("policies").size()).isPositive();
         assertThat(document.get("routes").size()).isPositive();
         assertThat(brokenSources(document)).containsExactly("web/broken/get.yml");
@@ -473,10 +472,10 @@ class AppLifecycleCommandsTest {
         Captured captured = executeCapturing("symbols", "--app", app.toString());
 
         assertThat(captured.exitCode()).isZero();
-        JsonNode document = new ObjectMapper().readTree(captured.stdout());
+        JsonNode document = io.tesseraql.yaml.JsonMappers.constrained().readTree(captured.stdout());
         assertThat(document.get("policies").size()).isPositive();
         assertThat(document.get("domains"))
-                .anyMatch(entry -> "sku".equals(entry.get("name").asText()));
+                .anyMatch(entry -> "sku".equals(entry.get("name").asString()));
         assertThat(document.get("routes")).isEmpty();
         assertThat(brokenSources(document)).contains("(app manifest)", "domains/bad.yml");
     }

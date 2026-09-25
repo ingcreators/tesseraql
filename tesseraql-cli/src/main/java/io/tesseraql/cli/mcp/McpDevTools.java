@@ -1,6 +1,5 @@
 package io.tesseraql.cli.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.tesseraql.cli.EmbeddedDbMarker;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -52,6 +51,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import javax.sql.DataSource;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Exposes TesseraQL's developer surfaces - manifest, sources, schema introspection, lint, tests,
@@ -701,7 +701,7 @@ public final class McpDevTools {
 
     private static String textOrNull(JsonNode args, String name) {
         JsonNode node = args.get(name);
-        return node == null || node.isNull() ? null : node.asText();
+        return node == null || node.isNull() ? null : node.asString("");
     }
 
     private static String textOr(JsonNode args, String name, String fallback) {

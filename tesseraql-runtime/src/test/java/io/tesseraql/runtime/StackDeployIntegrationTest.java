@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.AppInstaller;
 import io.tesseraql.operations.app.AppUpgrader;
@@ -35,6 +34,7 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The deploy surface, end to end (docs/stack-shells.md slice 3): a caller acquires a bearer at
@@ -55,7 +55,7 @@ class StackDeployIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();
     private static final AppInstaller INSTALLER = new AppInstaller();
@@ -148,9 +148,9 @@ class StackDeployIntegrationTest {
                 deployerBearer, "");
         assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
         var body = MAPPER.readTree(accepted.body());
-        assertThat(body.path("name").asText()).isEqualTo("shop");
-        assertThat(body.path("fromVersion").asText()).isEqualTo("1.0.0");
-        assertThat(body.path("toVersion").asText()).isEqualTo("2.0.0");
+        assertThat(body.path("name").asString()).isEqualTo("shop");
+        assertThat(body.path("fromVersion").asString()).isEqualTo("1.0.0");
+        assertThat(body.path("toVersion").asString()).isEqualTo("2.0.0");
 
         // The intent is written — a candidate, the catalogue still the serving version — and
         // the running host's reconciler applies it, moving the catalogue when it does.
@@ -167,7 +167,7 @@ class StackDeployIntegrationTest {
         assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
                 .isEqualTo("2.0.0");
         var verdict = MAPPER.readTree(status(deployerBearer).body());
-        assertThat(verdict.path("action").asText()).isEqualTo("replace");
+        assertThat(verdict.path("action").asString()).isEqualTo("replace");
         assertThat(status(otherBearer).statusCode()).as("the grant is per application")
                 .isEqualTo(403);
     }
@@ -190,8 +190,8 @@ class StackDeployIntegrationTest {
 
         awaitVerdict(deployerBearer, "refused", "5.0.0");
         var verdict = MAPPER.readTree(status(deployerBearer).body());
-        assertThat(verdict.path("action").asText()).isEqualTo("replace");
-        assertThat(verdict.path("message").asText()).contains("modules");
+        assertThat(verdict.path("action").asString()).isEqualTo("replace");
+        assertThat(verdict.path("message").asString()).contains("modules");
         assertThat(new AppCatalog(installRoot).find("shop").orElseThrow().version())
                 .as("the catalogue names the version that serves").isEqualTo("4.0.0");
         assertThat(itemName()).isEqualTo("s2");
@@ -221,8 +221,8 @@ class StackDeployIntegrationTest {
             HttpResponse<String> response = status(bearer);
             if (response.statusCode() == 200) {
                 var body = MAPPER.readTree(response.body());
-                if (outcome.equals(body.path("outcome").asText())
-                        && version.equals(body.path("version").asText())) {
+                if (outcome.equals(body.path("outcome").asString())
+                        && version.equals(body.path("version").asString())) {
                     return;
                 }
             }
@@ -418,7 +418,7 @@ class StackDeployIntegrationTest {
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         return new BrowserSession(setCookie.substring(0, setCookie.indexOf(';')),
-                MAPPER.readTree(login.body()).path("csrfToken").asText());
+                MAPPER.readTree(login.body()).path("csrfToken").asString());
     }
 
     /**
@@ -438,7 +438,7 @@ class StackDeployIntegrationTest {
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(exchanged.statusCode()).as(exchanged.body()).isEqualTo(200);
-        return MAPPER.readTree(exchanged.body()).path("token").asText();
+        return MAPPER.readTree(exchanged.body()).path("token").asString();
     }
 
     private static final String BOUNDARY = "tql-deploy-test-boundary";
@@ -470,7 +470,7 @@ class StackDeployIntegrationTest {
     private static String itemName() throws Exception {
         HttpResponse<String> response = items();
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
-        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
+        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asString();
     }
 
     /**
@@ -487,7 +487,7 @@ class StackDeployIntegrationTest {
         if (response.statusCode() != 200) {
             return null;
         }
-        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asText();
+        return MAPPER.readTree(response.body()).get("data").get(0).get("name").asString();
     }
 
     private static HttpResponse<String> items() throws Exception {

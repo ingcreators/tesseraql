@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -22,6 +20,8 @@ import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The origin's readiness consults its members (docs/deployment-maturity.md decision 3).
@@ -37,7 +37,7 @@ class StackReadinessIntegrationTest {
 
     // Managed by hand (not @Container) because the test itself stops it mid-flight.
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static MultiAppGateway gateway;
     static Path stack;
@@ -68,7 +68,7 @@ class StackReadinessIntegrationTest {
     void theOriginReportsUpWhileEveryMemberIsHealthy() throws Exception {
         HttpResponse<String> ready = awaitOrigin("UP");
         assertThat(ready.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(ready.body()).get("status").asText()).isEqualTo("UP");
+        assertThat(MAPPER.readTree(ready.body()).get("status").asString()).isEqualTo("UP");
         assertThat(get("/scaffold-demo/_tesseraql/health/ready").statusCode()).isEqualTo(200);
     }
 
@@ -81,7 +81,7 @@ class StackReadinessIntegrationTest {
         assertThat(ready.statusCode())
                 .as("every member is down, so the origin sheds: %s", ready.body()).isEqualTo(503);
         JsonNode body = MAPPER.readTree(ready.body());
-        assertThat(body.get("status").asText()).isEqualTo("DOWN");
+        assertThat(body.get("status").asString()).isEqualTo("DOWN");
         assertThat(body.get("down")).as("the body names what is down: %s", ready.body())
                 .isNotNull();
         assertThat(body.get("down").toString()).contains("scaffold-demo").contains("portal");

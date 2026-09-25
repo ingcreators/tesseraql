@@ -3,10 +3,10 @@ package io.tesseraql.mcp;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.core.exc.StreamConstraintsException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.json.JsonLimits;
 import org.junit.jupiter.api.Test;
+import tools.jackson.core.exc.StreamConstraintsException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The module's local constrained factory actually constrains — this mapper parses MCP requests

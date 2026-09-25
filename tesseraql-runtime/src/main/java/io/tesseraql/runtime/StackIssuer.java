@@ -56,8 +56,10 @@ final class StackIssuer {
             return false;
         }
         Object oauth = security.get("oauth");
-        return oauth instanceof Map<?, ?> map
-                && Boolean.parseBoolean(String.valueOf(map.get("enabled")));
+        // The configuration's own spelling rule (docs/jackson-3.md decision 7): YAML 1.2 reads
+        // `on` and `yes` as text, and Boolean.parseBoolean answered false for both.
+        return oauth instanceof Map<?, ?> map && map.get("enabled") != null
+                && AppConfig.booleanValue("security.oauth.enabled", map.get("enabled"));
     }
 
     /** The origin the issuer needs, or the refusal naming the stack file. */

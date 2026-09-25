@@ -130,7 +130,7 @@ final class OpsShellProviders {
             Map<String, String> basePaths = new LinkedHashMap<>();
             members.forEach(member -> basePaths.put(member.name(), member.basePath()));
             List<String> names = List.copyOf(basePaths.keySet());
-            com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+            tools.jackson.databind.ObjectMapper json = io.tesseraql.yaml.JsonMappers.constrained();
             return new Targets() {
                 @Override
                 public List<String> memberNames() {
@@ -200,9 +200,9 @@ final class OpsShellProviders {
                     }
                     try {
                         return json.readValue(response.body(),
-                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
                                 });
-                    } catch (com.fasterxml.jackson.core.JacksonException ex) {
+                    } catch (tools.jackson.core.JacksonException ex) {
                         throw unreachable(member, "unparseable answer");
                     }
                 }

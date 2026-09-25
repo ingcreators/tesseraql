@@ -1,8 +1,5 @@
 package io.tesseraql.mcp;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,6 +9,9 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The MCP stdio transport: newline-delimited JSON-RPC over a stream pair (an agent launches the
@@ -57,7 +57,7 @@ public final class StdioTransport {
         JsonNode message;
         try {
             message = mapper.readTree(line);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             return Optional.of(server.parseError(ex.getOriginalMessage()));
         }
         return server.handle(message);

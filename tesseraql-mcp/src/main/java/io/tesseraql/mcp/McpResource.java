@@ -1,7 +1,7 @@
 package io.tesseraql.mcp;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.Objects;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * One MCP resource: read-only context an agent attaches, addressed by a stable {@code uri}. It

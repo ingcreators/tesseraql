@@ -66,7 +66,7 @@ public record CatalogSpec(String table, String file, List<String> tables,
      */
     public record LabelSource(String column, String message) {
 
-        @JsonCreator
+        @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
         static LabelSource of(Object raw) {
             if (raw instanceof String column) {
                 return new LabelSource(column, null);

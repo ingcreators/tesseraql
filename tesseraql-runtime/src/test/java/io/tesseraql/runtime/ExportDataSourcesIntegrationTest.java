@@ -138,16 +138,16 @@ class ExportDataSourcesIntegrationTest {
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(started.statusCode()).isEqualTo(202);
-        String transferId = new com.fasterxml.jackson.databind.ObjectMapper()
-                .readTree(started.body()).get("transferId").asText();
+        String transferId = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(started.body()).get("transferId").asString();
         java.time.Instant deadline = java.time.Instant.now().plusSeconds(20);
         String status;
         do {
             HttpResponse<String> polled = HTTP.send(HttpRequest.newBuilder(URI.create(
                     "http://localhost:" + port + "/api/orders/file/" + transferId)).build(),
                     HttpResponse.BodyHandlers.ofString());
-            status = new com.fasterxml.jackson.databind.ObjectMapper().readTree(polled.body())
-                    .get("status").asText();
+            status = io.tesseraql.yaml.JsonMappers.constrained().readTree(polled.body())
+                    .get("status").asString();
             assertThat(java.time.Instant.now()).isBefore(deadline);
             Thread.sleep(100);
         } while ("PENDING".equals(status) || "RUNNING".equals(status));
@@ -186,7 +186,7 @@ class ExportDataSourcesIntegrationTest {
         java.util.Base64.Encoder enc = java.util.Base64.getUrlEncoder().withoutPadding();
         String header = enc.encodeToString("{\"alg\":\"HS256\"}"
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-        String payload = enc.encodeToString(new com.fasterxml.jackson.databind.ObjectMapper()
+        String payload = enc.encodeToString(io.tesseraql.yaml.JsonMappers.constrained()
                 .writeValueAsBytes(TestClaims.addressed(Map.of("sub", sub,
                         "roles", java.util.List.of("buyer"), "customer", customer))));
         javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");

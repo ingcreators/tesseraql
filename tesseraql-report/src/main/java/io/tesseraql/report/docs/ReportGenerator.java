@@ -1,7 +1,5 @@
 package io.tesseraql.report.docs;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -30,6 +28,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Builds the report-layer overlay ({@link ReportDoc} / {@code report.json}, documentation portal v2)
@@ -115,7 +115,7 @@ public final class ReportGenerator {
     public String toJson(ReportDoc report) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(report);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(GEN_ERROR,
                     "Failed to serialize report.json: " + ex.getMessage());
         }

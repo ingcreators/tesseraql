@@ -282,10 +282,10 @@ class CodeCatalogIntegrationTest {
         var rows = io.tesseraql.yaml.JsonMappers.constrained()
                 .readTree(ops("GET", "/_tesseraql/ops/catalogs").body());
         var broken = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
-                .filter(row -> "壊れた".equals(row.path("name").asText())).findFirst().orElseThrow();
+                .filter(row -> "壊れた".equals(row.path("name").asString())).findFirst().orElseThrow();
         assertThat(broken.path("loaded").asBoolean()).isFalse();
         assertThat(broken.path("loadedAt").isNull()).isTrue();
-        assertThat(broken.path("lastError").asText()).contains("存在しないマスタ");
+        assertThat(broken.path("lastError").asString()).contains("存在しないマスタ");
         // And the healthy ones read as before.
         assertThat(get("/受注一覧").body()).contains("<span>現金</span>");
     }

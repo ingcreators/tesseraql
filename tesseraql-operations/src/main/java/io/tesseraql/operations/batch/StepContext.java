@@ -1,6 +1,5 @@
 package io.tesseraql.operations.batch;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -20,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Everything one step's {@link StepRunner} reads, and nothing else: the executor's wiring, the

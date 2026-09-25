@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.io.IOException;
 import java.net.URI;
@@ -31,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Acceptance test for the approval workflow (roadmap Phase 28 slices 1–3): a managed state machine
@@ -52,7 +52,7 @@ class WorkflowTransitionIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 
     static TesseraqlRuntime runtime;
@@ -135,7 +135,7 @@ class WorkflowTransitionIntegrationTest {
         HttpResponse<String> refused = post("/funded-requests/PR-2/clear", "requester-1");
         assertThat(refused.statusCode()).isEqualTo(422);
         JsonNode details = MAPPER.readTree(refused.body()).path("error").path("details");
-        assertThat(details.path("code").asText()).isEqualTo("not-funded");
+        assertThat(details.path("code").asString()).isEqualTo("not-funded");
         assertThat(instanceState("funded_request", "PR-2")).isNull();
     }
 
@@ -153,7 +153,7 @@ class WorkflowTransitionIntegrationTest {
         HttpResponse<String> none = post("/funded-requests/PR-3/settle", "requester-1");
         assertThat(none.statusCode()).isEqualTo(422);
         JsonNode noneDetails = MAPPER.readTree(none.body()).path("error").path("details");
-        assertThat(noneDetails.path("dispatch").asText()).isEqualTo("settle");
+        assertThat(noneDetails.path("dispatch").asString()).isEqualTo("settle");
         assertThat(noneDetails.path("attempted")).hasSize(2);
         assertThat(none.body()).contains("clear").contains("writeoff")
                 .contains("TQL-WORKFLOW-3201");
@@ -202,15 +202,15 @@ class WorkflowTransitionIntegrationTest {
 
         JsonNode outcomes = report.path("outcomes");
         assertThat(outcomes).hasSize(3);
-        assertThat(outcomes.get(0).path("key").asText()).isEqualTo("PR-11");
+        assertThat(outcomes.get(0).path("key").asString()).isEqualTo("PR-11");
         assertThat(outcomes.get(0).path("status").asInt()).isEqualTo(200);
-        assertThat(outcomes.get(1).path("key").asText()).isEqualTo("PR-12");
+        assertThat(outcomes.get(1).path("key").asString()).isEqualTo("PR-12");
         assertThat(outcomes.get(1).path("status").asInt()).isEqualTo(200);
         // PR-13 is already cleared, so no member of the dispatch holds — the key carries the
         // dispatch's own refusal, exactly as its single-document endpoint would have answered.
-        assertThat(outcomes.get(2).path("key").asText()).isEqualTo("PR-13");
+        assertThat(outcomes.get(2).path("key").asString()).isEqualTo("PR-13");
         assertThat(outcomes.get(2).path("status").asInt()).isEqualTo(422);
-        assertThat(outcomes.get(2).path("code").asText()).isEqualTo("TQL-WORKFLOW-3202");
+        assertThat(outcomes.get(2).path("code").asString()).isEqualTo("TQL-WORKFLOW-3202");
 
         // Nothing was bypassed: each key advanced through its own member's pipeline, and each
         // one picked its own lane — PR-11 is funded (clear), PR-12 is a zero (writeoff).

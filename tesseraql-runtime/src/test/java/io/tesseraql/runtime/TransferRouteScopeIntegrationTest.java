@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A transfer answers under the route that created it, and nowhere else (docs/edge-hygiene.md
@@ -46,7 +46,7 @@ class TransferRouteScopeIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String JWT_SECRET = "scope-secret-for-tests-only-not-a-real-key";
 
@@ -80,7 +80,7 @@ class TransferRouteScopeIntegrationTest {
     void anotherRoutesSubtreeAnswersAnAdminTransferAsUnknown() throws Exception {
         String transferId = startTransfer("/api/orders/export-admin", jwt("ADMIN"));
         JsonNode own = awaitTerminal("/api/orders/export-admin/" + transferId, jwt("ADMIN"));
-        assertThat(own.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(own.get("status").asString()).isEqualTo("COMPLETED");
 
         // Without the token the parent route's gate holds: this is what protected the file.
         assertThat(get("/api/orders/export-admin/" + transferId, null).statusCode())
@@ -137,7 +137,7 @@ class TransferRouteScopeIntegrationTest {
         String transferId = startTransfer("/api/orders/export-slow", jwt("ADMIN"));
         JsonNode running = MAPPER.readTree(
                 get("/api/orders/export-slow/" + transferId, jwt("ADMIN")).body());
-        assertThat(running.get("status").asText()).isIn("RUNNING", "STARTED");
+        assertThat(running.get("status").asString()).isIn("RUNNING", "STARTED");
 
         HttpResponse<String> cancel = post("/api/orders/export-public/" + transferId + "/cancel",
                 null);
@@ -146,7 +146,7 @@ class TransferRouteScopeIntegrationTest {
                 .isNull();
 
         JsonNode done = awaitTerminal("/api/orders/export-slow/" + transferId, jwt("ADMIN"));
-        assertThat(done.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(done.get("status").asString()).isEqualTo("COMPLETED");
 
         // The control: the same POST through its own subtree, with the token, is answered —
         // and on a finished run it changes nothing either, which is what 200 says here.
@@ -170,7 +170,7 @@ class TransferRouteScopeIntegrationTest {
     void aCancelThroughItsOwnRouteStopsTheExportAndTheFileAnswers409() throws Exception {
         String transferId = startTransfer("/api/orders/export-long", jwt("ADMIN"));
         JsonNode running = awaitProgress("/api/orders/export-long/" + transferId, jwt("ADMIN"));
-        assertThat(running.get("status").asText()).isEqualTo("RUNNING");
+        assertThat(running.get("status").asString()).isEqualTo("RUNNING");
         assertThat(running.get("rowCount").asLong()).as("rows reached while RUNNING")
                 .isPositive();
 
@@ -181,7 +181,7 @@ class TransferRouteScopeIntegrationTest {
                 .as("cancel %s after %s", cancel.body(), running).isTrue();
 
         JsonNode done = awaitTerminal("/api/orders/export-long/" + transferId, jwt("ADMIN"));
-        assertThat(done.get("status").asText()).as("terminal status: %s", done)
+        assertThat(done.get("status").asString()).as("terminal status: %s", done)
                 .isEqualTo("STOPPED");
         assertThat(done.get("rowCount").asLong()).as("rows reached at the stop")
                 .isPositive().isLessThan(6_000);
@@ -207,7 +207,7 @@ class TransferRouteScopeIntegrationTest {
         HttpResponse<String> response = HTTP.send(request.build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     /** The status once the run has published a row count and is still RUNNING. */
@@ -215,7 +215,7 @@ class TransferRouteScopeIntegrationTest {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
             JsonNode status = MAPPER.readTree(get(statusPath, bearer).body());
-            if (!"RUNNING".equals(status.get("status").asText())
+            if (!"RUNNING".equals(status.get("status").asString())
                     || status.get("rowCount").asLong() > 0) {
                 return status;
             }
@@ -230,7 +230,7 @@ class TransferRouteScopeIntegrationTest {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
         while (true) {
             JsonNode status = MAPPER.readTree(get(statusPath, bearer).body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

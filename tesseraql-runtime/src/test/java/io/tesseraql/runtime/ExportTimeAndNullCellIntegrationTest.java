@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobStatus;
 import java.io.ByteArrayInputStream;
@@ -39,6 +37,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The codec renders every value the driver hands it (docs/export-declarations.md, PR 5-0). A
@@ -57,7 +57,7 @@ class ExportTimeAndNullCellIntegrationTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
     private static final HttpClient HTTP = HttpClient.newHttpClient();
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     /** The day fraction of 22:30 - what a real Excel time cell holds. */
     private static final double TWENTY_TWO_THIRTY = 0.9375;
 
@@ -186,9 +186,9 @@ class ExportTimeAndNullCellIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
 
         assertThat(started.statusCode()).as(started.body()).isEqualTo(202);
-        String id = MAPPER.readTree(started.body()).get("transferId").asText();
+        String id = MAPPER.readTree(started.body()).get("transferId").asString();
         JsonNode status = awaitTerminal("/api/shifts/file-grid/" + id);
-        assertThat(status.get("status").asText()).as(status.toString()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).as(status.toString()).isEqualTo("COMPLETED");
         HttpResponse<byte[]> file = get("/api/shifts/file-grid/" + id + "/file");
         assertThat(file.statusCode()).isEqualTo(200);
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(file.body()))) {
@@ -251,7 +251,7 @@ class ExportTimeAndNullCellIntegrationTest {
         while (true) {
             JsonNode status = MAPPER.readTree(
                     new String(get(statusPath).body(), StandardCharsets.UTF_8));
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

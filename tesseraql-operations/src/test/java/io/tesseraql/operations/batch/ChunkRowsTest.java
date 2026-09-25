@@ -2,7 +2,6 @@ package io.tesseraql.operations.batch;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.files.SpooledRows;
 import io.tesseraql.core.spool.FileTempStore;
 import io.tesseraql.core.spool.SpoolKind;
@@ -47,7 +46,8 @@ class ChunkRowsTest {
         row.put("loaded_at", stamp);
         SpoolRef ref = SpooledRows.drain(store, List.of(row).iterator()).ref();
 
-        try (ChunkRows rows = ChunkRows.of(store, ref, new ObjectMapper())) {
+        try (ChunkRows rows = ChunkRows.of(store, ref,
+                io.tesseraql.yaml.JsonMappers.constrained())) {
             assertThat(rows.next()).isTrue();
             Map<String, Object> read = rows.row();
             // One key per column — no lowercase-duplicate aliases doubling the row.
@@ -70,7 +70,8 @@ class ChunkRowsTest {
             writer.incrementRows(1);
         }
 
-        try (ChunkRows rows = ChunkRows.of(store, writer.toRef(), new ObjectMapper())) {
+        try (ChunkRows rows = ChunkRows.of(store, writer.toRef(),
+                io.tesseraql.yaml.JsonMappers.constrained())) {
             assertThat(rows.next()).isTrue();
             assertThat(rows.row())
                     .containsExactly(Map.entry("item_key", "h01"), Map.entry("payload", "1"));
@@ -87,10 +88,12 @@ class ChunkRowsTest {
                 .drain(store, List.<Map<String, Object>>of(Map.of("item_key", "a01")).iterator())
                 .ref();
 
-        try (ChunkRows first = ChunkRows.of(store, ref, new ObjectMapper())) {
+        try (ChunkRows first = ChunkRows.of(store, ref,
+                io.tesseraql.yaml.JsonMappers.constrained())) {
             assertThat(first.next()).isTrue();
         }
-        try (ChunkRows again = ChunkRows.of(store, ref, new ObjectMapper())) {
+        try (ChunkRows again = ChunkRows.of(store, ref,
+                io.tesseraql.yaml.JsonMappers.constrained())) {
             assertThat(again.next()).isTrue();
             assertThat(again.row()).containsEntry("item_key", "a01");
             assertThat(again.next()).isFalse();

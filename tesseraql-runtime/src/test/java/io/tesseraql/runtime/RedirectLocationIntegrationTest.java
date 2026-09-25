@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.identity.DefaultIdentityPack;
 import io.tesseraql.operations.attachment.JdbcAttachmentStore;
@@ -44,6 +42,7 @@ import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A redirect lands where it says: every {@code Location} and {@code HX-Redirect} the framework
@@ -292,9 +291,9 @@ class RedirectLocationIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         String trigger = response.headers().firstValue("HX-Trigger").orElseThrow();
         assertThat(trigger).matches("[\\x20-\\x7E]+").doesNotContain("?");
-        JsonNode event = new ObjectMapper().readTree(trigger);
-        assertThat(event.at("/hc:toast/message").asText()).isEqualTo("保存しました 受注-001");
-        assertThat(event.at("/hc:toast/variant").asText()).isEqualTo("success");
+        JsonNode event = io.tesseraql.yaml.JsonMappers.constrained().readTree(trigger);
+        assertThat(event.at("/hc:toast/message").asString()).isEqualTo("保存しました 受注-001");
+        assertThat(event.at("/hc:toast/variant").asString()).isEqualTo("success");
     }
 
     /**
@@ -422,8 +421,8 @@ class RedirectLocationIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
 
         assertThat(uploaded.statusCode()).isEqualTo(201);
-        String id = new com.fasterxml.jackson.databind.ObjectMapper()
-                .readTree(uploaded.body()).get("id").asText();
+        String id = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(uploaded.body()).get("id").asString();
         assertThat(uploaded.headers().firstValue("Location"))
                 .contains("/" + TENPU + "/R-1/files/" + id);
     }

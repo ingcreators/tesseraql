@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.messaging;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -12,6 +10,8 @@ import io.tesseraql.yaml.model.PublishSpec;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Compiles a {@code publish:} declaration and encodes it as a transactional outbox event (roadmap
@@ -117,7 +117,7 @@ public final class PublishEvents {
         try {
             return OutboxEvent.toInsert(AGGREGATE_TYPE, topic, EVENT_TYPE,
                     MAPPER.writeValueAsString(envelope), appName, notBefore, null);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to encode published event '" + source + "': " + ex.getMessage());
         }
@@ -138,7 +138,7 @@ public final class PublishEvents {
             }
             return new Envelope(string(raw.get("channel")), string(raw.get("topic")),
                     string(raw.get("key")), string(raw.get("source")), payload);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to decode published event envelope: " + ex.getMessage());
         }
@@ -148,7 +148,7 @@ public final class PublishEvents {
     public static String payloadJson(Map<String, Object> payload) {
         try {
             return MAPPER.writeValueAsString(payload == null ? Map.of() : payload);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ENCODE_ERROR,
                     "Failed to encode event payload: " + ex.getMessage());
         }

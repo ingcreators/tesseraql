@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import io.tesseraql.core.outbox.OutboxEvent;
@@ -36,6 +34,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for automatic provisioning-event emission from a command route (design ch. 10.15,
@@ -49,7 +49,7 @@ class CommandProvisioningIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final List<JsonNode> provisioned = new CopyOnWriteArrayList<>();
     private static final List<JsonNode> provisionedGroups = new CopyOnWriteArrayList<>();
 
@@ -89,15 +89,15 @@ class CommandProvisioningIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.path("affected").asInt()).isEqualTo(1);
-        assertThat(body.path("eventId").asText()).isNotBlank();
+        assertThat(body.path("eventId").asString()).isNotBlank();
 
         // The event is queued with a SCIM-shaped, nested payload assembled from dotted payload keys.
         OutboxEvent event = runtime.outboxStore().listPending(50).stream()
                 .filter(e -> "USER_PROVISIONED".equals(e.eventType()))
                 .findFirst().orElseThrow();
         JsonNode payload = MAPPER.readTree(event.payloadJson());
-        assertThat(payload.get("userName").asText()).isEqualTo("kim");
-        assertThat(payload.get("name").get("givenName").asText()).isEqualTo("Kim");
+        assertThat(payload.get("userName").asString()).isEqualTo("kim");
+        assertThat(payload.get("name").get("givenName").asString()).isEqualTo("Kim");
         assertThat(payload.get("active").asBoolean()).isTrue();
 
         int delivered = runtime.dispatchOutboxOnce();
@@ -105,8 +105,8 @@ class CommandProvisioningIntegrationTest {
 
         // The downstream SCIM provider received the structured user.
         assertThat(provisioned).anySatisfy(user -> {
-            assertThat(user.get("userName").asText()).isEqualTo("kim");
-            assertThat(user.get("name").get("givenName").asText()).isEqualTo("Kim");
+            assertThat(user.get("userName").asString()).isEqualTo("kim");
+            assertThat(user.get("name").get("givenName").asString()).isEqualTo("Kim");
         });
     }
 
@@ -124,15 +124,15 @@ class CommandProvisioningIntegrationTest {
                 .findFirst().orElseThrow();
         JsonNode members = MAPPER.readTree(event.payloadJson()).get("members");
         assertThat(members).hasSize(2);
-        assertThat(members.get(0).get("value").asText()).isEqualTo("100");
-        assertThat(members.get(1).get("value").asText()).isEqualTo("200");
+        assertThat(members.get(0).get("value").asString()).isEqualTo("100");
+        assertThat(members.get(1).get("value").asString()).isEqualTo("200");
 
         int delivered = runtime.dispatchOutboxOnce();
         assertThat(delivered).isGreaterThanOrEqualTo(1);
 
         assertThat(provisionedGroups).anySatisfy(group -> {
-            assertThat(group.get("displayName").asText()).isEqualTo("engineers");
-            assertThat(group.get("members").get(0).get("value").asText()).isEqualTo("100");
+            assertThat(group.get("displayName").asString()).isEqualTo("engineers");
+            assertThat(group.get("members").get(0).get("value").asString()).isEqualTo("100");
         });
     }
 
@@ -140,7 +140,7 @@ class CommandProvisioningIntegrationTest {
         try {
             JsonNode body = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
             provisionedGroups.add(body);
-            byte[] out = ((com.fasterxml.jackson.databind.node.ObjectNode) body)
+            byte[] out = ((tools.jackson.databind.node.ObjectNode) body)
                     .put("id", "remote-g1").toString().getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(201, out.length);
             try (OutputStream stream = exchange.getResponseBody()) {
@@ -155,7 +155,7 @@ class CommandProvisioningIntegrationTest {
         try {
             JsonNode body = MAPPER.readTree(exchange.getRequestBody().readAllBytes());
             provisioned.add(body);
-            byte[] out = ((com.fasterxml.jackson.databind.node.ObjectNode) body)
+            byte[] out = ((tools.jackson.databind.node.ObjectNode) body)
                     .put("id", "remote-1").toString().getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(201, out.length);
             try (OutputStream stream = exchange.getResponseBody()) {

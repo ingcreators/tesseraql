@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -26,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for per-tenant datasource routing (design ch. 30.2). Each tenant maps to its own
@@ -38,7 +38,7 @@ class TenantDataSourceRoutingIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -64,11 +64,11 @@ class TenantDataSourceRoutingIntegrationTest {
     void eachTenantReadsFromItsOwnDatasource() throws Exception {
         JsonNode acme = get("acme", 200);
         assertThat(acme.get("data")).hasSize(1);
-        assertThat(acme.get("data").get(0).get("name").asText()).isEqualTo("acme-only");
+        assertThat(acme.get("data").get(0).get("name").asString()).isEqualTo("acme-only");
 
         JsonNode globex = get("globex", 200);
         assertThat(globex.get("data")).hasSize(1);
-        assertThat(globex.get("data").get(0).get("name").asText()).isEqualTo("globex-only");
+        assertThat(globex.get("data").get(0).get("name").asString()).isEqualTo("globex-only");
     }
 
     @Test
@@ -83,7 +83,7 @@ class TenantDataSourceRoutingIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(response.body());
-        assertThat(body.get("data").get(0).get("name").asText()).isEqualTo("reporting-only");
+        assertThat(body.get("data").get(0).get("name").asString()).isEqualTo("reporting-only");
     }
 
     @Test
@@ -120,7 +120,7 @@ class TenantDataSourceRoutingIntegrationTest {
     void anExportServesTheTenantsOwnRowsAndItsAfterStatementLandsThere() throws Exception {
         String transferId = startTransfer("acme", "/api/items/export", "");
         assertThat(awaitTerminal("acme", "/api/items/export/" + transferId)
-                .get("status").asText()).isEqualTo("COMPLETED");
+                .get("status").asString()).isEqualTo("COMPLETED");
         HttpResponse<String> file = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
                         + "/api/items/export/" + transferId + "/file"))
@@ -141,7 +141,7 @@ class TenantDataSourceRoutingIntegrationTest {
         String transferId = startTransfer("globex", "/api/notes/import",
                 "name\nglobex-imported\n");
         assertThat(awaitTerminal("globex", "/api/notes/import/" + transferId)
-                .get("status").asText()).isEqualTo("COMPLETED");
+                .get("status").asString()).isEqualTo("COMPLETED");
 
         assertThat(noteCount("globex", "globex-imported")).isEqualTo(1);
         assertThat(noteCount("acme", "globex-imported")).isZero();
@@ -174,7 +174,7 @@ class TenantDataSourceRoutingIntegrationTest {
             throws Exception {
         String transferId = startTransfer("acme", "/api/items/export", "");
         assertThat(awaitTerminal("acme", "/api/items/export/" + transferId)
-                .get("status").asText()).isEqualTo("COMPLETED");
+                .get("status").asString()).isEqualTo("COMPLETED");
         String base = "http://localhost:" + runtime.port() + "/api/items/export/" + transferId;
 
         HttpResponse<String> foreignStatus = HttpClient.newHttpClient().send(
@@ -235,7 +235,7 @@ class TenantDataSourceRoutingIntegrationTest {
             throws Exception {
         HttpResponse<String> response = transferRequest(tenant, path, body);
         assertThat(response.statusCode()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     private static JsonNode awaitTerminal(String tenant, String statusPath) throws Exception {
@@ -249,7 +249,7 @@ class TenantDataSourceRoutingIntegrationTest {
                     HttpResponse.BodyHandlers.ofString());
             assertThat(response.statusCode()).isEqualTo(200);
             JsonNode status = MAPPER.readTree(response.body());
-            String state = status.get("status").asText();
+            String state = status.get("status").asString();
             if (!"PENDING".equals(state) && !"RUNNING".equals(state)) {
                 return status;
             }

@@ -27,7 +27,7 @@ import java.util.Map;
 public record GuardSpec(String expression, String file, String code, String message) {
 
     /** A bare YAML string is the expression form; a map is the SQL-file form. */
-    @JsonCreator
+    @JsonCreator(mode = JsonCreator.Mode.DELEGATING)
     public static GuardSpec of(Object value) {
         if (value == null) {
             return null;

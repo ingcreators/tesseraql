@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -25,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The list surface's "export this filtered set" end to end (docs/list-export.md): a grid page
@@ -40,7 +40,7 @@ class ListExportIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     /** The question the page shows: open tickets about the VPN, newest first. */
@@ -136,7 +136,7 @@ class ListExportIntegrationTest {
         String location = kickoff.headers().firstValue("location").orElse("");
         assertThat(location).startsWith("/tickets/export-async/");
         JsonNode status = awaitTerminal(location);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("rowCount").asLong()).isEqualTo(30);
 
         HttpResponse<String> card = get(location, "text/html");
@@ -194,8 +194,8 @@ class ListExportIntegrationTest {
         // answer with (the not-ready 409, as for a run that never produced one).
         HttpResponse<String> kickoff = postForm("/tickets/export-async?" + QUESTION, "",
                 "application/json");
-        String statusPath = MAPPER.readTree(kickoff.body()).get("statusUrl").asText();
-        assertThat(awaitTerminal(statusPath).get("status").asText()).isEqualTo("COMPLETED");
+        String statusPath = MAPPER.readTree(kickoff.body()).get("statusUrl").asString();
+        assertThat(awaitTerminal(statusPath).get("status").asString()).isEqualTo("COMPLETED");
         String transferId = statusPath.substring(statusPath.lastIndexOf('/') + 1);
         reclaimSpool(transferId);
 
@@ -203,7 +203,7 @@ class ListExportIntegrationTest {
         assertThat(card).contains("data-state=\"expired\"").doesNotContain("hx-trigger=")
                 .doesNotContain("/file\"").contains("The file is no longer available.");
         JsonNode status = MAPPER.readTree(get(statusPath, "application/json").body());
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("expired").asBoolean()).isTrue();
         assertThat(get(statusPath + "/file", "*/*").statusCode()).isEqualTo(409);
     }
@@ -232,9 +232,9 @@ class ListExportIntegrationTest {
 
         assertThat(kickoff.statusCode()).isEqualTo(202);
         JsonNode body = MAPPER.readTree(kickoff.body());
-        assertThat(body.get("statusUrl").asText())
-                .isEqualTo("/tickets/export-async/" + body.get("transferId").asText());
-        assertThat(awaitTerminal(body.get("statusUrl").asText()).get("rowCount").asLong())
+        assertThat(body.get("statusUrl").asString())
+                .isEqualTo("/tickets/export-async/" + body.get("transferId").asString());
+        assertThat(awaitTerminal(body.get("statusUrl").asString()).get("rowCount").asLong())
                 .isEqualTo(30);
     }
 
@@ -320,7 +320,7 @@ class ListExportIntegrationTest {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
             JsonNode status = MAPPER.readTree(get(statusPath, "application/json").body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

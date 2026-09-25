@@ -2,12 +2,11 @@ package io.tesseraql.yaml.lint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The shipped JSON Schema stays in sync with the linter (authoring feedback, roadmap Phase 43):
@@ -27,7 +26,7 @@ class SchemaSyncTest {
      */
     @Test
     void schemaInputFieldCoversEveryModelComponent() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         JsonNode properties = schema.path("$defs").path("inputField").path("properties");
 
@@ -50,7 +49,7 @@ class SchemaSyncTest {
             declared.add(name);
         }
         List<String> documented = new ArrayList<>();
-        properties.fieldNames().forEachRemaining(documented::add);
+        properties.propertyNames().iterator().forEachRemaining(documented::add);
 
         assertThat(documented)
                 .as("every input: key the model accepts is documented in the shipped schema")
@@ -122,7 +121,7 @@ class SchemaSyncTest {
                 .containsExactlyInAnyOrderElementsOf(
                         yamlNames(io.tesseraql.yaml.model.EnrichSpec.class));
 
-        JsonNode route = new ObjectMapper().readTree(
+        JsonNode route = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         assertThat(names(route.path("properties").path("outbox").path("properties")))
                 .as("the outbox block documents the outbox model's keys, and only those")
@@ -144,7 +143,7 @@ class SchemaSyncTest {
      */
     @Test
     void aPipelineStepsBlocksReferTheSharedShapes() throws Exception {
-        JsonNode step = new ObjectMapper().readTree(
+        JsonNode step = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-job-v1.schema.json"))
                 .path("properties").path("pipeline").path("items").path("allOf").path(1)
                 .path("properties");
@@ -152,12 +151,12 @@ class SchemaSyncTest {
         assertThat(List.of(step.path("notify"), step.path("chunk"), step.path("push"),
                 step.path("export")))
                 .as("a step's output and processing blocks are shared definitions")
-                .allMatch(node -> node.path("$ref").asText().contains("tesseraql-defs-v1"));
+                .allMatch(node -> node.path("$ref").asString().contains("tesseraql-defs-v1"));
 
-        JsonNode routeNotify = new ObjectMapper().readTree(
+        JsonNode routeNotify = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"))
                 .path("properties").path("notify").path("additionalProperties");
-        assertThat(routeNotify.path("$ref").asText())
+        assertThat(routeNotify.path("$ref").asString())
                 .as("a route's notifications are the same shape a step's is")
                 .contains("notification");
     }
@@ -168,9 +167,9 @@ class SchemaSyncTest {
      */
     @Test
     void everyFixedShapeBlockRefusesUnknownKeys() throws Exception {
-        JsonNode defs = new ObjectMapper().readTree(
+        JsonNode defs = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
-        JsonNode route = new ObjectMapper().readTree(
+        JsonNode route = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
 
         assertThat(List.of(
@@ -190,7 +189,8 @@ class SchemaSyncTest {
 
     /** The property names of one {@code $defs} entry, addressed by its path. */
     private List<String> defProperties(String resource, String... path) throws Exception {
-        JsonNode node = new ObjectMapper().readTree(getClass().getResourceAsStream(resource))
+        JsonNode node = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(getClass().getResourceAsStream(resource))
                 .path("$defs");
         for (String step : path) {
             node = node.path(step);
@@ -207,14 +207,14 @@ class SchemaSyncTest {
      * node, and the callers assert non-emptiness so that fails rather than passing quietly.
      */
     private static JsonNode resolve(JsonNode node, JsonNode defs) {
-        String ref = node.path("$ref").asText("");
+        String ref = node.path("$ref").asString("");
         return ref.isEmpty() ? node : defs.at(ref.substring(ref.indexOf('#') + 1));
     }
 
     /** The field names of a schema node, in declaration order. */
     private static List<String> names(JsonNode node) {
         List<String> names = new ArrayList<>();
-        node.fieldNames().forEachRemaining(names::add);
+        node.propertyNames().iterator().forEachRemaining(names::add);
         return names;
     }
 
@@ -231,10 +231,10 @@ class SchemaSyncTest {
      */
     @Test
     void theBindingSchemaDocumentsTheAuthoringForm() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         List<String> documented = new ArrayList<>();
-        schema.path("$defs").path("binding").path("properties").fieldNames()
+        schema.path("$defs").path("binding").path("properties").propertyNames().iterator()
                 .forEachRemaining(documented::add);
 
         assertThat(documented)
@@ -265,9 +265,10 @@ class SchemaSyncTest {
 
     /** The root property names of one shipped schema. */
     private List<String> rootProperties(String resource) throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(getClass().getResourceAsStream(resource));
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(getClass().getResourceAsStream(resource));
         List<String> names = new ArrayList<>();
-        schema.path("properties").fieldNames().forEachRemaining(names::add);
+        schema.path("properties").propertyNames().iterator().forEachRemaining(names::add);
         return names;
     }
 
@@ -293,13 +294,13 @@ class SchemaSyncTest {
 
     @Test
     void theRuleSetSchemaCoversEveryRuleSetComponent() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-rules-v1.schema.json"));
         JsonNode rule = schema.path("properties").path("rules")
                 .path("additionalProperties").path("properties");
 
         List<String> documented = new ArrayList<>();
-        rule.fieldNames().forEachRemaining(documented::add);
+        rule.propertyNames().iterator().forEachRemaining(documented::add);
         List<String> declared = new ArrayList<>();
         for (var component : io.tesseraql.yaml.model.RuleSetsDocument.RuleSet.class
                 .getRecordComponents()) {
@@ -311,13 +312,13 @@ class SchemaSyncTest {
 
     @Test
     void theDecisionsSchemaCoversEveryDecisionComponent() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-decisions-v1.schema.json"));
         JsonNode decision = schema.path("properties").path("decisions")
                 .path("additionalProperties").path("properties");
 
         List<String> documented = new ArrayList<>();
-        decision.fieldNames().forEachRemaining(documented::add);
+        decision.propertyNames().iterator().forEachRemaining(documented::add);
 
         assertThat(documented).containsAll(
                 yamlNames(io.tesseraql.yaml.model.DecisionsDocument.Decision.class));
@@ -326,14 +327,14 @@ class SchemaSyncTest {
     /** The source mapping's keys are covered too — the shape a table-backed decision authors. */
     @Test
     void theDecisionsSchemaCoversEverySourceComponent() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-decisions-v1.schema.json"));
         JsonNode source = schema.path("properties").path("decisions")
                 .path("additionalProperties").path("properties").path("source")
                 .path("properties");
 
         List<String> documented = new ArrayList<>();
-        source.fieldNames().forEachRemaining(documented::add);
+        source.propertyNames().iterator().forEachRemaining(documented::add);
 
         assertThat(documented).containsAll(
                 yamlNames(io.tesseraql.yaml.model.DecisionsDocument.Source.class));
@@ -342,13 +343,13 @@ class SchemaSyncTest {
     /** The route schema's decide: entry covers every authored DecisionUse key. */
     @Test
     void theRouteSchemaCoversEveryDecideReferenceKey() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         JsonNode reference = schema.path("properties").path("decide")
                 .path("additionalProperties").path("properties");
 
         List<String> documented = new ArrayList<>();
-        reference.fieldNames().forEachRemaining(documented::add);
+        reference.propertyNames().iterator().forEachRemaining(documented::add);
         List<String> declared = new ArrayList<>();
         for (var component : io.tesseraql.yaml.model.DecisionUse.class.getRecordComponents()) {
             var field = io.tesseraql.yaml.model.DecisionUse.class
@@ -372,11 +373,11 @@ class SchemaSyncTest {
      */
     @Test
     void theDomainSchemaRefersToTheSharedInputFieldDefinition() throws Exception {
-        JsonNode domains = new ObjectMapper().readTree(
+        JsonNode domains = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-domains-v1.schema.json"));
 
         assertThat(domains.path("properties").path("domains").path("additionalProperties")
-                .path("$ref").asText())
+                .path("$ref").asString())
                 .as("the domains map's value is the one input-field definition, not a copy")
                 .isEqualTo("tesseraql-defs-v1.schema.json#/$defs/inputField");
         assertThat(domains.has("$defs"))
@@ -386,7 +387,7 @@ class SchemaSyncTest {
 
     @Test
     void schemaValidateRuleDocumentsSharedRuleReferences() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         JsonNode rule = schema.path("properties").path("validate")
                 .path("additionalProperties").path("properties");
@@ -396,7 +397,7 @@ class SchemaSyncTest {
         assertThat(rule.has("use")).isTrue();
         assertThat(rule.has("rule")).isTrue();
         assertThat(rule.has("file")).isTrue();
-        assertThat(schema.path("properties").path("validate").path("description").asText())
+        assertThat(schema.path("properties").path("validate").path("description").asString())
                 .contains("use:");
     }
 
@@ -428,13 +429,13 @@ class SchemaSyncTest {
                 "/schema/tesseraql-job-v1.schema.json",
                 "/schema/tesseraql-view-v1.schema.json",
                 "/schema/tesseraql-document-v1.schema.json")) {
-            JsonNode kind = new ObjectMapper()
+            JsonNode kind = io.tesseraql.yaml.JsonMappers.constrained()
                     .readTree(getClass().getResourceAsStream(resource))
                     .path("properties").path("kind");
             if (kind.has("const")) {
-                claimed.add(kind.get("const").asText());
+                claimed.add(kind.get("const").asString());
             } else {
-                kind.path("enum").forEach(node -> claimed.add(node.asText()));
+                kind.path("enum").forEach(node -> claimed.add(node.asString()));
             }
         }
         assertThat(claimed).containsExactlyInAnyOrder("route", "job", "view", "workflow",
@@ -443,10 +444,11 @@ class SchemaSyncTest {
 
     /** One schema property's enum values. */
     private List<String> enumOf(String resource, String property) throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(getClass().getResourceAsStream(resource));
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(getClass().getResourceAsStream(resource));
         List<String> values = new ArrayList<>();
         schema.path("properties").path(property).path("enum")
-                .forEach(node -> values.add(node.asText()));
+                .forEach(node -> values.add(node.asString()));
         return values;
     }
 
@@ -474,7 +476,7 @@ class SchemaSyncTest {
         assertThat(rootProperties("/schema/tesseraql-view-v1.schema.json"))
                 .as("the phantom view: property is gone — the loader reads recipe:")
                 .doesNotContain("view");
-        assertThat(new ObjectMapper()
+        assertThat(io.tesseraql.yaml.JsonMappers.constrained()
                 .readTree(getClass().getResourceAsStream(
                         "/schema/tesseraql-view-v1.schema.json"))
                 .path("additionalProperties").asBoolean(true))
@@ -484,11 +486,11 @@ class SchemaSyncTest {
 
     @Test
     void schemaAuthEnumMatchesTheFrameworkAuthModes() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         List<String> authModes = new ArrayList<>();
         schema.path("properties").path("security").path("properties").path("auth").path("enum")
-                .forEach(node -> authModes.add(node.asText()));
+                .forEach(node -> authModes.add(node.asString()));
         assertThat(authModes)
                 .containsExactlyInAnyOrderElementsOf(AppLinter.knownAuthModes());
     }
@@ -501,16 +503,16 @@ class SchemaSyncTest {
      */
     @Test
     void schemaInputTypeEnumMatchesTheFrameworkFieldTypes() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         List<String> types = new ArrayList<>();
         schema.path("$defs").path("inputField").path("properties").path("type").path("enum")
-                .forEach(node -> types.add(node.asText()));
+                .forEach(node -> types.add(node.asString()));
         assertThat(types)
                 .containsExactlyInAnyOrderElementsOf(AppLinter.knownFieldTypes());
         List<String> kinds = new ArrayList<>();
         schema.path("$defs").path("resultField").path("properties").path("type").path("enum")
-                .forEach(node -> kinds.add(node.asText()));
+                .forEach(node -> kinds.add(node.asString()));
         assertThat(kinds)
                 .containsExactlyInAnyOrderElementsOf(
                         io.tesseraql.yaml.app.DeclaredKinds.RESULT_KINDS);
@@ -523,11 +525,11 @@ class SchemaSyncTest {
      */
     @Test
     void schemaWidgetEnumMatchesTheViewWidgetVocabulary() throws Exception {
-        JsonNode schema = new ObjectMapper().readTree(
+        JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         List<String> widgets = new ArrayList<>();
         schema.path("$defs").path("inputField").path("properties").path("widget").path("enum")
-                .forEach(node -> widgets.add(node.asText()));
+                .forEach(node -> widgets.add(node.asString()));
         assertThat(widgets)
                 .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.WIDGETS);
     }
@@ -547,7 +549,7 @@ class SchemaSyncTest {
      */
     @Test
     void theSqlAndHttpArmsAreOneSharedShape() throws Exception {
-        JsonNode defs = new ObjectMapper().readTree(
+        JsonNode defs = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
 
         assertThat(defProperties("/schema/tesseraql-defs-v1.schema.json", "sqlArm"))
@@ -596,9 +598,9 @@ class SchemaSyncTest {
      */
     @Test
     void aJobStepAndAServiceArmOfferOnlyWhatTheyHonour() throws Exception {
-        JsonNode job = new ObjectMapper().readTree(
+        JsonNode job = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-job-v1.schema.json"));
-        JsonNode defs = new ObjectMapper().readTree(
+        JsonNode defs = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
         // Resolve each branch's $ref before reading its keys. Collecting only the INLINE
         // properties leaves the guard blind to the defect returning in its original shape: a
@@ -641,7 +643,7 @@ class SchemaSyncTest {
      */
     @Test
     void everyResponseArmDeclaresItsRecordsKeys() throws Exception {
-        JsonNode route = new ObjectMapper().readTree(
+        JsonNode route = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-route-v1.schema.json"));
         JsonNode arms = route.path("properties").path("response").path("properties");
 
@@ -671,7 +673,7 @@ class SchemaSyncTest {
         // nested map or list and JSON-serializes it, so those values really are Object.
         for (String arm : List.of("html", "text", "file")) {
             assertThat(arms.path(arm).path("properties").path("model")
-                    .path("additionalProperties").path("type").asText())
+                    .path("additionalProperties").path("type").asString())
                     .as("response.%s.model is a map of bindable paths, which are strings", arm)
                     .isEqualTo("string");
         }
@@ -695,7 +697,7 @@ class SchemaSyncTest {
      */
     @Test
     void theConfigSchemaDescribesEveryScaffoldedKey() throws Exception {
-        JsonNode config = new ObjectMapper().readTree(
+        JsonNode config = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-config-v1.schema.json"));
         List<String> scaffolded = io.tesseraql.yaml.scaffold.ScaffoldedConfigKeys.CONSUMERS
                 .keySet().stream().filter(key -> key.startsWith("tesseraql.")).sorted().toList();
@@ -751,9 +753,9 @@ class SchemaSyncTest {
      */
     @Test
     void aViewDocumentsNestedShapesAreDescribed() throws Exception {
-        JsonNode defs = new ObjectMapper().readTree(
+        JsonNode defs = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"));
-        JsonNode view = new ObjectMapper().readTree(
+        JsonNode view = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-view-v1.schema.json"));
 
         Map<String, Class<?>> shapes = new java.util.LinkedHashMap<>();
@@ -784,9 +786,9 @@ class SchemaSyncTest {
         lists.put("panels", "viewPanel");
         lists.forEach((key, target) -> {
             JsonNode node = view.path("properties").path(key);
-            assertThat(node.path("type").asText())
+            assertThat(node.path("type").asString())
                     .as("%s: is a list — ViewSpec holds a List for it", key).isEqualTo("array");
-            assertThat(node.path("items").path("$ref").asText())
+            assertThat(node.path("items").path("$ref").asString())
                     .as("%s: items reach the shared %s shape", key, target)
                     .isEqualTo("tesseraql-defs-v1.schema.json#/$defs/" + target);
         });
@@ -795,7 +797,7 @@ class SchemaSyncTest {
         // framework's set. inputField's copy is pinned by its own test above.
         List<String> widgets = new ArrayList<>();
         defs.path("$defs").path("viewField").path("properties").path("widget").path("enum")
-                .forEach(node -> widgets.add(node.asText()));
+                .forEach(node -> widgets.add(node.asString()));
         assertThat(widgets).as("a view field's widget vocabulary is the framework's")
                 .containsExactlyInAnyOrderElementsOf(io.tesseraql.yaml.view.ViewSpec.WIDGETS);
     }
@@ -810,9 +812,10 @@ class SchemaSyncTest {
     private static String armRef(JsonNode defs, String pointer) {
         JsonNode node = defs.at(pointer);
         assertThat(node.isMissingNode()).as("%s exists", pointer).isFalse();
-        assertThat(node.path("description").asText("")).as("%s keeps its own description", pointer)
+        assertThat(node.path("description").asString(""))
+                .as("%s keeps its own description", pointer)
                 .isNotBlank();
-        return node.path("$ref").asText("");
+        return node.path("$ref").asString("");
     }
 
     /**
@@ -823,7 +826,7 @@ class SchemaSyncTest {
      */
     @Test
     void everyFixedShapeScalarIsTypedAsItsModelHoldsIt() throws Exception {
-        JsonNode defs = new ObjectMapper().readTree(
+        JsonNode defs = io.tesseraql.yaml.JsonMappers.constrained().readTree(
                 getClass().getResourceAsStream("/schema/tesseraql-defs-v1.schema.json"))
                 .path("$defs");
         Map<String, JsonNode> blocks = Map.of(
@@ -850,7 +853,7 @@ class SchemaSyncTest {
                 if (expected == null || property.has("$ref")) {
                     continue; // a nested shape reaches its own definition
                 }
-                assertThat(property.path("type").asText())
+                assertThat(property.path("type").asString())
                         .as("%s.%s is a %s in %s", entry.getKey(), component.getName(),
                                 component.getType().getSimpleName(),
                                 entry.getValue().getSimpleName())

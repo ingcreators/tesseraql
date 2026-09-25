@@ -3,7 +3,6 @@ package io.tesseraql.security.jwt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
@@ -13,12 +12,14 @@ import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 class JwtAuthenticatorTest {
 
     private static final String SECRET = "test-secret-test-secret-test-secret";
     private static final String AUDIENCE = "https://app.example.com";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new JsonMapper();
 
     private static JwtConfig config() {
         return config(java.util.List.of(AUDIENCE), null);

@@ -1,17 +1,17 @@
 package io.tesseraql.scim;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.outbox.TerminalDeliveryException;
 import io.tesseraql.yaml.http.HttpOutbound;
 import io.tesseraql.yaml.http.OutboundGateway;
 import io.tesseraql.yaml.model.HttpCallSpec;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A client that provisions users and groups to a downstream SCIM provider over HTTP (design ch.
@@ -117,7 +117,7 @@ public final class ScimOutboundClient {
             if (response.status() == ok) {
                 try {
                     return mapper.readValue(response.body(), type);
-                } catch (IOException ex) {
+                } catch (JacksonException ex) {
                     throw new ScimException(502, null,
                             "SCIM provider answered an unparseable resource: " + ex.getMessage());
                 }
@@ -156,7 +156,7 @@ public final class ScimOutboundClient {
     private String write(Object body) {
         try {
             return mapper.writeValueAsString(body);
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             throw new ScimException(502, null,
                     "SCIM request body is not serializable: " + ex.getMessage());
         }

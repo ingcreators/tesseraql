@@ -2,8 +2,6 @@ package io.tesseraql.scim;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.OutputStream;
@@ -15,6 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Tests outbound group provisioning against an in-process stub SCIM provider that assigns remote ids
@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  */
 class ScimGroupProvisionerTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private HttpServer server;
     private final AtomicInteger ids = new AtomicInteger();
@@ -73,10 +73,10 @@ class ScimGroupProvisionerTest {
         assertThat(patches).hasSize(1);
         JsonNode operations = patches.get(0).get("Operations");
         assertThat(operations).hasSize(2);
-        assertThat(operations.get(0).get("op").asText()).isEqualTo("add");
-        assertThat(operations.get(0).get("value").get(0).get("value").asText()).isEqualTo("200");
-        assertThat(operations.get(1).get("op").asText()).isEqualTo("remove");
-        assertThat(operations.get(1).get("path").asText()).isEqualTo("members[value eq \"100\"]");
+        assertThat(operations.get(0).get("op").asString()).isEqualTo("add");
+        assertThat(operations.get(0).get("value").get(0).get("value").asString()).isEqualTo("200");
+        assertThat(operations.get(1).get("op").asString()).isEqualTo("remove");
+        assertThat(operations.get(1).get("path").asString()).isEqualTo("members[value eq \"100\"]");
     }
 
     @Test
@@ -122,7 +122,7 @@ class ScimGroupProvisionerTest {
     }
 
     private static String withId(JsonNode body, String id) {
-        return ((com.fasterxml.jackson.databind.node.ObjectNode) body).put("id", id).toString();
+        return ((tools.jackson.databind.node.ObjectNode) body).put("id", id).toString();
     }
 
     private static void respond(HttpExchange exchange, int status, String body) {

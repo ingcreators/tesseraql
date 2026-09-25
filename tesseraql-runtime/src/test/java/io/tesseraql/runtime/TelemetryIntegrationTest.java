@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.telemetry.RecordingMeter;
 import io.tesseraql.core.telemetry.RecordingTracer;
 import java.io.IOException;
@@ -31,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for telemetry (design ch. 25): a SQL execution span is recorded for a request,
@@ -42,7 +42,7 @@ class TelemetryIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     static final RecordingTracer TRACER = new RecordingTracer();
     static final RecordingMeter METER = new RecordingMeter();
 

@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -19,6 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A binding's {@code result:} declaration, end to end (docs/temporal-semantics.md T3): a
@@ -39,7 +39,7 @@ class ResultDeclarationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static TesseraqlRuntime runtime;
@@ -70,11 +70,11 @@ class ResultDeclarationIntegrationTest {
 
         JsonNode payload = rows.get(0).get("payload");
         assertThat(payload.isObject()).as("a structure, not text: " + payload).isTrue();
-        assertThat(payload.get("sku").asText()).isEqualTo("A-1");
+        assertThat(payload.get("sku").asString()).isEqualTo("A-1");
         assertThat(payload.get("qty").asInt()).isEqualTo(2);
         assertThat(payload.get("price").decimalValue()).isEqualByComparingTo("1.10");
         // A text column holding JSON is the same case as a jsonb column.
-        assertThat(rows.get(0).get("payload_text").get("sku").asText()).isEqualTo("B-2");
+        assertThat(rows.get(0).get("payload_text").get("sku").asString()).isEqualTo("B-2");
         assertThat(rows.get(1).get("payload").isNull()).isTrue();
         assertThat(rows.get(1).get("payload_text").isNull()).isTrue();
     }
@@ -108,8 +108,8 @@ class ResultDeclarationIntegrationTest {
         JsonNode rows = data(get("/api/docs"));
 
         JsonNode orderedOn = rows.get(0).get("ordered_on");
-        assertThat(orderedOn.isTextual()).isTrue();
-        assertThat(orderedOn.asText()).isEqualTo("2026-01-15");
+        assertThat(orderedOn.isString()).isTrue();
+        assertThat(orderedOn.asString()).isEqualTo("2026-01-15");
         assertThat(rows.get(1).get("ordered_on").isNull()).isTrue();
     }
 
@@ -141,11 +141,11 @@ class ResultDeclarationIntegrationTest {
         // A 5xx body carries the code and the structured details, never the message (the
         // error renderer's confidentiality rule); the message is the log's.
         JsonNode error = MAPPER.readTree(response.body()).get("error");
-        assertThat(error.get("code").asText()).isEqualTo("TQL-SQL-2503");
-        assertThat(error.get("details").get("source").asText()).isEqualTo("main");
-        assertThat(error.get("details").get("column").asText()).isEqualTo("payload");
+        assertThat(error.get("code").asString()).isEqualTo("TQL-SQL-2503");
+        assertThat(error.get("details").get("source").asString()).isEqualTo("main");
+        assertThat(error.get("details").get("column").asString()).isEqualTo("payload");
         assertThat(error.get("details").get("row").asInt()).isEqualTo(1);
-        assertThat(error.get("details").get("kind").asText()).isEqualTo("json");
+        assertThat(error.get("details").get("kind").asString()).isEqualTo("json");
     }
 
     /** A declared column the query never produced is logged, never a 500. */
@@ -170,8 +170,8 @@ class ResultDeclarationIntegrationTest {
 
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
         JsonNode rows = MAPPER.readTree(response.body()).get("read");
-        assertThat(rows.get(0).get("payload").get("sku").asText()).isEqualTo("A-1");
-        assertThat(rows.get(0).get("ordered_on").asText()).isEqualTo("2026-01-15");
+        assertThat(rows.get(0).get("payload").get("sku").asString()).isEqualTo("A-1");
+        assertThat(rows.get(0).get("ordered_on").asString()).isEqualTo("2026-01-15");
     }
 
     private static HttpResponse<String> get(String path) throws Exception {

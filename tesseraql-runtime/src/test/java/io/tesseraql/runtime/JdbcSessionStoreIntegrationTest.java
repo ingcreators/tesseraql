@@ -89,7 +89,7 @@ class JdbcSessionStoreIntegrationTest {
                         "insert into tql_session (session_id, principal_json, csrf_token, "
                                 + "created_at, expires_at, subject) values (?, ?, ?, ?, ?, ?)")) {
             ps.setString(1, legacy);
-            ps.setString(2, new com.fasterxml.jackson.databind.ObjectMapper()
+            ps.setString(2, io.tesseraql.yaml.JsonMappers.constrained()
                     .writeValueAsString(principal("jdbc-legacy")));
             ps.setString(3, "csrf");
             ps.setTimestamp(4, java.sql.Timestamp.from(java.time.Instant.now()));

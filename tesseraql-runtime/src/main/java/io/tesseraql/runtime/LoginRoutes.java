@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.binding.ErrorResponseRenderer;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
@@ -20,6 +19,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Password login/logout endpoints (design ch. 10.8, 11.2):
@@ -442,7 +443,7 @@ final class LoginRoutes {
             // the map — so without this the caller's own mistake arrived as a NullPointerException
             // and left as an internal server error, exactly like the parse failure below.
             return parsed == null ? Map.of() : parsed;
-        } catch (com.fasterxml.jackson.core.JsonProcessingException notJson) {
+        } catch (JacksonException notJson) {
             // The sentence travels in details, not in the message: ErrorResponseRenderer replaces
             // an envelope's message with the localized status phrase, so a message-only throw
             // answers "Bad Request" and renders an alert with an empty body.

@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobStatus;
 import java.io.ByteArrayOutputStream;
@@ -28,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Two edges of the export formatting chain, each on an app of its own
@@ -44,7 +44,7 @@ class ExportFormatDefaultsEdgeIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     /**
@@ -71,7 +71,7 @@ class ExportFormatDefaultsEdgeIntegrationTest {
             String after = sequence();
 
             assertThat(capped.get().statusCode()).isEqualTo(500);
-            assertThat(MAPPER.readTree(capped.get().body()).at("/error/code").asText())
+            assertThat(MAPPER.readTree(capped.get().body()).at("/error/code").asString())
                     .isEqualTo("TQL-LD-2802");
             assertThat(after).as("the extraction ran").isNotEqualTo(before);
             List<String> lines = log.lines().toList();

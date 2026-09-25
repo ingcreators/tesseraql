@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
@@ -33,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The headline activation arrangement (docs/application-roles.md structural decisions 4 and 5):
@@ -49,7 +49,7 @@ class StackActivationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
@@ -218,8 +218,8 @@ class StackActivationIntegrationTest {
         HttpResponse<String> minted = postJson("/shop-a/_tesseraql/token",
                 "{\"actingRole\":\"shop-a.sales\"}", kenji);
         assertThat(minted.statusCode()).isEqualTo(200);
-        JsonNode payload = jwtPayload(MAPPER.readTree(minted.body()).get("token").asText());
-        assertThat(payload.get("acting_role").asText()).isEqualTo("shop-a.sales");
+        JsonNode payload = jwtPayload(MAPPER.readTree(minted.body()).get("token").asString());
+        assertThat(payload.get("acting_role").asString()).isEqualTo("shop-a.sales");
         List<String> roles = strings(payload.get("roles"));
         assertThat(roles).contains("r-kenji", "shop-a.sales").doesNotContain("shop-a.audit");
         List<String> permissions = strings(payload.get("permissions"));
@@ -228,7 +228,7 @@ class StackActivationIntegrationTest {
         // Nothing selected mints the union, exactly as before.
         HttpResponse<String> union = postJson("/shop-a/_tesseraql/token", "{}", kenji);
         assertThat(union.statusCode()).isEqualTo(200);
-        JsonNode unionPayload = jwtPayload(MAPPER.readTree(union.body()).get("token").asText());
+        JsonNode unionPayload = jwtPayload(MAPPER.readTree(union.body()).get("token").asString());
         assertThat(unionPayload.has("acting_role")).isFalse();
         assertThat(strings(unionPayload.get("roles"))).contains("shop-a.sales", "shop-a.audit");
 
@@ -277,7 +277,7 @@ class StackActivationIntegrationTest {
     private static List<String> strings(JsonNode node) {
         List<String> values = new ArrayList<>();
         if (node != null && node.isArray()) {
-            node.forEach(element -> values.add(element.asText()));
+            node.forEach(element -> values.add(element.asString()));
         }
         return values;
     }
@@ -363,7 +363,7 @@ class StackActivationIntegrationTest {
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         return new Session(setCookie.substring(0, setCookie.indexOf(';')),
-                MAPPER.readTree(login.body()).path("csrfToken").asText());
+                MAPPER.readTree(login.body()).path("csrfToken").asString());
     }
 
     /** An HS256 bearer for the fixture app's declared secret, carrying the given atom grants. */

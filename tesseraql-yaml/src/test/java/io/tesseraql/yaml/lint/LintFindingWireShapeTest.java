@@ -2,7 +2,6 @@ package io.tesseraql.yaml.lint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -17,8 +16,9 @@ class LintFindingWireShapeTest {
 
     @Test
     void serializesTheDocumentedShape() throws Exception {
-        String json = new ObjectMapper().writeValueAsString(new LintFinding("TQL-YAML-1043",
-                LintFinding.Severity.WARNING, "web/get.yml", "Unknown key", 7, 3));
+        String json = io.tesseraql.yaml.JsonMappers.constrained()
+                .writeValueAsString(new LintFinding("TQL-YAML-1043",
+                        LintFinding.Severity.WARNING, "web/get.yml", "Unknown key", 7, 3));
 
         assertThat(json).isEqualTo("{\"code\":\"TQL-YAML-1043\",\"severity\":\"warning\","
                 + "\"source\":\"web/get.yml\",\"message\":\"Unknown key\",\"line\":7,"
@@ -27,8 +27,9 @@ class LintFindingWireShapeTest {
 
     @Test
     void anErrorSerializesTheErrorSeverityAndFlag() throws Exception {
-        String json = new ObjectMapper().writeValueAsString(new LintFinding("TQL-YAML-1044",
-                LintFinding.Severity.ERROR, "web/get.yml", "Renamed key"));
+        String json = io.tesseraql.yaml.JsonMappers.constrained()
+                .writeValueAsString(new LintFinding("TQL-YAML-1044",
+                        LintFinding.Severity.ERROR, "web/get.yml", "Renamed key"));
 
         assertThat(json).isEqualTo("{\"code\":\"TQL-YAML-1044\",\"severity\":\"error\","
                 + "\"source\":\"web/get.yml\",\"message\":\"Renamed key\",\"line\":null,"

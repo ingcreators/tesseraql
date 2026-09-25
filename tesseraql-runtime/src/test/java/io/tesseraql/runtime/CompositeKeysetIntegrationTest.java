@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -24,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Composite keyset pagination end to end (docs/list-surface.md decision 5): {@code by:} as an
@@ -38,7 +38,7 @@ class CompositeKeysetIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -64,7 +64,7 @@ class CompositeKeysetIntegrationTest {
     void aCompositeCursorWalksThePagesAndSurvivesInserts() throws Exception {
         JsonNode first = page(null);
         assertThat(labels(first)).containsExactly("A", "B");
-        String cursor = first.path("page").path("next").asText();
+        String cursor = first.path("page").path("next").asString();
         // base64url("1") = MQ, base64url("2") = Mg — the token joins parts with a dot.
         assertThat(cursor).isEqualTo("MQ.Mg");
 
@@ -102,7 +102,7 @@ class CompositeKeysetIntegrationTest {
 
     private static java.util.List<String> labels(JsonNode body) {
         java.util.List<String> labels = new java.util.ArrayList<>();
-        body.path("data").forEach(row -> labels.add(row.path("label").asText()));
+        body.path("data").forEach(row -> labels.add(row.path("label").asString()));
         return labels;
     }
 

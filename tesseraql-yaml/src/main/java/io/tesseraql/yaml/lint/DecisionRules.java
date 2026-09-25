@@ -470,9 +470,9 @@ final class DecisionRules implements LintRule {
             return null;
         }
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            com.fasterxml.jackson.databind.JsonNode root = mapper
-                    .readTree(Files.readString(sidecar));
+            tools.jackson.databind.ObjectMapper mapper = io.tesseraql.yaml.JsonMappers
+                    .constrained();
+            tools.jackson.databind.JsonNode root = mapper.readTree(Files.readString(sidecar));
             Map<String, Set<String>> tables = new LinkedHashMap<>();
             for (var entry : root.path("datasources").properties()) {
                 io.tesseraql.yaml.scaffold.CatalogSchema schema = mapper.convertValue(

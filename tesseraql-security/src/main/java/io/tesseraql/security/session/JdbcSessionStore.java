@@ -1,6 +1,5 @@
 package io.tesseraql.security.session;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.sql.Transactions;
 import io.tesseraql.security.Principal;
 import java.sql.Connection;
@@ -15,6 +14,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import javax.sql.DataSource;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A database-backed {@link SessionStore} (design ch. 11.2): sessions live in {@code tql_session},
@@ -159,7 +160,7 @@ public final class JdbcSessionStore implements SessionStore {
             update.setString(1, mapper.writeValueAsString(principal));
             update.setString(2, sessionId);
             return update.executeUpdate() > 0;
-        } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (SQLException | JacksonException ex) {
             throw new IllegalStateException("Failed to replace session principal", ex);
         }
     }
@@ -188,7 +189,7 @@ public final class JdbcSessionStore implements SessionStore {
                 insert.setTimestamp(10, Timestamp.from(now));
                 insert.executeUpdate();
             }
-        } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (SQLException | JacksonException ex) {
             throw new IllegalStateException("Failed to create session", ex);
         }
         return id;
@@ -234,7 +235,7 @@ public final class JdbcSessionStore implements SessionStore {
                 Principal principal = mapper.readValue(rs.getString(1), Principal.class);
                 return new Session(principal, rs.getString(2));
             }
-        } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (SQLException | JacksonException ex) {
             throw new IllegalStateException("Failed to read session", ex);
         }
     }
@@ -443,7 +444,7 @@ public final class JdbcSessionStore implements SessionStore {
                 // a session that exists.
                 Transactions.restoreQuietly(connection, autoCommit, "session rotate");
             }
-        } catch (SQLException | com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (SQLException | JacksonException ex) {
             throw new IllegalStateException("Failed to rotate session", ex);
         }
         touched.remove(sessionId);

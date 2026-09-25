@@ -2,8 +2,6 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -17,6 +15,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@code tesseraql bench} against a stub with scripted latencies and refusals
@@ -27,7 +27,7 @@ import picocli.CommandLine;
  */
 class BenchCommandTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String[] CODES = {"TQL-RATE-4293", "TQL-RATE-4294", "TQL-RATE-4295"};
 
     static HttpServer stub;
@@ -167,8 +167,8 @@ class BenchCommandTest {
                 .isBetween(1, 4);
         JsonNode report = MAPPER.readTree(run.stdout());
         assertThat(report.get("requests").asLong()).isGreaterThan(20);
-        assertThat(report.get("mode").asText()).isEqualTo("closed");
-        assertThat(report.get("targets").get(0).asText()).isEqualTo("items.list");
+        assertThat(report.get("mode").asString()).isEqualTo("closed");
+        assertThat(report.get("targets").get(0).asString()).isEqualTo("items.list");
         assertThat(report.get("latencyMillis").get("p50").asDouble()).isGreaterThan(0.0);
         assertThat(report.get("latencyMillis").has("p95")).isTrue();
         assertThat(report.get("latencyMillis").has("p99")).isTrue();
@@ -176,7 +176,7 @@ class BenchCommandTest {
         assertThat(report.get("statuses").get("200").asLong()).isGreaterThan(10);
         assertThat(report.get("statuses").get("503").asLong()).isGreaterThan(0);
         // Classified by the code in the body, never by the status alone.
-        assertThat(report.get("refused").fieldNames()).toIterable()
+        assertThat(report.get("refused").propertyNames().iterator()).toIterable()
                 .containsExactlyInAnyOrder("TQL-RATE-4293", "TQL-RATE-4294", "TQL-RATE-4295");
         assertThat(report.get("refusedPercent").asDouble()).isBetween(15.0, 35.0);
         assertThat(report.get("errors").asLong()).isZero();
@@ -317,7 +317,7 @@ class BenchCommandTest {
 
         assertThat(run.exitCode()).as(run.stderr()).isZero();
         JsonNode report = MAPPER.readTree(run.stdout());
-        assertThat(report.get("mode").asText()).isEqualTo("open");
+        assertThat(report.get("mode").asString()).isEqualTo("open");
         assertThat(report.get("ratePerSecond").asDouble()).isEqualTo(50.0);
         assertThat(report.get("requests").asLong()).as("about fifty in a second")
                 .isBetween(25L, 75L);

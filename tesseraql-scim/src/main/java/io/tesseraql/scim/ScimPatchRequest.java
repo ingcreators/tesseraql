@@ -2,8 +2,8 @@ package io.tesseraql.scim;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
+import tools.jackson.databind.JsonNode;
 
 /**
  * A SCIM 2.0 PATCH request (design ch. 10.15, RFC 7644 §3.5.2): an ordered list of add/replace/remove

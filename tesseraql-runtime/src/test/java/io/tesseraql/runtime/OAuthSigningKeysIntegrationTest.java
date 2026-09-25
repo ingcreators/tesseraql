@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.oauth.JwksDocuments;
 import io.tesseraql.oauth.Rs256TokenSigner;
 import io.tesseraql.oauth.SigningKeys;
@@ -27,6 +25,8 @@ import org.postgresql.ds.PGSimpleDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The signing-key lifecycle on a real database (docs/token-issuance.md slice 3): exactly-once
@@ -40,7 +40,7 @@ class OAuthSigningKeysIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static DataSource dataSource;
     static SigningKeys keys;
@@ -92,8 +92,8 @@ class OAuthSigningKeysIntegrationTest {
         assertThat(parts).hasSize(3);
 
         JsonNode header = MAPPER.readTree(Base64.getUrlDecoder().decode(parts[0]));
-        assertThat(header.get("alg").asText()).isEqualTo("RS256");
-        String kid = header.get("kid").asText();
+        assertThat(header.get("alg").asString()).isEqualTo("RS256");
+        String kid = header.get("kid").asString();
 
         // The published document, parsed by the exact class member validation uses.
         Map<String, RSAPublicKey> published = Jwks.parseJwkSet(
@@ -107,7 +107,7 @@ class OAuthSigningKeysIntegrationTest {
         assertThat(verifier.verify(Base64.getUrlDecoder().decode(parts[2]))).isTrue();
 
         JsonNode payload = MAPPER.readTree(Base64.getUrlDecoder().decode(parts[1]));
-        assertThat(payload.get("sub").asText()).isEqualTo("u-1");
+        assertThat(payload.get("sub").asString()).isEqualTo("u-1");
     }
 
     @Test

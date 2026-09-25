@@ -47,7 +47,7 @@ public record HttpSourceSpec(HttpCallSpec call, String select, String onError,
      * level. The mapping lives here so {@link HttpCallSpec} stays the single definition of what
      * a call is — a field added there reaches sources without a second edit.
      */
-    @JsonCreator
+    @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     public static HttpSourceSpec of(
             @JsonProperty("method") String method,
             @JsonProperty("url") String url,

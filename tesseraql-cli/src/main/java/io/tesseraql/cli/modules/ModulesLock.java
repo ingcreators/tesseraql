@@ -1,9 +1,5 @@
 package io.tesseraql.cli.modules;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -14,6 +10,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The {@code modules.lock} file: the declared {@code tesseraql.modules} plus the exact resolved
@@ -24,7 +24,7 @@ import java.util.Optional;
 public final class ModulesLock {
 
     private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained()
-            .enable(SerializationFeature.INDENT_OUTPUT);
+            .rebuild().enable(SerializationFeature.INDENT_OUTPUT).build();
 
     /** One resolved artifact pinned by coordinate and checksum. */
     public record Artifact(String coordinate, String sha256) {
@@ -63,10 +63,11 @@ public final class ModulesLock {
         try {
             ObjectNode root = (ObjectNode) MAPPER.readTree(Files.readString(file));
             List<String> mods = new ArrayList<>();
-            root.path("modules").forEach(node -> mods.add(node.asText()));
+            root.path("modules").forEach(node -> mods.add(node.asString("")));
             List<Artifact> arts = new ArrayList<>();
             root.path("artifacts").forEach(node -> arts.add(
-                    new Artifact(node.path("coordinate").asText(), node.path("sha256").asText())));
+                    new Artifact(node.path("coordinate").asString(""),
+                            node.path("sha256").asString(""))));
             return Optional.of(new ModulesLock(mods, arts));
         } catch (IOException ex) {
             throw new UncheckedIOException(ex);

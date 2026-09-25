@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.AppUpgrader;
 import io.tesseraql.operations.app.InstalledApp;
@@ -19,6 +18,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Converges a running host to the install root's state (docs/runtime-replace.md structural
@@ -479,7 +480,7 @@ final class StackReconciler implements AutoCloseable {
             io.tesseraql.core.files.AtomicFiles.replace(
                     dir.resolve(status.name() + ".status.json"),
                     MAPPER.writeValueAsBytes(status));
-        } catch (IOException unwritable) {
+        } catch (JacksonException | IOException unwritable) {
             // The outcome still happened and is in the log; a status file that cannot be
             // written must not fail the deploy it reports on.
             LOG.warn("Could not write the deploy status for '{}': {}", status.name(),

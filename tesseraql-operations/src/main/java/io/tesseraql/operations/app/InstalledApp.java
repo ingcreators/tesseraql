@@ -51,7 +51,7 @@ public record InstalledApp(String name, String version, String path,
      * from the name, always, and silently ignoring a declaration would leave an operator
      * believing in an address nothing serves.
      */
-    @JsonCreator
+    @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     static InstalledApp fromJson(@JsonProperty("name") String name,
             @JsonProperty("version") String version,
             @JsonProperty("path") String path,

@@ -1,7 +1,5 @@
 package io.tesseraql.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.ErrorEnvelope;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
@@ -16,6 +14,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The MCP Streamable HTTP transport, free of any specific HTTP server: it maps a request
@@ -240,7 +240,7 @@ public final class McpHttpHandler {
             // either; the null check it replaces was dead, since readTree never returns null.
             return json(400, server.parseError("empty request body").toString(), Map.of());
         }
-        boolean initialize = message.path("method").asText("").equals("initialize");
+        boolean initialize = message.path("method").asString("").equals("initialize");
         if (!initialize) {
             if (request.sessionId() == null) {
                 return json(400, ErrorEnvelope.json(SESSION_REQUIRED,

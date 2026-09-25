@@ -2,11 +2,10 @@ package io.tesseraql.test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The shipped test-suite schema stays in sync with {@link TestSuite}.
@@ -36,7 +35,8 @@ class TestsSchemaSyncTest {
      */
     @Test
     void aVerifyStepDescribesTheSameShapesTheCaseDoes() throws Exception {
-        JsonNode tests = new ObjectMapper().readTree(getClass().getResourceAsStream(SCHEMA));
+        JsonNode tests = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(getClass().getResourceAsStream(SCHEMA));
         JsonNode caseNode = tests.at("/properties/tests/items/properties");
         JsonNode step = tests.at("/properties/tests/items/properties/verify/items/properties");
 
@@ -76,7 +76,7 @@ class TestsSchemaSyncTest {
     /** The field names of a schema node, in declaration order. */
     private static List<String> names(JsonNode node) {
         List<String> names = new ArrayList<>();
-        node.fieldNames().forEachRemaining(names::add);
+        node.propertyNames().iterator().forEachRemaining(names::add);
         return names;
     }
 }

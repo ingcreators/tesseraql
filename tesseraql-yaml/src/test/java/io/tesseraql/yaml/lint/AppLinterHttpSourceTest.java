@@ -225,7 +225,10 @@ class AppLinterHttpSourceTest {
         assertThat(new AppLinter().lint(dir)).anySatisfy(finding -> {
             assertThat(finding.code()).isEqualTo("TQL-YAML-1001");
             assertThat(finding.source()).isEqualTo("web/orders/get.yml");
-            assertThat(finding.message()).contains("Duplicate field 'rates'");
+            // The library's sentence (Jackson 3 says "property" where 2 said "field"); the code
+            // and the position are the contract (docs/jackson-3.md decision 9).
+            assertThat(finding.message()).contains("Duplicate Object property \"rates\"");
+            assertThat(finding.line()).isEqualTo(9);
         });
     }
 

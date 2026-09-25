@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
 import java.io.IOException;
@@ -27,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for runtime multi-app hosting (design ch. 32.7). Two installed apps catalogued
@@ -39,7 +39,7 @@ class MultiAppHostIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static MultiAppHost host;
     static Path installRoot;
@@ -133,7 +133,7 @@ class MultiAppHostIntegrationTest {
     private static String greeting(String appId, String prefix) throws Exception {
         HttpResponse<String> response = get(appId, prefix + "/api/greet");
         assertThat(response.statusCode()).isEqualTo(200);
-        return MAPPER.readTree(response.body()).get("data").get(0).get("greeting").asText();
+        return MAPPER.readTree(response.body()).get("data").get(0).get("greeting").asString();
     }
 
     /**
@@ -222,7 +222,7 @@ class MultiAppHostIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode data = MAPPER.readTree(response.body()).get("data");
         assertThat(data).hasSize(1);
-        return data.get(0).get("name").asText();
+        return data.get(0).get("name").asString();
     }
 
     private static HttpResponse<String> get(String appId, String path) throws Exception {

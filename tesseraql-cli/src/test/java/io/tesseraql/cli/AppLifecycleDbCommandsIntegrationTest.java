@@ -2,8 +2,6 @@ package io.tesseraql.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -16,6 +14,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import picocli.CommandLine;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The database-backed app-lifecycle CLI surface — {@code migrate} (apply/info/validate),
@@ -48,14 +47,14 @@ class AppLifecycleDbCommandsIntegrationTest {
         // SQL coverage with the 1-based covered/coverable line lists, one JSON object.
         Captured json = executeCapturing(args(app, "test", "--format", "json"));
         assertThat(json.exitCode()).isZero();
-        JsonNode document = new ObjectMapper().readTree(json.stdout());
+        JsonNode document = io.tesseraql.yaml.JsonMappers.constrained().readTree(json.stdout());
         assertThat(document.get("failed").asLong()).isZero();
         assertThat(document.get("passed").asLong()).isEqualTo(document.get("results").size());
-        assertThat(document.get("results").get(0).get("name").asText()).isNotBlank();
+        assertThat(document.get("results").get(0).get("name").asString()).isNotBlank();
         assertThat(document.get("results").get(0).get("passed").asBoolean()).isTrue();
         assertThat(document.get("sql").size()).isPositive();
         JsonNode sqlFile = document.get("sql").get(0);
-        assertThat(sqlFile.get("file").asText()).endsWith(".sql");
+        assertThat(sqlFile.get("file").asString()).endsWith(".sql");
         assertThat(sqlFile.get("coveredLines").isArray()).isTrue();
         assertThat(sqlFile.get("coverableLines").isArray()).isTrue();
 
@@ -63,9 +62,9 @@ class AppLifecycleDbCommandsIntegrationTest {
         Captured single = executeCapturing(args(app, "test", "--format", "json",
                 "--case", "the items search returns the seeded row"));
         assertThat(single.exitCode()).isZero();
-        JsonNode filtered = new ObjectMapper().readTree(single.stdout());
+        JsonNode filtered = io.tesseraql.yaml.JsonMappers.constrained().readTree(single.stdout());
         assertThat(filtered.get("results").size()).isEqualTo(1);
-        assertThat(filtered.get("results").get(0).get("name").asText())
+        assertThat(filtered.get("results").get(0).get("name").asString())
                 .isEqualTo("the items search returns the seeded row");
 
         // Coverage gate (default thresholds are 0, so it passes).

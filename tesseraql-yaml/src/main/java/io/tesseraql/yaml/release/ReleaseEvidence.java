@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.release;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +9,8 @@ import io.tesseraql.yaml.openapi.OpenApiGenerator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Builds release evidence tying an app version to the hashes of its source and generated artifacts
@@ -44,7 +44,7 @@ public final class ReleaseEvidence {
         try {
             return mapper.writerWithDefaultPrettyPrinter()
                     .writeValueAsString(build(manifest, appName, appVersion));
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ERROR,
                     "Failed to serialize release evidence: " + ex.getMessage());
         }

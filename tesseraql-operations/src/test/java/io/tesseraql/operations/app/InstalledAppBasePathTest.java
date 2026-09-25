@@ -3,7 +3,6 @@ package io.tesseraql.operations.app;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -34,7 +33,7 @@ class InstalledAppBasePathTest {
 
     @Test
     void aCatalogueDeclaringABasePathIsRefused() {
-        assertThatThrownBy(() -> new ObjectMapper().readValue("""
+        assertThatThrownBy(() -> io.tesseraql.yaml.JsonMappers.constrained().readValue("""
                 {"name":"orders","version":"1.0.0","path":"orders/1.0.0",
                  "entitledTenants":[],"basePath":"/shop"}
                 """, InstalledApp.class))
@@ -45,7 +44,7 @@ class InstalledAppBasePathTest {
     /** The derived address never enters the JSON, so nothing on disk can drift from the name. */
     @Test
     void theAddressIsNotSerialised() throws Exception {
-        String json = new ObjectMapper().writeValueAsString(
+        String json = io.tesseraql.yaml.JsonMappers.constrained().writeValueAsString(
                 new InstalledApp("orders", "1.0.0", "orders/1.0.0", List.of()));
         assertThat(json).doesNotContain("basePath");
     }

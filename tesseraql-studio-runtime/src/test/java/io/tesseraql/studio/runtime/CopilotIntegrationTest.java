@@ -38,7 +38,8 @@ class CopilotIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    static final tools.jackson.databind.ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers
+            .constrained();
 
     static HttpServer modelServer;
     static final ConcurrentLinkedQueue<String> REPLIES = new ConcurrentLinkedQueue<>();
@@ -104,23 +105,23 @@ class CopilotIntegrationTest {
 
     /** Splits one canned message into OpenAI-style stream deltas (choices[0].delta). */
     private static List<String> deltaFrames(String message) throws IOException {
-        com.fasterxml.jackson.databind.JsonNode canned = MAPPER.readTree(message);
+        tools.jackson.databind.JsonNode canned = MAPPER.readTree(message);
         List<String> frames = new java.util.ArrayList<>();
-        String content = canned.path("content").asText(null);
+        String content = canned.path("content").asString(null);
         if (content != null && !content.isEmpty()) {
             int mid = content.length() / 2;
             frames.add(frame(delta -> delta.put("content", content.substring(0, mid))));
             frames.add(frame(delta -> delta.put("content", content.substring(mid))));
         }
-        com.fasterxml.jackson.databind.JsonNode call = canned.path("tool_calls").path(0);
+        tools.jackson.databind.JsonNode call = canned.path("tool_calls").path(0);
         if (!call.isMissingNode()) {
-            String arguments = call.path("function").path("arguments").asText();
+            String arguments = call.path("function").path("arguments").asString();
             int mid = arguments.length() / 2;
             frames.add(frame(delta -> {
                 var part = delta.putArray("tool_calls").addObject();
-                part.put("index", 0).put("id", call.path("id").asText());
+                part.put("index", 0).put("id", call.path("id").asString());
                 part.putObject("function")
-                        .put("name", call.path("function").path("name").asText())
+                        .put("name", call.path("function").path("name").asString())
                         .put("arguments", arguments.substring(0, mid));
             }));
             frames.add(frame(delta -> {
@@ -133,9 +134,9 @@ class CopilotIntegrationTest {
     }
 
     private static String frame(
-            java.util.function.Consumer<com.fasterxml.jackson.databind.node.ObjectNode> delta)
+            java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> delta)
             throws IOException {
-        com.fasterxml.jackson.databind.node.ObjectNode root = MAPPER.createObjectNode();
+        tools.jackson.databind.node.ObjectNode root = MAPPER.createObjectNode();
         delta.accept(root.putArray("choices").addObject().putObject("delta"));
         return MAPPER.writeValueAsString(root);
     }

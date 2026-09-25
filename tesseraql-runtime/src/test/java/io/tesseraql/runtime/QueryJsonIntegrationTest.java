@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
@@ -32,6 +30,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * End-to-end acceptance test for milestone M1 plus Phase 4a security: {@code GET /api/users}
@@ -44,7 +44,7 @@ class QueryJsonIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 
     static TesseraqlRuntime runtime;
@@ -72,9 +72,9 @@ class QueryJsonIntegrationTest {
         JsonNode body = getJson("/api/users?q=sato&limit=10", token(List.of("USER_READ")));
 
         assertThat(body.path("data")).hasSize(1);
-        assertThat(body.path("data").get(0).path("name").asText()).isEqualTo("sato");
+        assertThat(body.path("data").get(0).path("name").asString()).isEqualTo("sato");
         // created_at is masked by the response field policy (design ch. 34).
-        assertThat(body.path("data").get(0).path("created_at").asText()).isEqualTo("[MASKED]");
+        assertThat(body.path("data").get(0).path("created_at").asString()).isEqualTo("[MASKED]");
         assertThat(body.path("meta").path("count").asInt()).isEqualTo(1);
         assertThat(body.path("meta").path("limit").asInt()).isEqualTo(10);
         assertThat(body.path("meta").path("offset").asInt()).isZero();
@@ -92,7 +92,7 @@ class QueryJsonIntegrationTest {
     void rejectsMissingToken() throws Exception {
         HttpResponse<String> response = get("/api/users", null);
         assertThat(response.statusCode()).isEqualTo(401);
-        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-SEC-4011");
     }
 
@@ -100,7 +100,7 @@ class QueryJsonIntegrationTest {
     void rejectsInsufficientRole() throws Exception {
         HttpResponse<String> response = get("/api/users", token(List.of("SOMETHING_ELSE")));
         assertThat(response.statusCode()).isEqualTo(403);
-        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-SEC-4031");
     }
 
@@ -152,7 +152,7 @@ class QueryJsonIntegrationTest {
                 sessions.cookieName() + "=" + sid, null, "{\"name\":\"suzuki\"}");
 
         assertThat(response.statusCode()).isEqualTo(403);
-        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-SEC-4032");
     }
 
@@ -185,7 +185,7 @@ class QueryJsonIntegrationTest {
         HttpResponse<String> conflict = postIdem("/users/deactivate", cookie, csrf, key,
                 "{\"name\":\"tanaka\"}");
         assertThat(conflict.statusCode()).isEqualTo(422);
-        assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-IDEM-4221");
 
         // Same key, same request body -> replay of the original response.
@@ -218,7 +218,7 @@ class QueryJsonIntegrationTest {
         HttpResponse<String> conflict = postForm("/users/deactivate", cookie, csrf,
                 "name=tanaka&_idempotency=form-key-001");
         assertThat(conflict.statusCode()).isEqualTo(422);
-        assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(conflict.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-IDEM-4221");
     }
 

@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import tools.jackson.core.JacksonException;
 
 /**
  * The mail composer's document model (docs/html-email.md D4): a mail template composed
@@ -209,12 +210,13 @@ public final class MailComposer {
     private static String json(Object value) {
         try {
             return JSON.writeValueAsString(value);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalStateException(ex);
         }
     }
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final tools.jackson.databind.ObjectMapper JSON = io.tesseraql.yaml.JsonMappers
+            .constrained();
 
     private static Block block(String invocation) {
         int paren = invocation.indexOf('(');

@@ -2,9 +2,6 @@ package io.tesseraql.cli.mcp;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.mcp.McpServer;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
 import java.nio.file.Files;
@@ -15,6 +12,9 @@ import java.sql.Statement;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The Phase 24 acceptance criterion, exercised end to end: an agent connected only over MCP
@@ -24,7 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class McpDevToolsAcceptanceTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
     private int id;
 
     @Test
@@ -42,15 +42,15 @@ class McpDevToolsAcceptanceTest {
         McpServer server = new McpDevTools(Map.of("demo", app), false).toServer();
 
         // The agent initializes, then discovers the app.
-        assertThat(initialize(server).get("serverInfo").get("name").asText())
+        assertThat(initialize(server).get("serverInfo").get("name").asString())
                 .isEqualTo("tesseraql-dev");
         JsonNode summary = callJson(server, "manifest_summary", Map.of());
-        assertThat(summary.get("appName").asText()).isEqualTo("demo");
+        assertThat(summary.get("appName").asString()).isEqualTo("demo");
 
         // It introspects the table it intends to scaffold.
         JsonNode schema = callJson(server, "schema_introspect", Map.of("table", "items",
                 "jdbcUrl", jdbcUrl));
-        assertThat(schema.get("versionColumn").asText()).isEqualToIgnoringCase("version");
+        assertThat(schema.get("versionColumn").asString()).isEqualToIgnoringCase("version");
 
         // It scaffolds the CRUD slice - a write tool, applied through the checksum-aware writer.
         JsonNode scaffold = callJson(server, "scaffold_crud", Map.of("table", "items",
@@ -101,20 +101,20 @@ class McpDevToolsAcceptanceTest {
         for (JsonNode tool : tools) {
             JsonNode schema = tool.get("inputSchema");
             assertThat(schema.get("properties").has("application"))
-                    .as(() -> tool.get("name").asText() + " lacks the application argument")
+                    .as(() -> tool.get("name").asString() + " lacks the application argument")
                     .isTrue();
             java.util.List<String> required = new java.util.ArrayList<>();
-            schema.get("required").forEach(name -> required.add(name.asText()));
+            schema.get("required").forEach(name -> required.add(name.asString()));
             assertThat(required).contains("application");
-            assertThat(schema.get("properties").get("application").get("description").asText())
+            assertThat(schema.get("properties").get("application").get("description").asString())
                     .contains("orders").contains("billing");
         }
 
         // The argument selects the member; each answers with its own identity.
         assertThat(callJson(server, "manifest_summary", Map.of("application", "orders"))
-                .get("appName").asText()).isEqualTo("orders");
+                .get("appName").asString()).isEqualTo("orders");
         assertThat(callJson(server, "manifest_summary", Map.of("application", "billing"))
-                .get("appName").asText()).isEqualTo("billing");
+                .get("appName").asString()).isEqualTo("billing");
 
         // Omitting it, or naming a stranger, is an error that lists what the server holds.
         ObjectNode missing = mapper.createObjectNode();
@@ -136,14 +136,14 @@ class McpDevToolsAcceptanceTest {
         JsonNode prompts = request(server, "prompts/list", null).get("result").get("prompts");
         JsonNode copilot = null;
         for (JsonNode prompt : prompts) {
-            if ("studio_copilot".equals(prompt.get("name").asText())) {
+            if ("studio_copilot".equals(prompt.get("name").asString())) {
                 copilot = prompt;
             }
         }
         assertThat(copilot).isNotNull();
         boolean hasApplicationArg = false;
         for (JsonNode argument : copilot.get("arguments")) {
-            hasApplicationArg |= "application".equals(argument.get("name").asText());
+            hasApplicationArg |= "application".equals(argument.get("name").asString());
         }
         assertThat(hasApplicationArg).isTrue();
     }
@@ -234,7 +234,7 @@ class McpDevToolsAcceptanceTest {
         McpServer server = new McpDevTools(Map.of("ro", app), true).toServer();
         JsonNode tools = request(server, "tools/list", null).get("result").get("tools");
         java.util.List<String> names = new java.util.ArrayList<>();
-        tools.forEach(tool -> names.add(tool.get("name").asText()));
+        tools.forEach(tool -> names.add(tool.get("name").asString()));
         assertThat(names).contains("manifest_summary", "lint")
                 .doesNotContain("scaffold_crud", "draft_save", "draft_apply");
         // The copilot prompt drives the write loop, so it is hidden in read-only mode too.
@@ -253,7 +253,7 @@ class McpDevToolsAcceptanceTest {
         // The prompt is advertised (Studio backlog G: the describe -> draft -> preview -> apply loop).
         JsonNode prompts = request(server, "prompts/list", null).get("result").get("prompts");
         java.util.List<String> names = new java.util.ArrayList<>();
-        prompts.forEach(prompt -> names.add(prompt.get("name").asText()));
+        prompts.forEach(prompt -> names.add(prompt.get("name").asString()));
         assertThat(names).contains("studio_copilot");
 
         // Getting it renders guidance that names the loop's tools and folds in the request.
@@ -263,7 +263,7 @@ class McpDevToolsAcceptanceTest {
         arguments.put("task", "a JSON endpoint that lists active users");
         arguments.put("table", "users");
         JsonNode result = request(server, "prompts/get", params).get("result");
-        String text = result.get("messages").get(0).get("content").get("text").asText();
+        String text = result.get("messages").get(0).get("content").get("text").asString();
         assertThat(text).contains("a JSON endpoint that lists active users").contains("users")
                 .contains("scaffold_crud").contains("draft_preview").contains("draft_apply");
 
@@ -290,7 +290,7 @@ class McpDevToolsAcceptanceTest {
 
         McpServer server = new McpDevTools(Map.of("marker", app), false).toServer();
         JsonNode schema = callJson(server, "schema_introspect", Map.of("table", "items"));
-        assertThat(schema.get("versionColumn").asText()).isEqualToIgnoringCase("version");
+        assertThat(schema.get("versionColumn").asString()).isEqualToIgnoringCase("version");
     }
 
     /**
@@ -364,7 +364,7 @@ class McpDevToolsAcceptanceTest {
 
     private static java.util.List<String> routeIds(JsonNode summary) {
         java.util.List<String> ids = new java.util.ArrayList<>();
-        summary.get("routes").forEach(route -> ids.add(route.get("id").asText()));
+        summary.get("routes").forEach(route -> ids.add(route.get("id").asString()));
         return ids;
     }
 }

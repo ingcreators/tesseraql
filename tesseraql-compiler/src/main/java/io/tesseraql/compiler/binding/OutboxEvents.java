@@ -1,6 +1,5 @@
 package io.tesseraql.compiler.binding;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +10,8 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Builds the {@link OutboxEvent} a command route declares, resolving the {@code outbox.payload}
@@ -52,7 +53,7 @@ final class OutboxEvents {
             return OutboxEvent.toInsert(outbox.aggregateType(), aggregateId, outbox.eventType(),
                     mapper.writeValueAsString(payload), appName,
                     outbox.schedule().resolve(context, java.time.Instant.now()), null);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(SERIALIZE_ERROR, "Failed to serialize outbox payload");
         }
     }

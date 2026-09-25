@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -20,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * http: sources end to end (docs/connectors.md, "HTTP sources"): a query route composes an
@@ -33,7 +33,7 @@ class HttpSourceIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    static final ObjectMapper MAPPER = new ObjectMapper();
+    static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static HttpServer upstream;
     static TesseraqlRuntime runtime;
@@ -115,12 +115,12 @@ class HttpSourceIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.get("rows")).hasSize(1);
-        assertThat(body.get("rows").get(0).get("status").asText()).isEqualTo("PENDING");
+        assertThat(body.get("rows").get(0).get("status").asString()).isEqualTo("PENDING");
         // select: rates picked the array; each element is one row.
         assertThat(body.get("fx")).hasSize(2);
-        assertThat(body.get("fx").get(0).get("code").asText()).isEqualTo("JPY");
+        assertThat(body.get("fx").get(0).get("code").asString()).isEqualTo("JPY");
         // The object-shaped body remains addressable for scalar shaping.
-        assertThat(body.get("base").asText()).isEqualTo("USD");
+        assertThat(body.get("base").asString()).isEqualTo("USD");
         // The named credential rode the outbound gateway onto the rates request (the
         // credential-less meta source sends none).
         assertThat(seenAuthorizations).contains("Bearer fx-dummy-token");
@@ -152,7 +152,7 @@ class HttpSourceIntegrationTest {
         assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.get("due")).hasSize(1);
-        assertThat(body.get("due").get(0).get("due").asText()).isEqualTo("2026-01-15");
+        assertThat(body.get("due").get(0).get("due").asString()).isEqualTo("2026-01-15");
         assertThat(body.get("due").get(0).get("note").get("lot").asInt()).isEqualTo(7);
     }
 
@@ -163,7 +163,7 @@ class HttpSourceIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(response.body());
         assertThat(body.get("matches")).hasSize(1);
-        assertThat(body.get("matches").get(0).get("name").asText()).isEqualTo("yen");
+        assertThat(body.get("matches").get(0).get("name").asString()).isEqualTo("yen");
         // The method and the body reached the upstream, rather than being dropped.
         assertThat(seenSearchRequests).anyMatch(seen -> seen.startsWith("POST ")
                 && seen.contains("JPY"));

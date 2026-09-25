@@ -2,8 +2,6 @@ package io.tesseraql.yaml.lint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
 import io.tesseraql.yaml.scaffold.ScaffoldedFile;
 import java.io.IOException;
@@ -17,6 +15,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * No shipped schema node describes nothing.
@@ -43,7 +43,7 @@ class SchemaBlindNodeTest {
     /** The source tree, not the classpath: the file set is derived by listing the directory. */
     private static final Path SCHEMAS = Path.of("src/main/resources/schema");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     /**
      * The nodes that describe nothing <em>because the value really is free-form</em>.
@@ -222,7 +222,7 @@ class SchemaBlindNodeTest {
     private static void collectRefs(JsonNode node, String file, List<String> refs,
             List<String> dangling, Map<String, JsonNode> documents) {
         if (node.isObject()) {
-            String ref = node.path("$ref").asText("");
+            String ref = node.path("$ref").asString("");
             if (!ref.isEmpty()) {
                 refs.add(ref);
                 int hash = ref.indexOf('#');
@@ -259,7 +259,7 @@ class SchemaBlindNodeTest {
      * written to check exactly this — an honest node stripped of its properties.
      */
     private static boolean describes(JsonNode node, boolean branch) {
-        if (!node.path("$ref").asText("").isEmpty() || node.has("const")) {
+        if (!node.path("$ref").asString("").isEmpty() || node.has("const")) {
             return true;
         }
         List<String> arrays = branch
@@ -306,14 +306,14 @@ class SchemaBlindNodeTest {
      */
     private static boolean describesByType(JsonNode node) {
         JsonNode type = node.path("type");
-        if (type.isTextual()) {
-            return !"object".equals(type.asText()) && !"array".equals(type.asText());
+        if (type.isString()) {
+            return !"object".equals(type.asString()) && !"array".equals(type.asString());
         }
         if (!type.isArray() || type.isEmpty()) {
             return false;
         }
         for (JsonNode member : type) {
-            if ("object".equals(member.asText()) || "array".equals(member.asText())) {
+            if ("object".equals(member.asString()) || "array".equals(member.asString())) {
                 return false;
             }
         }

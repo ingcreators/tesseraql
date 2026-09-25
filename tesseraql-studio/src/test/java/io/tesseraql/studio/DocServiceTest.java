@@ -665,12 +665,13 @@ class DocServiceTest {
     void exportsTheOpenApiDocumentGeneratedLiveFromTheManifest() throws Exception {
         DocService service = new DocService(exampleManifest());
 
-        com.fasterxml.jackson.databind.JsonNode doc = new com.fasterxml.jackson.databind.ObjectMapper()
+        tools.jackson.databind.JsonNode doc = io.tesseraql.yaml.JsonMappers.constrained()
                 .readTree(service.openApiJson());
         // A real OpenAPI 3 document: the version marker, the app's title, and its routes.
-        assertThat(doc.path("openapi").asText()).isEqualTo("3.0.3");
-        assertThat(doc.path("info").path("title").asText()).isEqualTo("user-admin");
-        assertThat(doc.path("paths").fieldNames()).toIterable().contains("/api/users");
+        assertThat(doc.path("openapi").asString()).isEqualTo("3.0.3");
+        assertThat(doc.path("info").path("title").asString()).isEqualTo("user-admin");
+        assertThat(doc.path("paths").propertyNames().iterator()).toIterable()
+                .contains("/api/users");
         assertThat(doc.path("components").path("securitySchemes").has("bearerAuth")).isTrue();
     }
 
@@ -679,7 +680,7 @@ class DocServiceTest {
         DocService service = new DocService(exampleManifest());
 
         // Well-formed JSON object; its detailed shape is the generator's own contract (tested there).
-        com.fasterxml.jackson.databind.JsonNode doc = new com.fasterxml.jackson.databind.ObjectMapper()
+        tools.jackson.databind.JsonNode doc = io.tesseraql.yaml.JsonMappers.constrained()
                 .readTree(service.htmxContractJson());
         assertThat(doc.isObject()).isTrue();
     }

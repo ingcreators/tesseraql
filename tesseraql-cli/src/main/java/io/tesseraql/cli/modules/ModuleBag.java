@@ -1,9 +1,5 @@
 package io.tesseraql.cli.modules;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -11,6 +7,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The manifest a fetched bag carries (docs/module-channel.md decision 5): what was collected, on
@@ -28,7 +28,7 @@ public final class ModuleBag {
     public static final String FILE_NAME = "bag.json";
 
     private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained()
-            .enable(SerializationFeature.INDENT_OUTPUT);
+            .rebuild().enable(SerializationFeature.INDENT_OUTPUT).build();
 
     /** One collected artifact and the declaration that asked for it. */
     public record Entry(String source, String coordinate, String sha256) {

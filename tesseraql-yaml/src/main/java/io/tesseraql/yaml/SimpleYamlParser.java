@@ -1,6 +1,5 @@
 package io.tesseraql.yaml;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +10,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Parses and validates TesseraQL Simple YAML into the route model (design ch. 6).
@@ -68,7 +69,7 @@ public final class SimpleYamlParser {
             return validate(mapper.readValue(yaml, RouteDefinition.class), source);
         } catch (TqlException ex) {
             throw ex;
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("route", source, ex);
         }
     }
@@ -103,23 +104,24 @@ public final class SimpleYamlParser {
      * {@code default}, and {@code writable} belong to each route's use of it.
      */
     public io.tesseraql.yaml.model.DomainsDocument parseDomains(Path file) {
-        com.fasterxml.jackson.databind.JsonNode tree;
+        tools.jackson.databind.JsonNode tree;
         try {
             tree = mapper.readTree(readFile(file));
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("domains", file.toString(), ex);
         }
         if (tree == null || !tree.isObject()) {
             throw new TqlException(DOMAIN_MALFORMED,
                     "Domains document " + file + " must be a map");
         }
-        if (!EXPECTED_VERSION.equals(tree.path("version").asText(null))) {
+        if (!EXPECTED_VERSION.equals(tree.path("version").asString(null))) {
             throw new TqlException(DOMAIN_MALFORMED, "Domains document " + file
                     + " must declare version: " + EXPECTED_VERSION);
         }
         java.util.Map<String, io.tesseraql.yaml.model.InputField> domains = new java.util.LinkedHashMap<>();
         for (var entry : tree.path("domains").properties()) {
-            for (String key : (Iterable<String>) () -> entry.getValue().fieldNames()) {
+            for (String key : (Iterable<String>) () -> entry.getValue().propertyNames()
+                    .iterator()) {
                 if (!DOMAIN_KEYS.contains(key)) {
                     throw new TqlException(DOMAIN_OPERATIONAL_KEY, "Domain '" + entry.getKey()
                             + "' (" + file + ") declares '" + key + "' — a domain describes the"
@@ -132,7 +134,8 @@ public final class SimpleYamlParser {
         }
         java.util.Map<String, io.tesseraql.yaml.model.ErrorsSpec.ConstraintMapping> constraints = new java.util.LinkedHashMap<>();
         for (var entry : tree.path("constraints").properties()) {
-            for (String key : (Iterable<String>) () -> entry.getValue().fieldNames()) {
+            for (String key : (Iterable<String>) () -> entry.getValue().propertyNames()
+                    .iterator()) {
                 if (!CONSTRAINT_KEYS.contains(key)) {
                     // Mirror the strict domains: check — ConstraintMapping is ignoreUnknown, so a
                     // `feild:` typo would otherwise drop the field mapping and surface the DB
@@ -161,23 +164,24 @@ public final class SimpleYamlParser {
 
     /** Parses a {@code catalogs/*.yml} document (docs/lookups.md, decision 9). */
     public java.util.Map<String, io.tesseraql.yaml.model.CatalogSpec> parseCatalogs(Path file) {
-        com.fasterxml.jackson.databind.JsonNode tree;
+        tools.jackson.databind.JsonNode tree;
         try {
             tree = mapper.readTree(readFile(file));
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("catalogs", file.toString(), ex);
         }
         if (tree == null || !tree.isObject()) {
             throw new TqlException(CATALOG_MALFORMED,
                     "Catalogs document " + file + " must be a map");
         }
-        if (!EXPECTED_VERSION.equals(tree.path("version").asText(null))) {
+        if (!EXPECTED_VERSION.equals(tree.path("version").asString(null))) {
             throw new TqlException(CATALOG_MALFORMED, "Catalogs document " + file
                     + " must declare version: " + EXPECTED_VERSION);
         }
         java.util.Map<String, io.tesseraql.yaml.model.CatalogSpec> catalogs = new java.util.LinkedHashMap<>();
         for (var entry : tree.path("catalogs").properties()) {
-            for (String key : (Iterable<String>) () -> entry.getValue().fieldNames()) {
+            for (String key : (Iterable<String>) () -> entry.getValue().propertyNames()
+                    .iterator()) {
                 if (!CATALOG_KEYS.contains(key)) {
                     // Strict like domains: a `lable:` typo would otherwise leave every code
                     // rendering as its raw value with nothing to explain why.
@@ -207,7 +211,7 @@ public final class SimpleYamlParser {
         try {
             document = mapper.readValue(readFile(file),
                     io.tesseraql.yaml.model.RuleSetsDocument.class);
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("rules", file.toString(), ex);
         }
         if (document == null) {
@@ -242,7 +246,7 @@ public final class SimpleYamlParser {
         try {
             document = mapper.readValue(readFile(file),
                     io.tesseraql.yaml.model.DecisionsDocument.class);
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("decisions", file.toString(), ex);
         }
         if (document == null) {
@@ -268,7 +272,7 @@ public final class SimpleYamlParser {
         try {
             document = mapper.readValue(readFile(file),
                     io.tesseraql.yaml.model.CalendarsDocument.class);
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("calendars", file.toString(), ex);
         }
         if (document == null) {
@@ -291,7 +295,7 @@ public final class SimpleYamlParser {
         try {
             scenario = mapper.readValue(readFile(file),
                     io.tesseraql.yaml.bench.BenchScenario.class);
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("bench scenario", file.toString(), ex);
         }
         if (scenario == null) {
@@ -328,7 +332,7 @@ public final class SimpleYamlParser {
             return validateJob(mapper.readValue(content, JobDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("job", file.toString(), ex);
         }
     }
@@ -356,7 +360,7 @@ public final class SimpleYamlParser {
                     content, io.tesseraql.yaml.model.ScopeDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("scope", file.toString(), ex);
         }
     }
@@ -384,7 +388,7 @@ public final class SimpleYamlParser {
                     content, io.tesseraql.yaml.model.AttachmentDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("attachment", file.toString(), ex);
         }
     }
@@ -412,7 +416,7 @@ public final class SimpleYamlParser {
                     content, io.tesseraql.yaml.model.WorkflowDefinition.class), file.toString());
         } catch (TqlException ex) {
             throw ex;
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("workflow", file.toString(), ex);
         }
     }
@@ -441,7 +445,7 @@ public final class SimpleYamlParser {
     public String write(Object tree) {
         try {
             return mapper.writeValueAsString(tree);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(SCHEMA_ERROR, "Failed to serialize YAML: " + ex.getMessage());
         }
     }
@@ -458,7 +462,7 @@ public final class SimpleYamlParser {
             return tree == null ? Map.of() : tree;
         } catch (TqlException ex) {
             throw ex;
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("config", file.toString(), ex);
         }
     }
@@ -479,7 +483,7 @@ public final class SimpleYamlParser {
             return tree == null ? Map.of() : tree;
         } catch (TqlException ex) {
             throw ex;
-        } catch (IOException | RuntimeException ex) {
+        } catch (RuntimeException ex) {
             throw schemaError("config", "<string>", ex);
         }
     }

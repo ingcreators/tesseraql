@@ -1,11 +1,10 @@
 package io.tesseraql.apptasks;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.Hashing;
+import io.tesseraql.yaml.JsonMappers;
 import io.tesseraql.yaml.config.AppConfig;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,6 +13,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The packaging side of the module channel (docs/module-channel.md decision 3): what a
@@ -51,7 +53,7 @@ public final class PackagedModules {
     public static final TqlErrorCode MODULES_DIVERGED_AT_PACK = new TqlErrorCode(TqlDomain.APP,
             4219);
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JsonMappers.constrained();
 
     private PackagedModules() {
     }
@@ -88,8 +90,8 @@ public final class PackagedModules {
         List<String> locked = new ArrayList<>();
         try {
             JsonNode root = MAPPER.readTree(Files.readString(lock));
-            root.path("artifacts").forEach(node -> locked.add(node.path("sha256").asText()));
-        } catch (IOException ex) {
+            root.path("artifacts").forEach(node -> locked.add(node.path("sha256").asString("")));
+        } catch (JacksonException | IOException ex) {
             throw new TqlException(MODULES_DIVERGED_AT_PACK, "Application '"
                     + appHome.getFileName() + "' has an unreadable modules.lock ("
                     + ex.getMessage() + ") — re-run 'tesseraql modules resolve --app " + appHome
@@ -148,8 +150,8 @@ public final class PackagedModules {
         try {
             JsonNode root = MAPPER.readTree(Files.readString(lock));
             root.path("artifacts").forEach(node -> coordinates.add(
-                    node.path("coordinate").asText()));
-        } catch (IOException ex) {
+                    node.path("coordinate").asString("")));
+        } catch (JacksonException | IOException ex) {
             throw new TqlException(MODULES_DIVERGED_AT_PACK, "Unreadable modules.lock at " + lock
                     + " (" + ex.getMessage() + ") — re-run 'tesseraql modules resolve'");
         }

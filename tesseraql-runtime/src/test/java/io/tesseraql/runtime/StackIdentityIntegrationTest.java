@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.app.AppCatalog;
 import io.tesseraql.operations.app.InstalledApp;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
@@ -33,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The identity remainder and the {@code tql.app.use} fence, end to end (docs/stack-shells.md
@@ -48,7 +48,7 @@ class StackIdentityIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
@@ -320,7 +320,7 @@ class StackIdentityIntegrationTest {
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         return new Session(setCookie.substring(0, setCookie.indexOf(';')),
-                MAPPER.readTree(login.body()).path("csrfToken").asText());
+                MAPPER.readTree(login.body()).path("csrfToken").asString());
     }
 
     /** An HS256 bearer for the fixture app's declared secret, carrying the given atom grants. */

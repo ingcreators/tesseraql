@@ -1,7 +1,5 @@
 package io.tesseraql.yaml.release;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Verifies a release evidence document against the app it claims to describe (design ch. 49):
@@ -90,7 +90,7 @@ public final class ReleaseEvidenceVerifier {
     private Map<?, ?> parse(String evidenceJson) {
         try {
             return mapper.readValue(evidenceJson, Map.class);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(ERROR, "Invalid evidence document: " + ex.getMessage());
         }
     }

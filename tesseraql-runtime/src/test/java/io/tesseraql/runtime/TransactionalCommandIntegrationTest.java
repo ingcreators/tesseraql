@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -34,6 +32,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Phase 18 acceptance (roadmap "transactional write depth"): an order header+lines form posts
@@ -49,7 +49,7 @@ class TransactionalCommandIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -86,12 +86,12 @@ class TransactionalCommandIntegrationTest {
         assertThat(orderId).isPositive(); // generated key captured from the header insert
         assertThat(body.path("orderNo").asLong()).isEqualTo(1); // first sequence value
         assertThat(body.path("lines").asInt()).isEqualTo(2);
-        assertThat(body.path("eventId").asText()).isNotBlank();
+        assertThat(body.path("eventId").asString()).isNotBlank();
         // A command's query-step shapes its rows the way a query route does: an ISO-8601
         // instant, not whatever java.sql.Timestamp.toString() a driver happens to produce
         // ("2026-01-01 00:00:00.0"). A response binding written against one path used to
         // break on the other.
-        assertThat(body.path("placed").get(0).path("created_at").asText())
+        assertThat(body.path("placed").get(0).path("created_at").asString())
                 .matches("\\d{4}-\\d{2}-\\d{2}T.*");
 
         Map<String, Object> header = queryOne(
@@ -155,7 +155,7 @@ class TransactionalCommandIntegrationTest {
         // Same intent token, different content: a stale tab or a bug, not a retry - 422, so it
         // renders where the request's own refusals do, and never as a punished 409.
         assertThat(reused.statusCode()).isEqualTo(422);
-        assertThat(MAPPER.readTree(reused.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(reused.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-IDEM-4221");
         assertThat(count("orders", "1=1")).isEqualTo(ordersBefore);
     }
@@ -205,11 +205,11 @@ class TransactionalCommandIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(409);
         JsonNode error = MAPPER.readTree(response.body()).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4091");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-SQL-4091");
         JsonNode field = error.path("details").path("fields").get(0);
-        assertThat(field.path("field").asText()).isEqualTo("lines");
-        assertThat(field.path("code").asText()).isEqualTo("unknown-product");
-        assertThat(field.path("constraint").asText()).isEqualTo("order_lines_product_fk");
+        assertThat(field.path("field").asString()).isEqualTo("lines");
+        assertThat(field.path("code").asString()).isEqualTo("unknown-product");
+        assertThat(field.path("constraint").asString()).isEqualTo("order_lines_product_fk");
 
         // The header insert (an earlier step) rolled back with the failing lines step.
         assertThat(count("orders", "1=1")).isEqualTo(ordersBefore);
@@ -244,10 +244,10 @@ class TransactionalCommandIntegrationTest {
 
         assertThat(response.statusCode()).isEqualTo(400);
         JsonNode error = MAPPER.readTree(response.body()).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-FIELD-2001");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-FIELD-2001");
         JsonNode field = error.path("details").path("fields").get(0);
-        assertThat(field.path("field").asText()).isEqualTo("lines[1].quantity");
-        assertThat(field.path("code").asText()).isEqualTo("min");
+        assertThat(field.path("field").asString()).isEqualTo("lines[1].quantity");
+        assertThat(field.path("code").asString()).isEqualTo("min");
         assertThat(count("orders", "1=1")).isEqualTo(ordersBefore);
     }
 
@@ -261,7 +261,7 @@ class TransactionalCommandIntegrationTest {
                 ]}""", Map.of());
 
         assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(response.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-FIELD-2002");
     }
 
@@ -285,11 +285,11 @@ class TransactionalCommandIntegrationTest {
                 "{\"id\": " + orderId + ", \"status\": \"SHIPPED\", \"version\": 1}", Map.of());
         assertThat(stale.statusCode()).isEqualTo(409);
         JsonNode error = MAPPER.readTree(stale.body()).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4092");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-SQL-4092");
         JsonNode conflict = error.path("details").path("conflict");
         assertThat(conflict.path("expectedRows").asInt()).isEqualTo(1);
         assertThat(conflict.path("actualRows").asInt()).isEqualTo(0);
-        assertThat(conflict.path("hint").asText()).contains("another user");
+        assertThat(conflict.path("hint").asString()).contains("another user");
         assertThat(queryOne("select status from orders where id = " + orderId).get("status"))
                 .isEqualTo("APPROVED"); // the stale write did not stick
     }

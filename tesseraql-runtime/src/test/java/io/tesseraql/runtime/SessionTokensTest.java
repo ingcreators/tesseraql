@@ -3,7 +3,6 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -11,6 +10,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The provider behind the console's issue-token page (docs/stack-architecture.md Decision 20).
@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
  */
 class SessionTokensTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private static final JwtConfig JWT = new JwtConfig("HS256", "unit-test-secret", null, null,
             null, "https://issuer.example.com", List.of("https://app.example.com"), null, null,
@@ -53,15 +53,15 @@ class SessionTokensTest {
         assertThat(issued).containsEntry("enabled", true).containsEntry("tokenType", "Bearer");
         var claims = MAPPER.readTree(new String(Base64.getUrlDecoder().decode(
                 String.valueOf(issued.get("token")).split("\\.")[1]), StandardCharsets.UTF_8));
-        assertThat(claims.path("sub").asText()).isEqualTo("alice");
-        assertThat(claims.path("name").asText()).isEqualTo("Alice");
+        assertThat(claims.path("sub").asString()).isEqualTo("alice");
+        assertThat(claims.path("name").asString()).isEqualTo("Alice");
         assertThat(claims.path("roles").toString()).contains("USER_READ");
         assertThat(claims.path("permissions").toString()).contains("users.read");
         assertThat(claims.path("groups").toString()).contains("staff");
         // Required since the audience work, and minted without it the token would be signed
         // correctly and refused on arrival by the application that issued it.
-        assertThat(claims.path("aud").asText()).isEqualTo("https://app.example.com");
-        assertThat(claims.path("iss").asText()).isEqualTo("https://issuer.example.com");
+        assertThat(claims.path("aud").asString()).isEqualTo("https://app.example.com");
+        assertThat(claims.path("iss").asString()).isEqualTo("https://issuer.example.com");
     }
 
     /**
@@ -150,7 +150,8 @@ class SessionTokensTest {
         String token = String.valueOf(minted.get("token"));
         String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]),
                 StandardCharsets.UTF_8);
-        assertThat(new ObjectMapper().readTree(payload).get("aud").asText())
+        assertThat(
+                io.tesseraql.yaml.JsonMappers.constrained().readTree(payload).get("aud").asString())
                 .isEqualTo("https://stack.example.com/shop");
     }
 }

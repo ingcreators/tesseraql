@@ -1,6 +1,5 @@
 package io.tesseraql.operations.batch;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.dialect.JdbcValues;
 import io.tesseraql.core.dialect.ResultRows;
 import io.tesseraql.core.error.TqlDomain;
@@ -22,6 +21,8 @@ import java.sql.SQLException;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The rows a chunk step processes, one at a time, whatever produced them.
@@ -138,7 +139,7 @@ interface ChunkRows extends AutoCloseable {
                     }
                     current = mapper.readValue(line, Map.class);
                     return true;
-                } catch (IOException ex) {
+                } catch (JacksonException | IOException ex) {
                     throw TqlException.builder(READ_ERROR)
                             .message("the step's spool could not be read: " + ex.getMessage())
                             .cause(ex)

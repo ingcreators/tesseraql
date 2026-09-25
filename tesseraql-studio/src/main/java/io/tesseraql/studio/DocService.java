@@ -1,7 +1,5 @@
 package io.tesseraql.studio;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -31,6 +29,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The backend for the in-Studio documentation portal (documentation portal v1): it serves the
@@ -71,8 +71,7 @@ public final class DocService {
     private static final TqlErrorCode TRAVERSAL = new TqlErrorCode(TqlDomain.STUDIO, 4003);
     private static final TqlErrorCode READ_ERROR = new TqlErrorCode(TqlDomain.STUDIO, 4041);
     private static final TqlErrorCode NOT_FOUND = new TqlErrorCode(TqlDomain.STUDIO, 4042);
-    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final Pattern NON_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
     private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
@@ -126,7 +125,7 @@ public final class DocService {
         if (Files.isRegularFile(spec)) {
             try {
                 return MAPPER.readValue(spec.toFile(), DocSpec.class);
-            } catch (IOException ex) {
+            } catch (JacksonException ex) {
                 throw new TqlException(READ_ERROR,
                         "Failed to read " + SPEC_PATH + ": " + ex.getMessage());
             }
@@ -156,7 +155,7 @@ public final class DocService {
         }
         try {
             return MAPPER.readValue(report.toFile(), ReportOverlay.class);
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return null;
         }
     }
@@ -182,7 +181,7 @@ public final class DocService {
         }
         try {
             return List.of(MAPPER.readValue(file.toFile(), HistoryPoint[].class));
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return List.of();
         }
     }
@@ -200,7 +199,7 @@ public final class DocService {
         try {
             MAPPER.readValue(file.toFile(), HistoryPoint[].class);
             return false;
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return true;
         }
     }
@@ -253,7 +252,7 @@ public final class DocService {
     private static SchemaOverlay read(Path file) {
         try {
             return MAPPER.readValue(file.toFile(), SchemaOverlay.class);
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return null;
         }
     }
@@ -300,7 +299,7 @@ public final class DocService {
         SchemaOverlay baseline;
         try {
             baseline = MAPPER.readValue(baselineFile.toFile(), SchemaOverlay.class);
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return null;
         }
         return SchemaDiff.generate(baseline, schema());
@@ -321,7 +320,7 @@ public final class DocService {
         try {
             MAPPER.readValue(baselineFile.toFile(), SchemaOverlay.class);
             return false;
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return true;
         }
     }

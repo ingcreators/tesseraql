@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -38,6 +36,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The procurement demo's exchange end to end (docs/procurement-documents-and-edi.md decisions 2,
@@ -55,7 +55,7 @@ class SupplierEdiIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
     private static final String ORDER = "ORD-S4-EDI";
@@ -121,10 +121,10 @@ class SupplierEdiIntegrationTest {
         assertThat(sftpRoot.resolve("drop/receipt-notice-2026-09-21.csv")).exists();
 
         JsonNode imported = awaitNotice("DN-2026-001");
-        assertThat(imported.get("order_id").asText()).isEqualTo(ORDER);
-        assertThat(imported.get("partner_name").asText()).isEqualTo("ミナミオフィスサプライ株式会社");
-        assertThat(imported.get("carrier").asText()).isEqualTo("ヤマト運輸");
-        String importedAt = imported.get("imported_at").asText();
+        assertThat(imported.get("order_id").asString()).isEqualTo(ORDER);
+        assertThat(imported.get("partner_name").asString()).isEqualTo("ミナミオフィスサプライ株式会社");
+        assertThat(imported.get("carrier").asString()).isEqualTo("ヤマト運輸");
+        String importedAt = imported.get("imported_at").asString();
         // The consumer moves the file out of the drop once it is ingested — after the import's
         // transaction made the row visible — so the move is awaited as the row was, never
         // assumed.
@@ -140,13 +140,13 @@ class SupplierEdiIntegrationTest {
         assertThat(rerun.body()).contains("COMPLETED");
         long deadline = System.currentTimeMillis() + 30_000;
         JsonNode again = notice("DN-2026-001");
-        while (again.get("imported_at").asText().equals(importedAt)
+        while (again.get("imported_at").asString().equals(importedAt)
                 && System.currentTimeMillis() < deadline) {
             Thread.sleep(500);
             again = notice("DN-2026-001");
         }
-        assertThat(again.get("imported_at").asText()).isNotEqualTo(importedAt);
-        assertThat(again.get("order_id").asText()).isEqualTo(ORDER);
+        assertThat(again.get("imported_at").asString()).isNotEqualTo(importedAt);
+        assertThat(again.get("order_id").asString()).isEqualTo(ORDER);
         assertThat(notices().size()).isEqualTo(2); // the seeded notice and the imported one
     }
 
@@ -165,7 +165,7 @@ class SupplierEdiIntegrationTest {
                 StandardCharsets.UTF_8);
 
         JsonNode imported = awaitNotice("DN-2026-002");
-        assertThat(imported.get("order_id").asText()).isEqualTo("ORD-BOM");
+        assertThat(imported.get("order_id").asString()).isEqualTo("ORD-BOM");
     }
 
     /**
@@ -200,7 +200,7 @@ class SupplierEdiIntegrationTest {
 
     private static JsonNode notice(String deliveryNoteNo) throws Exception {
         for (JsonNode row : notices()) {
-            if (deliveryNoteNo.equals(row.get("delivery_note_no").asText())) {
+            if (deliveryNoteNo.equals(row.get("delivery_note_no").asString())) {
                 return row;
             }
         }

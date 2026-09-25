@@ -1,14 +1,14 @@
 package io.tesseraql.docs;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The YAML-surface reference (docs/docs-site.md): a recursive walk of the shipped JSON
@@ -79,7 +79,7 @@ final class SchemaReference {
 
         md.append("\n## Shared definitions\n");
         JsonNode shapes = defs.get("$defs");
-        for (Iterator<String> names = shapes.fieldNames(); names.hasNext();) {
+        for (Iterator<String> names = shapes.propertyNames().iterator(); names.hasNext();) {
             String name = names.next();
             // The shared *property* definitions are inlined into each kind's table above;
             // only the value shapes get a section of their own.
@@ -100,7 +100,7 @@ final class SchemaReference {
         md.append('\n').append("#".repeat(Math.min(level, 6))).append(' ').append(title)
                 .append('\n');
         if (node.hasNonNull("description")) {
-            md.append('\n').append(node.get("description").asText()).append('\n');
+            md.append('\n').append(node.get("description").asString("")).append('\n');
         }
         JsonNode properties = node.get("properties");
         if (properties == null) {
@@ -115,19 +115,19 @@ final class SchemaReference {
         }
         List<String> required = new ArrayList<>();
         if (node.has("required")) {
-            node.get("required").forEach(name -> required.add(name.asText()));
+            node.get("required").forEach(name -> required.add(name.asString("")));
         }
         md.append("\n| Property | Type | Description |\n| --- | --- | --- |\n");
         List<String[]> children = new ArrayList<>();
-        for (Iterator<String> names = properties.fieldNames(); names.hasNext();) {
+        for (Iterator<String> names = properties.propertyNames().iterator(); names.hasNext();) {
             String name = names.next();
             JsonNode property = shared(properties.get(name), root);
             String childTitle = childTitle(title, name);
             // A property that is nothing but a $ref carries its description at the target; the
             // reader wants the sentence in the row, not only behind the link.
-            String description = property.path("description").asText("");
+            String description = property.path("description").asString("");
             if (description.isBlank() && property.has("$ref")) {
-                description = resolve(property, root).path("description").asText("");
+                description = resolve(property, root).path("description").asString("");
             }
             md.append("| `").append(name).append('`')
                     .append(required.contains(name) ? " \\*" : "").append(" | ")
@@ -149,7 +149,7 @@ final class SchemaReference {
      * ({@code inputField}, {@code sqlBinding}) keep their reference and their own section.
      */
     private static JsonNode shared(JsonNode property, JsonNode defs) {
-        return property.path("$ref").asText("").contains(SHARED_PROPERTY)
+        return property.path("$ref").asString("").contains(SHARED_PROPERTY)
                 ? resolve(property, defs)
                 : property;
     }
@@ -169,7 +169,7 @@ final class SchemaReference {
      */
     private static JsonNode resolve(JsonNode node, JsonNode defs) {
         if (node.has("$ref")) {
-            String ref = node.get("$ref").asText();
+            String ref = node.get("$ref").asString("");
             return defs.at(ref.substring(ref.indexOf('#') + 1));
         }
         if (node.has("allOf")) {
@@ -201,7 +201,8 @@ final class SchemaReference {
         for (JsonNode branch : branches) {
             JsonNode resolved = resolve(branch, defs);
             JsonNode branchProperties = resolved.path("properties");
-            for (Iterator<String> names = branchProperties.fieldNames(); names.hasNext();) {
+            for (Iterator<String> names = branchProperties.propertyNames().iterator(); names
+                    .hasNext();) {
                 String name = names.next();
                 properties.set(name, branchProperties.get(name));
             }
@@ -224,14 +225,14 @@ final class SchemaReference {
             return defLink(property);
         }
         if (property.has("const")) {
-            return "const `" + property.get("const").asText() + "`";
+            return "const `" + property.get("const").asString("") + "`";
         }
         if (property.has("enum")) {
             List<String> values = new ArrayList<>();
-            property.get("enum").forEach(value -> values.add("`" + value.asText() + "`"));
+            property.get("enum").forEach(value -> values.add("`" + value.asString("") + "`"));
             return "enum: " + String.join(" \\| ", values);
         }
-        String type = property.path("type").asText("");
+        String type = property.path("type").asString("");
         if ("array".equals(type)) {
             JsonNode items = property.path("items");
             if (items.has("$ref")) {
@@ -241,7 +242,7 @@ final class SchemaReference {
                 children.add(new String[]{name, childTitle});
                 return "array of [object](#" + ReferenceGenerator.slug(childTitle) + ")";
             }
-            return "array of " + items.path("type").asText("any");
+            return "array of " + items.path("type").asString("any");
         }
         if ("object".equals(type)) {
             if (property.has("properties")) {
@@ -257,13 +258,13 @@ final class SchemaReference {
                     children.add(new String[]{name, childTitle});
                     return "map of [object](#" + ReferenceGenerator.slug(childTitle) + ")";
                 }
-                return "map of " + values.path("type").asText("any");
+                return "map of " + values.path("type").asString("any");
             }
             return "object";
         }
         StringBuilder cell = new StringBuilder(type.isEmpty() ? "any" : type);
         if (property.has("pattern")) {
-            cell.append(" matching `").append(property.get("pattern").asText()).append('`');
+            cell.append(" matching `").append(property.get("pattern").asString("")).append('`');
         }
         if (property.has("minLength")) {
             cell.append(", min length ").append(property.get("minLength").asInt());
@@ -278,7 +279,7 @@ final class SchemaReference {
     }
 
     private static String defLink(JsonNode node) {
-        String def = node.get("$ref").asText().replaceAll(".*/", "");
+        String def = node.get("$ref").asString("").replaceAll(".*/", "");
         return "[" + def + "](#" + ReferenceGenerator.slug(def) + ")";
     }
 }

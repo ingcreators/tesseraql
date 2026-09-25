@@ -1,6 +1,5 @@
 package io.tesseraql.security.jwt;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
@@ -9,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Verifies and parses bearer JWTs into a {@link Principal} (design ch. 11.1 {@code bearer}).

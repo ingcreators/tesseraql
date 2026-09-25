@@ -119,7 +119,7 @@ class PasswordLoginIntegrationTest {
 
     private static String writerToken() throws Exception {
         java.util.Base64.Encoder enc = java.util.Base64.getUrlEncoder().withoutPadding();
-        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        tools.jackson.databind.ObjectMapper mapper = io.tesseraql.yaml.JsonMappers.constrained();
         String header = enc.encodeToString(
                 "{\"alg\":\"HS256\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         String payload = enc.encodeToString(mapper.writeValueAsBytes(TestClaims.addressed(

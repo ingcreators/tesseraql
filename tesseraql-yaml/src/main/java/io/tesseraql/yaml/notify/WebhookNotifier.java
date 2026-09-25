@@ -1,6 +1,5 @@
 package io.tesseraql.yaml.notify;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +10,7 @@ import io.tesseraql.yaml.model.HttpCallSpec;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Delivers a notification to an HMAC-signed webhook channel (roadmap Phase 20).

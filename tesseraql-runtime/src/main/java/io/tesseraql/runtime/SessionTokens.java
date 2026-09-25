@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import java.nio.charset.StandardCharsets;
@@ -12,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Minting a bearer token from a principal the caller already is
@@ -197,7 +197,7 @@ final class SessionTokens {
         try {
             minted = sign(principal, expiry, audience);
         } catch (java.security.GeneralSecurityException
-                | com.fasterxml.jackson.core.JacksonException ex) {
+                | tools.jackson.core.JacksonException ex) {
             throw new IllegalStateException("Could not sign a bearer token", ex);
         }
         // Recorded because a token outliving the session that produced it is a credential nobody
@@ -209,8 +209,7 @@ final class SessionTokens {
 
     /** The claims the bearer path reads, signed with the secret it verifies against. */
     private String sign(Principal principal, Instant expiry, String audienceOverride)
-            throws java.security.GeneralSecurityException,
-            com.fasterxml.jackson.core.JsonProcessingException {
+            throws java.security.GeneralSecurityException {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sub", principal.subject());
         put(payload, jwt.loginClaim(), principal.loginId());

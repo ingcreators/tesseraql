@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.TestMethodOrder;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Acceptance test for the declared lock (docs/edit-conflict.md slice 1): a route declaring
@@ -46,7 +46,7 @@ class EditConflictLockIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String JWT_SECRET = "dev-only-secret-change-me-in-production";
 
     static TesseraqlRuntime runtime;
@@ -88,14 +88,14 @@ class EditConflictLockIntegrationTest {
 
         assertThat(stale.statusCode()).as(stale::body).isEqualTo(409);
         JsonNode error = MAPPER.readTree(stale.body()).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4094");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-SQL-4094");
         assertThat(error.path("details").path("conflict").path("actualRows").asInt()).isZero();
-        assertThat(error.path("details").path("conflict").path("hint").asText())
+        assertThat(error.path("details").path("conflict").path("hint").asString())
                 .contains("another user");
         JsonNode lock = error.path("details").path("lock");
-        assertThat(lock.path("column").asText()).isEqualTo("version");
-        assertThat(lock.path("field").asText()).isEqualTo("_lock");
-        assertThat(lock.path("overwriteField").asText()).isEqualTo("_overwrite");
+        assertThat(lock.path("column").asString()).isEqualTo("version");
+        assertThat(lock.path("field").asString()).isEqualTo("_lock");
+        assertThat(lock.path("overwriteField").asString()).isEqualTo("_overwrite");
         // The stale write did not stick.
         assertThat(nameOf(1)).isEqualTo("first edit");
     }
@@ -107,7 +107,7 @@ class EditConflictLockIntegrationTest {
                 "{\"id\": 1, \"name\": \"no lock\"}", "k-3");
 
         assertThat(bare.statusCode()).as(bare::body).isEqualTo(400);
-        assertThat(MAPPER.readTree(bare.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(bare.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-FIELD-2011");
         assertThat(nameOf(1)).isEqualTo("first edit");
     }
@@ -139,7 +139,7 @@ class EditConflictLockIntegrationTest {
                 "{\"id\": 999, \"name\": \"ghost\", \"_overwrite\": \"1\"}", "k-5");
 
         assertThat(missing.statusCode()).as(missing::body).isEqualTo(409);
-        assertThat(MAPPER.readTree(missing.body()).path("error").path("code").asText())
+        assertThat(MAPPER.readTree(missing.body()).path("error").path("code").asString())
                 .isEqualTo("TQL-SQL-4094");
     }
 
@@ -165,7 +165,7 @@ class EditConflictLockIntegrationTest {
 
         assertThat(stale.statusCode()).as(stale::body).isEqualTo(409);
         JsonNode error = MAPPER.readTree(stale.body()).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4092");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-SQL-4092");
         assertThat(error.path("details").has("lock")).isFalse();
     }
 

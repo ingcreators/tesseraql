@@ -1,8 +1,5 @@
 package io.tesseraql.operations.files;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -51,6 +48,9 @@ import java.util.concurrent.Executors;
 import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Database-backed {@link FileTransferService} (design ch. 28): every transfer is a batch
@@ -1856,7 +1856,7 @@ public final class JdbcFileTransferService implements FileTransferService {
                 stored.forEach(row -> rows.add(((Number) row).longValue()));
             }
             return rows;
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to read the import batch report: " + ex.getMessage());
         }
@@ -1874,7 +1874,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
         try {
             return mapper.readValue(json, io.tesseraql.core.files.RowContract.class);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to read the parked row contract: " + ex.getMessage());
         }
@@ -1887,7 +1887,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         }
         try {
             return mapper.readValue(json, io.tesseraql.core.files.FileReadSpec.class);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(TRANSFER_ERROR,
                     "Failed to read the parked read spec: " + ex.getMessage());
         }
@@ -2446,7 +2446,7 @@ public final class JdbcFileTransferService implements FileTransferService {
     private String toJson(Object value) {
         try {
             return mapper.writeValueAsString(value);
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(TRANSFER_ERROR, "Failed to serialize transfer detail");
         }
     }
@@ -2458,7 +2458,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         try {
             return mapper.readValue(json, new TypeReference<List<RowError>>() {
             });
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return List.of();
         }
     }
@@ -2470,7 +2470,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         try {
             return mapper.readValue(json, new TypeReference<Map<String, Object>>() {
             });
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return Map.of();
         }
     }
@@ -2483,7 +2483,7 @@ public final class JdbcFileTransferService implements FileTransferService {
         try {
             return mapper.readValue(json, new TypeReference<List<String>>() {
             });
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             return List.of();
         }
     }

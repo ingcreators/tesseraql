@@ -1,6 +1,5 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.compiler.pipeline.Pipeline;
 import io.tesseraql.compiler.pipeline.Pipelines;
 import io.tesseraql.core.error.TqlDomain;
@@ -13,6 +12,7 @@ import io.tesseraql.pipeline.RuntimeContext;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
 import io.tesseraql.security.session.CsrfValidator;
 import io.tesseraql.security.session.SessionStore;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Exchanges an authenticated session for a short-lived bearer token

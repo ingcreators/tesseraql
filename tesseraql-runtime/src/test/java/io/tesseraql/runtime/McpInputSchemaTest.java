@@ -2,11 +2,11 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.tesseraql.yaml.model.InputField;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * An MCP tool's input schema describes what the framework actually accepts.
@@ -28,7 +28,7 @@ class McpInputSchemaTest {
     void aDeclaredArrayIsAnArray() {
         ObjectNode schema = McpInputSchema.fromInputs(Map.of("ids", array(null)));
 
-        assertThat(schema.path("properties").path("ids").path("type").asText())
+        assertThat(schema.path("properties").path("ids").path("type").asString())
                 .isEqualTo("array");
     }
 
@@ -38,7 +38,7 @@ class McpInputSchemaTest {
                 array(new InputField.InputItems("string", List.of("A", "B"), null))));
 
         ObjectNode items = (ObjectNode) schema.path("properties").path("codes").path("items");
-        assertThat(items.path("type").asText()).isEqualTo("string");
+        assertThat(items.path("type").asString()).isEqualTo("string");
         assertThat(items.path("enum").toString()).isEqualTo("[\"A\",\"B\"]");
     }
 
@@ -62,10 +62,10 @@ class McpInputSchemaTest {
                 array(new InputField.InputItems(null, null, fields))));
 
         ObjectNode items = (ObjectNode) schema.path("properties").path("lines").path("items");
-        assertThat(items.path("type").asText()).isEqualTo("object");
+        assertThat(items.path("type").asString()).isEqualTo("object");
         assertThat(items.path("required").toString()).isEqualTo("[\"itemId\",\"qty\"]");
         assertThat(items.path("properties").path("qty").path("minimum").asInt()).isEqualTo(1);
-        assertThat(items.path("properties").path("desiredDate").path("format").asText())
+        assertThat(items.path("properties").path("desiredDate").path("format").asString())
                 .isEqualTo("date");
     }
 
@@ -81,7 +81,7 @@ class McpInputSchemaTest {
 
         ObjectNode schema = McpInputSchema.fromInputs(Map.of("sku", sku));
 
-        assertThat(schema.path("properties").path("sku").path("description").asText())
+        assertThat(schema.path("properties").path("sku").path("description").asString())
                 .isEqualTo("The stock keeping unit to look up.");
     }
 
@@ -116,17 +116,17 @@ class McpInputSchemaTest {
         ObjectNode schema = McpInputSchema.fromInputs(definition.input());
         ObjectNode properties = (ObjectNode) schema.path("properties");
 
-        assertThat(properties.path("sku").path("pattern").asText()).isEqualTo("^[A-Z]{3}-\\d+$");
+        assertThat(properties.path("sku").path("pattern").asString()).isEqualTo("^[A-Z]{3}-\\d+$");
         assertThat(properties.path("sku").path("minLength").asInt()).isEqualTo(6);
         assertThat(properties.path("sku").path("maxLength").asInt()).isEqualTo(20);
-        assertThat(properties.path("email").path("format").asText()).isEqualTo("email");
-        assertThat(properties.path("ref").path("format").asText()).isEqualTo("uuid");
-        assertThat(properties.path("site").path("format").asText()).isEqualTo("uri");
+        assertThat(properties.path("email").path("format").asString()).isEqualTo("email");
+        assertThat(properties.path("ref").path("format").asString()).isEqualTo("uuid");
+        assertThat(properties.path("site").path("format").asString()).isEqualTo("uri");
 
         ObjectNode element = (ObjectNode) properties.path("lines").path("items").path("properties");
-        assertThat(element.path("code").path("pattern").asText()).isEqualTo("^[a-z]+$");
+        assertThat(element.path("code").path("pattern").asString()).isEqualTo("^[a-z]+$");
         assertThat(element.path("code").path("minLength").asInt()).isEqualTo(2);
-        assertThat(element.path("contact").path("format").asText()).isEqualTo("email");
+        assertThat(element.path("contact").path("format").asString()).isEqualTo("email");
     }
 
     /** A field with no description carries no key, rather than a null or an empty string. */
@@ -163,7 +163,7 @@ class McpInputSchemaTest {
         ObjectNode schema = McpInputSchema.fromInputs(definition.input());
 
         List<String> advertised = new java.util.ArrayList<>();
-        schema.path("properties").fieldNames().forEachRemaining(advertised::add);
+        schema.path("properties").propertyNames().iterator().forEachRemaining(advertised::add);
 
         assertThat(advertised).containsExactly("name", "email", "department", "role", "status");
         assertThat(schema.path("required").toString())

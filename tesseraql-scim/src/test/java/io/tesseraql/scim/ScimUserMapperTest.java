@@ -2,16 +2,16 @@ package io.tesseraql.scim;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 class ScimUserMapperTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     @Test
     void deserializesScimUserJsonAndPicksPrimaryEmail() throws Exception {
@@ -110,19 +110,19 @@ class ScimUserMapperTest {
         ScimListResponse<ScimUser> list = ScimListResponse.of(List.of(user), 1, 1);
 
         JsonNode json = MAPPER.valueToTree(list);
-        assertThat(json.get("schemas").get(0).asText()).isEqualTo(ScimListResponse.SCHEMA);
+        assertThat(json.get("schemas").get(0).asString()).isEqualTo(ScimListResponse.SCHEMA);
         assertThat(json.get("totalResults").asInt()).isEqualTo(1);
         assertThat(json.get("startIndex").asInt()).isEqualTo(1);
         assertThat(json.get("itemsPerPage").asInt()).isEqualTo(1);
-        assertThat(json.get("Resources").get(0).get("userName").asText()).isEqualTo("dave");
+        assertThat(json.get("Resources").get(0).get("userName").asString()).isEqualTo("dave");
     }
 
     @Test
     void serializesErrorInScimShape() throws Exception {
         JsonNode json = MAPPER
                 .valueToTree(ScimError.of(409, "userName already exists", "uniqueness"));
-        assertThat(json.get("schemas").get(0).asText()).isEqualTo(ScimError.SCHEMA);
-        assertThat(json.get("status").asText()).isEqualTo("409");
-        assertThat(json.get("scimType").asText()).isEqualTo("uniqueness");
+        assertThat(json.get("schemas").get(0).asString()).isEqualTo(ScimError.SCHEMA);
+        assertThat(json.get("status").asString()).isEqualTo("409");
+        assertThat(json.get("scimType").asString()).isEqualTo("uniqueness");
     }
 }

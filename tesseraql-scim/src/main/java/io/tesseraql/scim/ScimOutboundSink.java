@@ -1,8 +1,8 @@
 package io.tesseraql.scim;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.outbox.OutboxEvent;
 import io.tesseraql.core.outbox.OutboxEventSink;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Delivers outbox events to a downstream SCIM provider (design ch. 10.15, 39.2): a

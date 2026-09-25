@@ -1,13 +1,13 @@
 package io.tesseraql.oauth;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.Signature;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The production {@link AccessTokenSigner} (docs/token-issuance.md decision 3): RS256 over the
@@ -47,7 +47,7 @@ public final class Rs256TokenSigner implements AccessTokenSigner {
     private static String encode(Map<String, Object> json) {
         try {
             return URL.encodeToString(MAPPER.writeValueAsBytes(json));
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("Claims are not serializable", e);
         }
     }

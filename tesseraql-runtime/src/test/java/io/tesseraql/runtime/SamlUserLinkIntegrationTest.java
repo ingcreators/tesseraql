@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.identity.DefaultIdentityPack;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -33,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for SAML userLink (design ch. 10.14): a federated login resolves the local
@@ -45,7 +45,7 @@ class SamlUserLinkIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final String AUDIENCE = "https://sp.example.com/saml";
     private static final String RECIPIENT = "https://sp.example.com/_tesseraql/saml/acs";
     private static final Instant NOW = Instant.now();
@@ -77,9 +77,9 @@ class SamlUserLinkIntegrationTest {
         HttpResponse<String> response = postAcs("alice", Map.of());
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(response.body());
-        assertThat(body.get("loginId").asText()).isEqualTo("alice");
+        assertThat(body.get("loginId").asString()).isEqualTo("alice");
         // subject is the local user_id (not the NameID), proving the local account was resolved.
-        assertThat(body.get("subject").asText()).isEqualTo("user-alice");
+        assertThat(body.get("subject").asString()).isEqualTo("user-alice");
     }
 
     @Test
@@ -87,7 +87,7 @@ class SamlUserLinkIntegrationTest {
         HttpResponse<String> response = postAcs("bob@new.example.com",
                 Map.of("email", List.of("bob@corp.example.com")));
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(response.body()).get("subject").asText())
+        assertThat(MAPPER.readTree(response.body()).get("subject").asString())
                 .isNotBlank().isNotEqualTo("bob@new.example.com");
 
         try (Connection connection = DriverManager.getConnection(
@@ -108,7 +108,7 @@ class SamlUserLinkIntegrationTest {
         HttpResponse<String> first = postAcs("subj-dave", Map.of(
                 "uid", List.of("dave"), "department", List.of("総務部")));
         assertThat(first.statusCode()).isEqualTo(200);
-        String userId = MAPPER.readTree(first.body()).get("subject").asText();
+        String userId = MAPPER.readTree(first.body()).get("subject").asString();
         assertThat(userId).isNotEqualTo("dave");
         assertThat(scalar("select value from tql_user_attributes where user_id = '" + userId
                 + "' and name = 'department'")).isEqualTo("総務部");
@@ -129,8 +129,8 @@ class SamlUserLinkIntegrationTest {
                 "uid", List.of("dave.renamed"), "department", List.of("経理部")));
         assertThat(second.statusCode()).isEqualTo(200);
         JsonNode body = MAPPER.readTree(second.body());
-        assertThat(body.get("subject").asText()).isEqualTo(userId);
-        assertThat(body.get("loginId").asText()).isEqualTo("dave.renamed");
+        assertThat(body.get("subject").asString()).isEqualTo(userId);
+        assertThat(body.get("loginId").asString()).isEqualTo("dave.renamed");
         assertThat(scalar("select login_id from tql_users where user_id = '" + userId + "'"))
                 .isEqualTo("dave.renamed");
         assertThat(scalar("select value from tql_user_attributes where user_id = '" + userId

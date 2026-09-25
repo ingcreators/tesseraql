@@ -1,7 +1,5 @@
 package io.tesseraql.studio;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -14,6 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The draft filesystem store under {@code work/studio/drafts} (design ch. 16.7): saving, reading,
@@ -300,8 +301,8 @@ final class DraftStore {
         try {
             JsonNode node = jsonMapper.readTree(Files.readString(meta));
             JsonNode base = node.get("base");
-            return new BaseMeta(base == null || base.isNull() ? null : base.asText());
-        } catch (IOException ex) {
+            return new BaseMeta(base == null || base.isNull() ? null : base.asString(""));
+        } catch (JacksonException | IOException ex) {
             return null;
         }
     }

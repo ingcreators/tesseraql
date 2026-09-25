@@ -2,9 +2,6 @@ package io.tesseraql.yaml.scaffold;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -12,6 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The scaffold⇄consumer drift test (docs/config-consumers.md): every configuration key the
@@ -23,7 +22,7 @@ import org.junit.jupiter.api.Test;
  */
 class ScaffoldedConfigKeysTest {
 
-    private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
+    private static final ObjectMapper YAML = io.tesseraql.yaml.YamlMappers.constrained();
     private static final Path REPO_ROOT = Paths.get("..").toAbsolutePath().normalize();
 
     @Test

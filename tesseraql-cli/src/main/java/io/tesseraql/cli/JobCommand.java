@@ -1,6 +1,5 @@
 package io.tesseraql.cli;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.jdbc.DriverManagerDataSource;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobExecutor;
@@ -29,6 +28,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * {@code tesseraql job <list|run|rerun> --app <dir>}: the external-scheduler execution contract
@@ -231,7 +231,7 @@ final class JobCommand implements Callable<Integer> {
         String recorded = wiring.repository().findExecutionParams(target).orElse(null);
         if (recorded != null && !recorded.isBlank()) {
             MAPPER.readTree(recorded).properties().forEach(
-                    entry -> runParams.put(entry.getKey(), entry.getValue().asText()));
+                    entry -> runParams.put(entry.getKey(), entry.getValue().asString("")));
         }
         if (source.businessDate() != null) {
             runParams.put("businessDate", source.businessDate().toString());

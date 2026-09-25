@@ -3,7 +3,6 @@ package io.tesseraql.security.jwt;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.SecurityConfig.JwtConfig;
@@ -17,11 +16,13 @@ import java.util.Base64;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Verifies RS256 bearer tokens against a static configured public key (design ch. 11.1). */
 class RsaJwtAuthenticatorTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new JsonMapper();
     private static final Base64.Encoder ENC = Base64.getUrlEncoder().withoutPadding();
     private static final String AUDIENCE = "https://app.example.com";
 

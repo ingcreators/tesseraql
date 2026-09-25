@@ -1,6 +1,5 @@
 package io.tesseraql.operations.http;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.expr.EvaluationContext;
@@ -30,6 +29,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.LongSupplier;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Executes an {@code http-call} pipeline step (roadmap Phase 26): one synchronous outbound REST
@@ -568,7 +569,7 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
         byte[] bytes;
         try {
             bytes = mapper.writeValueAsBytes(value);
-        } catch (IOException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(INVALID_CALL, "http-call body '" + spec.body()
                     + "' is not serializable to JSON", ex);
         }
@@ -631,7 +632,7 @@ public final class HttpCallClient implements io.tesseraql.yaml.http.OutboundGate
         if (contentType.contains("json")) {
             try {
                 return mapper.readValue(body, Object.class);
-            } catch (IOException ex) {
+            } catch (JacksonException ex) {
                 // A malformed JSON body is surfaced as text rather than failing the whole step.
                 return text;
             }

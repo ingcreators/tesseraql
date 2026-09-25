@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.security.Principal;
 import io.tesseraql.security.session.SessionStore;
 import java.io.IOException;
@@ -23,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A session buys a short-lived bearer, and the bearer works
@@ -39,7 +39,7 @@ class TokenExchangeIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -68,14 +68,14 @@ class TokenExchangeIntegrationTest {
 
         assertThat(minted.statusCode()).isEqualTo(200);
         var body = MAPPER.readTree(minted.body());
-        assertThat(body.path("tokenType").asText()).isEqualTo("Bearer");
-        assertThat(body.path("expiresAt").asText()).isNotBlank();
+        assertThat(body.path("tokenType").asString()).isEqualTo("Bearer");
+        assertThat(body.path("expiresAt").asString()).isNotBlank();
 
         // The round trip: this application verifies what it just issued.
         HttpResponse<String> api = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create(
                         "http://localhost:" + runtime.port() + "/api/users"))
-                        .header("Authorization", "Bearer " + body.path("token").asText())
+                        .header("Authorization", "Bearer " + body.path("token").asString())
                         .build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(api.statusCode()).isEqualTo(200);
@@ -87,15 +87,15 @@ class TokenExchangeIntegrationTest {
         HttpResponse<String> minted = exchange(session("bob", List.of("USER_READ", "USER_WRITE")));
 
         String payload = new String(java.util.Base64.getUrlDecoder().decode(
-                MAPPER.readTree(minted.body()).path("token").asText().split("\\.")[1]),
+                MAPPER.readTree(minted.body()).path("token").asString().split("\\.")[1]),
                 java.nio.charset.StandardCharsets.UTF_8);
         var claims = MAPPER.readTree(payload);
 
-        assertThat(claims.path("sub").asText()).isEqualTo("bob");
+        assertThat(claims.path("sub").asString()).isEqualTo("bob");
         assertThat(claims.path("roles").toString()).contains("USER_READ").contains("USER_WRITE");
         // Required since the audience work, and minted without it the token would be refused by
         // the application that issued it.
-        assertThat(claims.path("aud").asText()).isEqualTo("https://user-admin.example.com");
+        assertThat(claims.path("aud").asString()).isEqualTo("https://user-admin.example.com");
         assertThat(claims.path("exp").asLong())
                 .isGreaterThan(java.time.Instant.now().getEpochSecond());
     }

@@ -1,7 +1,5 @@
 package io.tesseraql.report;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
@@ -11,6 +9,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Renders findings as SARIF 2.1.0 (design ch. 15), the static-analysis interchange format consumed by
@@ -75,7 +75,7 @@ public final class SarifReporter {
 
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(root);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(REPORT_ERROR,
                     "Failed to render SARIF report: " + ex.getMessage());
         }

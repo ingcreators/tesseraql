@@ -3,8 +3,6 @@ package io.tesseraql.scim;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.OutputStream;
@@ -16,6 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Tests outbound provisioning against an in-process stub SCIM provider that assigns remote ids and
@@ -23,7 +23,7 @@ import org.junit.jupiter.api.Test;
  */
 class ScimProvisionerTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     private HttpServer server;
     private final AtomicInteger ids = new AtomicInteger();
@@ -141,7 +141,7 @@ class ScimProvisionerTest {
     }
 
     private static String withId(JsonNode body, String id) {
-        return ((com.fasterxml.jackson.databind.node.ObjectNode) body).put("id", id).toString();
+        return ((tools.jackson.databind.node.ObjectNode) body).put("id", id).toString();
     }
 
     private static void respond(HttpExchange exchange, int status, String body) {

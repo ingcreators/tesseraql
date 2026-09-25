@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -27,6 +25,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for in-process slow-SQL collection (design ch. 26.11). With the slow threshold
@@ -38,7 +38,7 @@ class SlowSqlIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -78,8 +78,8 @@ class SlowSqlIntegrationTest {
         JsonNode entries = MAPPER.readTree(slow.body());
         assertThat(entries.isArray()).isTrue();
         assertThat(entries).anySatisfy(entry -> {
-            assertThat(entry.get("sqlId").asText()).endsWith("ping.sql");
-            assertThat(entry.get("mode").asText()).isEqualTo("query");
+            assertThat(entry.get("sqlId").asString()).endsWith("ping.sql");
+            assertThat(entry.get("mode").asString()).isEqualTo("query");
             assertThat(entry.get("durationMs").asLong()).isGreaterThanOrEqualTo(0);
         });
     }
@@ -102,9 +102,9 @@ class SlowSqlIntegrationTest {
         JsonNode spans = MAPPER.readTree(traces.body());
         assertThat(spans.isArray()).isTrue();
         assertThat(spans).anySatisfy(
-                span -> assertThat(span.get("name").asText()).isEqualTo("tesseraql.sql.execute"));
+                span -> assertThat(span.get("name").asString()).isEqualTo("tesseraql.sql.execute"));
         assertThat(spans).anySatisfy(
-                span -> assertThat(span.get("name").asText()).isEqualTo("tesseraql.route"));
+                span -> assertThat(span.get("name").asString()).isEqualTo("tesseraql.route"));
     }
 
     @Test
@@ -128,13 +128,13 @@ class SlowSqlIntegrationTest {
 
         JsonNode roots = MAPPER.readTree(tree.body());
         assertThat(roots).anySatisfy(root -> {
-            assertThat(root.get("span").get("attributes").path("routeId").asText())
+            assertThat(root.get("span").get("attributes").path("routeId").asString())
                     .isEqualTo("secure.ping");
             assertThat(root.get("children"))
-                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asString())
                             .isEqualTo("tesseraql.security.authenticate"));
             assertThat(root.get("children"))
-                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asString())
                             .isEqualTo("tesseraql.security.authorize"));
         });
     }
@@ -156,18 +156,18 @@ class SlowSqlIntegrationTest {
 
         JsonNode roots = MAPPER.readTree(tree.body());
         assertThat(roots).anySatisfy(root -> {
-            assertThat(root.get("span").get("name").asText()).isEqualTo("tesseraql.route");
+            assertThat(root.get("span").get("name").asString()).isEqualTo("tesseraql.route");
             // UI fields: formatted start time, duration, and the slow highlight (threshold 0).
-            assertThat(root.get("startedAt").asText()).isNotBlank();
+            assertThat(root.get("startedAt").asString()).isNotBlank();
             assertThat(root.get("durationMs").isNumber()).isTrue();
             assertThat(root.get("selfMs").isNumber()).isTrue();
             assertThat(root.get("slow").asBoolean()).isTrue();
             // The route span now has intermediate children for binding and SQL execution.
             assertThat(root.get("children"))
-                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asString())
                             .isEqualTo("tesseraql.request.bind"));
             assertThat(root.get("children"))
-                    .anySatisfy(child -> assertThat(child.get("span").get("name").asText())
+                    .anySatisfy(child -> assertThat(child.get("span").get("name").asString())
                             .isEqualTo("tesseraql.sql.execute"));
         });
 
@@ -178,9 +178,9 @@ class SlowSqlIntegrationTest {
                 HttpResponse.BodyHandlers.ofString());
         assertThat(summary.statusCode()).isEqualTo(200);
         assertThat(MAPPER.readTree(summary.body())).anySatisfy(trace -> {
-            assertThat(trace.get("rootSpan").asText()).isEqualTo("tesseraql.route");
+            assertThat(trace.get("rootSpan").asString()).isEqualTo("tesseraql.route");
             assertThat(trace.get("spanCount").asInt()).isGreaterThanOrEqualTo(2);
-            assertThat(trace.get("slowestSpan").asText()).isNotBlank();
+            assertThat(trace.get("slowestSpan").asString()).isNotBlank();
             assertThat(trace.get("errorCount").isNumber()).isTrue();
             assertThat(trace.get("slowCount").asInt()).isGreaterThan(0); // threshold is 0
         });
@@ -211,15 +211,15 @@ class SlowSqlIntegrationTest {
                         .POST(HttpRequest.BodyPublishers.noBody()).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(started.statusCode()).isEqualTo(202);
-        String transferId = MAPPER.readTree(started.body()).get("transferId").asText();
+        String transferId = MAPPER.readTree(started.body()).get("transferId").asString();
         java.time.Instant deadline = java.time.Instant.now().plusSeconds(20);
         while (true) {
             JsonNode status = MAPPER.readTree(HttpClient.newHttpClient().send(
                     HttpRequest.newBuilder(URI.create("http://localhost:" + runtime.port()
                             + "/api/export/" + transferId)).build(),
                     HttpResponse.BodyHandlers.ofString()).body());
-            if (!"RUNNING".equals(status.get("status").asText())) {
-                assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+            if (!"RUNNING".equals(status.get("status").asString())) {
+                assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
                 break;
             }
             assertThat(java.time.Instant.now()).isBefore(deadline);
@@ -238,9 +238,9 @@ class SlowSqlIntegrationTest {
         assertThat(MAPPER.readTree(traces.body()))
                 .as("the transfer's span under tql.ops.view.user-admin")
                 .anySatisfy(span -> {
-                    assertThat(span.get("attributes").path("surface").asText())
+                    assertThat(span.get("attributes").path("surface").asString())
                             .isEqualTo("transfer");
-                    assertThat(span.get("attributes").path("app").asText())
+                    assertThat(span.get("attributes").path("app").asString())
                             .isEqualTo("user-admin");
                 });
     }

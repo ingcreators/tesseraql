@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -30,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * End-to-end test for the optional Excel codec (design ch. 28, 47): with tesseraql-excel on the
@@ -42,7 +42,7 @@ class ExcelTransferIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static TesseraqlRuntime runtime;
@@ -72,8 +72,8 @@ class ExcelTransferIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(accepted.statusCode()).isEqualTo(202);
-        String importId = MAPPER.readTree(accepted.body()).get("transferId").asText();
-        assertThat(awaitTerminal("/api/people/import/" + importId).get("status").asText())
+        String importId = MAPPER.readTree(accepted.body()).get("transferId").asString();
+        assertThat(awaitTerminal("/api/people/import/" + importId).get("status").asString())
                 .isEqualTo("COMPLETED");
         assertThat(personCount()).isEqualTo(2);
 
@@ -82,9 +82,9 @@ class ExcelTransferIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + "/api/people/export"))
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(), HttpResponse.BodyHandlers.ofString());
-        String exportId = MAPPER.readTree(started.body()).get("transferId").asText();
+        String exportId = MAPPER.readTree(started.body()).get("transferId").asString();
         JsonNode status = awaitTerminal("/api/people/export/" + exportId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
 
         HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port()
@@ -127,7 +127,7 @@ class ExcelTransferIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + "/api/people/fragile-sync"))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(sync.statusCode()).isEqualTo(500);
-        assertThat(MAPPER.readTree(sync.body()).at("/error/code").asText())
+        assertThat(MAPPER.readTree(sync.body()).at("/error/code").asString())
                 .isEqualTo("TQL-LD-2837");
 
         // The asynchronous route.
@@ -135,8 +135,8 @@ class ExcelTransferIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + "/api/people/fragile"))
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(), HttpResponse.BodyHandlers.ofString());
-        String transferId = MAPPER.readTree(started.body()).get("transferId").asText();
-        assertThat(awaitTerminal("/api/people/fragile/" + transferId).get("status").asText())
+        String transferId = MAPPER.readTree(started.body()).get("transferId").asString();
+        assertThat(awaitTerminal("/api/people/fragile/" + transferId).get("status").asString())
                 .isEqualTo("FAILED");
         assertThat(runtime.jobRepository().findExecution(transferId).orElseThrow().exitMessage())
                 .contains("TQL-LD-2837").contains("fragile-frame.xlsx");
@@ -158,16 +158,16 @@ class ExcelTransferIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
                 .build(), HttpResponse.BodyHandlers.ofString());
-        String seedId = MAPPER.readTree(seeded.body()).get("transferId").asText();
-        assertThat(awaitTerminal("/api/people/import/" + seedId).get("status").asText())
+        String seedId = MAPPER.readTree(seeded.body()).get("transferId").asString();
+        assertThat(awaitTerminal("/api/people/import/" + seedId).get("status").asString())
                 .isEqualTo("COMPLETED");
 
         HttpResponse<String> started = HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/people/report"))
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build(), HttpResponse.BodyHandlers.ofString());
-        String transferId = MAPPER.readTree(started.body()).get("transferId").asText();
-        assertThat(awaitTerminal("/api/people/report/" + transferId).get("status").asText())
+        String transferId = MAPPER.readTree(started.body()).get("transferId").asString();
+        assertThat(awaitTerminal("/api/people/report/" + transferId).get("status").asString())
                 .isEqualTo("COMPLETED");
 
         HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
@@ -193,8 +193,8 @@ class ExcelTransferIntegrationTest {
                 URI.create("http://localhost:" + runtime.port() + "/api/people/import"))
                 .POST(HttpRequest.BodyPublishers.ofByteArray(workbook()))
                 .build(), HttpResponse.BodyHandlers.ofString());
-        String importId = MAPPER.readTree(accepted.body()).get("transferId").asText();
-        assertThat(awaitTerminal("/api/people/import/" + importId).get("status").asText())
+        String importId = MAPPER.readTree(accepted.body()).get("transferId").asString();
+        assertThat(awaitTerminal("/api/people/import/" + importId).get("status").asString())
                 .isEqualTo("COMPLETED");
 
         HttpResponse<byte[]> file = HTTP.send(HttpRequest.newBuilder(
@@ -238,7 +238,7 @@ class ExcelTransferIntegrationTest {
                     URI.create("http://localhost:" + runtime.port() + statusPath)).build(),
                     HttpResponse.BodyHandlers.ofString());
             JsonNode status = MAPPER.readTree(response.body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

@@ -22,7 +22,8 @@ import java.time.Duration;
  */
 final class OAuthRoutes {
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+    private static final tools.jackson.databind.ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers
+            .constrained();
 
     private final SigningKeys keys;
     private final Duration accessTokenLifetime;
@@ -160,11 +161,11 @@ final class OAuthRoutes {
      * secret storage; a client that asks for {@code client_secret_basic} is issued a secret.
      */
     private void register(Exchange exchange) throws Exception {
-        com.fasterxml.jackson.databind.JsonNode metadata;
+        tools.jackson.databind.JsonNode metadata;
         try {
             String body = exchange.getBody(String.class);
             metadata = MAPPER.readTree(body == null ? "" : body);
-        } catch (com.fasterxml.jackson.core.JacksonException unparsable) {
+        } catch (tools.jackson.core.JacksonException unparsable) {
             error(exchange, 400, "invalid_client_metadata");
             return;
         }
@@ -172,16 +173,16 @@ final class OAuthRoutes {
             error(exchange, 400, "invalid_client_metadata");
             return;
         }
-        com.fasterxml.jackson.databind.JsonNode uris = metadata.path("redirect_uris");
+        tools.jackson.databind.JsonNode uris = metadata.path("redirect_uris");
         java.util.List<String> redirectUris = new java.util.ArrayList<>();
         if (uris.isArray()) {
             try {
-                for (com.fasterxml.jackson.databind.JsonNode uri : uris) {
-                    if (java.net.URI.create(uri.asText()).getScheme() == null) {
+                for (tools.jackson.databind.JsonNode uri : uris) {
+                    if (java.net.URI.create(uri.asString("")).getScheme() == null) {
                         redirectUris.clear();
                         break;
                     }
-                    redirectUris.add(uri.asText());
+                    redirectUris.add(uri.asString(""));
                 }
             } catch (IllegalArgumentException malformed) {
                 redirectUris.clear();
@@ -191,13 +192,13 @@ final class OAuthRoutes {
             error(exchange, 400, "invalid_redirect_uri");
             return;
         }
-        String authMethod = metadata.path("token_endpoint_auth_method").asText("none");
+        String authMethod = metadata.path("token_endpoint_auth_method").asString("none");
         String clientId = "c-" + java.util.UUID.randomUUID();
         String clientSecret = "none".equals(authMethod) ? null : Tokens.newToken();
         store.saveClient(new RegisteredClient(clientId,
                 clientSecret == null ? null : Tokens.sha256Hex(clientSecret),
                 redirectUris,
-                metadata.path("client_name").asText(null),
+                metadata.path("client_name").asString(null),
                 metadata.toString(),
                 java.time.Instant.now(),
                 null));
@@ -213,7 +214,7 @@ final class OAuthRoutes {
                 : "client_secret_basic");
         answer.put("redirect_uris", redirectUris);
         if (metadata.hasNonNull("client_name")) {
-            answer.put("client_name", metadata.get("client_name").asText());
+            answer.put("client_name", metadata.get("client_name").asString(""));
         }
         exchange.response().status(201);
         exchange.response().header(Headers.CONTENT_TYPE, "application/json");

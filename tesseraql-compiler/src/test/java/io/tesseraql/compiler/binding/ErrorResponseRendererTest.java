@@ -313,20 +313,20 @@ class ErrorResponseRendererTest {
 
         new ErrorResponseRenderer().process(exchange);
 
-        com.fasterxml.jackson.databind.JsonNode error = new com.fasterxml.jackson.databind.ObjectMapper()
+        tools.jackson.databind.JsonNode error = io.tesseraql.yaml.JsonMappers.constrained()
                 .readTree(exchange.getBody(String.class)).path("error");
-        assertThat(error.path("code").asText()).isEqualTo("TQL-SQL-4094");
+        assertThat(error.path("code").asString()).isEqualTo("TQL-SQL-4094");
 
-        com.fasterxml.jackson.databind.JsonNode conflict = error.path("details").path("conflict");
-        assertThat(conflict.path("hintKey").asText()).isEqualTo("tql.conflict.stale");
+        tools.jackson.databind.JsonNode conflict = error.path("details").path("conflict");
+        assertThat(conflict.path("hintKey").asString()).isEqualTo("tql.conflict.stale");
         // The affordance is a sibling of the conflict, never an entry inside it.
-        assertThat(conflict.fieldNames()).toIterable()
+        assertThat(conflict.propertyNames().iterator()).toIterable()
                 .containsExactlyInAnyOrder("step", "expectedRows", "actualRows", "hint", "hintKey");
 
-        com.fasterxml.jackson.databind.JsonNode lock = error.path("details").path("lock");
-        assertThat(lock.path("column").asText()).isEqualTo("version");
-        assertThat(lock.path("field").asText()).isEqualTo("_lock");
-        assertThat(lock.path("overwriteField").asText()).isEqualTo("_overwrite");
+        tools.jackson.databind.JsonNode lock = error.path("details").path("lock");
+        assertThat(lock.path("column").asString()).isEqualTo("version");
+        assertThat(lock.path("field").asString()).isEqualTo("_lock");
+        assertThat(lock.path("overwriteField").asString()).isEqualTo("_overwrite");
     }
 
     /** A stale-write refusal with the affordance the envelope publishes. */

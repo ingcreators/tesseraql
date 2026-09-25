@@ -1,11 +1,12 @@
 package io.tesseraql.runtime;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.yaml.i18n.MessageCatalog;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Builds the client-side message catalog module served at
@@ -58,7 +59,7 @@ final class ClientMessages {
         try {
             script.append("setMessages(").append(mapper.writeValueAsString(entries))
                     .append(");\n");
-        } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new IllegalStateException("Failed to serialize message catalog", ex);
         }
         return script.toString().getBytes(StandardCharsets.UTF_8);

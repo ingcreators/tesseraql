@@ -1,6 +1,6 @@
 package io.tesseraql.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Runs one {@link McpTool} call. The handler receives the {@code arguments} object of the

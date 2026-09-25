@@ -1,13 +1,10 @@
 package io.tesseraql.yaml.flags;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import io.tesseraql.core.error.TqlDomain;
 import io.tesseraql.core.error.TqlErrorCode;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.core.util.OrderedCopies;
+import io.tesseraql.yaml.JacksonDefaults;
 import io.tesseraql.yaml.SimpleYamlParser;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -17,6 +14,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.dataformat.yaml.YAMLFactory;
+import tools.jackson.dataformat.yaml.YAMLMapper;
+import tools.jackson.dataformat.yaml.YAMLWriteFeature;
 
 /**
  * The application's live feature flags ({@code config/flags.yml}, a {@code flags:} map of name to a
@@ -37,8 +39,9 @@ public final class FlagsSpec {
     /** TQL-YAML-1111: config/flags.yml is mis-shaped, or could not be written. */
     private static final TqlErrorCode INVALID_DOCUMENT = new TqlErrorCode(TqlDomain.YAML, 1111);
 
-    private static final ObjectMapper YAML = new ObjectMapper(
-            new YAMLFactory().disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER));
+    private static final ObjectMapper YAML = JacksonDefaults.pin(YAMLMapper.builder(
+            YAMLFactory.builder().disable(YAMLWriteFeature.WRITE_DOC_START_MARKER).build()))
+            .build();
 
     private static final FlagsSpec EMPTY = new FlagsSpec(Map.of());
 
@@ -126,7 +129,7 @@ public final class FlagsSpec {
         doc.put("flags", values);
         try {
             return YAML.writeValueAsString(doc);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             throw new TqlException(INVALID_DOCUMENT, "Failed to serialize flags.yml");
         }
     }

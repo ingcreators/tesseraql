@@ -2,7 +2,6 @@ package io.tesseraql.compiler.binding;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.files.ExportModel;
 import io.tesseraql.core.files.FileCodec;
 import io.tesseraql.core.files.FileCodecs;
@@ -19,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * An import page's accepted file types come from the codec set the binding is handed, not from
@@ -28,7 +28,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class ViewBindingImportTargetTest {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** A codec set holding a workbook format under the name the route declares. */
     private static final FileCodecs WITH_WORKBOOK = FileCodecs.of(new Workbook());

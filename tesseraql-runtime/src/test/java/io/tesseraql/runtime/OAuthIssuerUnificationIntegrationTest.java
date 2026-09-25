@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.oauth.SigningKeys;
 import io.tesseraql.operations.app.AppInstaller;
 import io.tesseraql.security.password.Pbkdf2PasswordEncoder;
@@ -31,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * One issuer per stack, end to end (docs/token-issuance.md decision 9): the stack file enables
@@ -46,7 +46,7 @@ class OAuthIssuerUnificationIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER).build();
 
@@ -104,12 +104,12 @@ class OAuthIssuerUnificationIntegrationTest {
         assertThat(parts).hasSize(3);
 
         JsonNode header = MAPPER.readTree(Base64.getUrlDecoder().decode(parts[0]));
-        assertThat(header.get("alg").asText()).isEqualTo("RS256");
-        assertThat(header.get("kid").asText()).isEqualTo(SigningKeys.INITIAL_KID);
+        assertThat(header.get("alg").asString()).isEqualTo("RS256");
+        assertThat(header.get("kid").asString()).isEqualTo(SigningKeys.INITIAL_KID);
 
         JsonNode payload = MAPPER.readTree(Base64.getUrlDecoder().decode(parts[1]));
-        assertThat(payload.get("iss").asText()).isEqualTo("http://localhost:" + port);
-        assertThat(payload.get("sub").asText()).isEqualTo("u-alice");
+        assertThat(payload.get("iss").asString()).isEqualTo("http://localhost:" + port);
+        assertThat(payload.get("sub").asString()).isEqualTo("u-alice");
         assertThat(payload.get("roles")).isNotNull();
     }
 
@@ -123,7 +123,7 @@ class OAuthIssuerUnificationIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
 
         assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(200);
-        assertThat(MAPPER.readTree(accepted.body()).get("data").get(0).get("name").asText())
+        assertThat(MAPPER.readTree(accepted.body()).get("data").get(0).get("name").asString())
                 .isEqualTo("s1");
     }
 
@@ -131,11 +131,11 @@ class OAuthIssuerUnificationIntegrationTest {
     void aMemberScopedTokenCarriesTheMembersAddressAndWorksThere() throws Exception {
         HttpResponse<String> exchanged = exchange("alice", "{\"appName\":\"shop\"}");
         assertThat(exchanged.statusCode()).as(exchanged.body()).isEqualTo(200);
-        String token = MAPPER.readTree(exchanged.body()).path("token").asText();
+        String token = MAPPER.readTree(exchanged.body()).path("token").asString();
 
         JsonNode payload = MAPPER.readTree(
                 Base64.getUrlDecoder().decode(token.split("\\.")[1]));
-        assertThat(payload.get("aud").asText())
+        assertThat(payload.get("aud").asString())
                 .isEqualTo("http://localhost:" + port + "/shop");
 
         HttpResponse<String> accepted = CLIENT.send(HttpRequest.newBuilder(
@@ -234,12 +234,12 @@ class OAuthIssuerUnificationIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(minted.statusCode()).as(minted.body()).isEqualTo(200);
         JsonNode tokens = MAPPER.readTree(minted.body());
-        String access = tokens.get("access_token").asText();
-        String refresh = tokens.get("refresh_token").asText();
+        String access = tokens.get("access_token").asString();
+        String refresh = tokens.get("refresh_token").asString();
 
         JsonNode payload = MAPPER.readTree(
                 Base64.getUrlDecoder().decode(access.split("\\.")[1]));
-        assertThat(payload.get("aud").asText())
+        assertThat(payload.get("aud").asString())
                 .isEqualTo("http://localhost:" + port + "/shop");
         assertThat(payload.get("roles").toString()).contains("staff");
 
@@ -269,7 +269,7 @@ class OAuthIssuerUnificationIntegrationTest {
                                 + enc(refresh)))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(refreshed.statusCode()).as(refreshed.body()).isEqualTo(200);
-        assertThat(MAPPER.readTree(refreshed.body()).get("refresh_token").asText())
+        assertThat(MAPPER.readTree(refreshed.body()).get("refresh_token").asString())
                 .isNotEqualTo(refresh);
 
         HttpResponse<String> reused = CLIENT.send(HttpRequest.newBuilder(
@@ -282,7 +282,7 @@ class OAuthIssuerUnificationIntegrationTest {
         assertThat(reused.statusCode()).isEqualTo(400);
 
         // The live end of the chain, for the revocation test downstream.
-        liveRefresh = MAPPER.readTree(refreshed.body()).get("refresh_token").asText();
+        liveRefresh = MAPPER.readTree(refreshed.body()).get("refresh_token").asString();
     }
 
     /** The rotated chain's live end after the token test — what revocation must kill. */
@@ -396,7 +396,7 @@ class OAuthIssuerUnificationIntegrationTest {
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         return new String[]{setCookie.substring(0, setCookie.indexOf(';')),
-                MAPPER.readTree(login.body()).path("csrfToken").asText()};
+                MAPPER.readTree(login.body()).path("csrfToken").asString()};
     }
 
     @Test
@@ -413,8 +413,8 @@ class OAuthIssuerUnificationIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(registered.statusCode()).as(registered.body()).isEqualTo(201);
         JsonNode issued = MAPPER.readTree(registered.body());
-        String clientId = issued.get("client_id").asText();
-        assertThat(issued.get("token_endpoint_auth_method").asText()).isEqualTo("none");
+        String clientId = issued.get("client_id").asString();
+        assertThat(issued.get("token_endpoint_auth_method").asString()).isEqualTo("none");
         assertThat(issued.has("client_secret")).isFalse();
 
         // The registration is live: the registered client walks into the authorize flow and
@@ -444,14 +444,14 @@ class OAuthIssuerUnificationIntegrationTest {
         assertThat(metadata.statusCode()).as(metadata.body()).isEqualTo(200);
         JsonNode document = MAPPER.readTree(metadata.body());
         String issuer = "http://localhost:" + port;
-        assertThat(document.get("issuer").asText()).isEqualTo(issuer);
-        assertThat(document.get("authorization_endpoint").asText())
+        assertThat(document.get("issuer").asString()).isEqualTo(issuer);
+        assertThat(document.get("authorization_endpoint").asString())
                 .isEqualTo(issuer + "/_tesseraql/oauth/authorize");
-        assertThat(document.get("token_endpoint").asText())
+        assertThat(document.get("token_endpoint").asString())
                 .isEqualTo(issuer + "/_tesseraql/oauth/token");
-        assertThat(document.get("registration_endpoint").asText())
+        assertThat(document.get("registration_endpoint").asString())
                 .isEqualTo(issuer + "/_tesseraql/oauth/register");
-        assertThat(document.get("jwks_uri").asText())
+        assertThat(document.get("jwks_uri").asString())
                 .isEqualTo(issuer + "/_tesseraql/oauth/jwks");
         assertThat(document.get("code_challenge_methods_supported").toString())
                 .contains("S256");
@@ -483,8 +483,8 @@ class OAuthIssuerUnificationIntegrationTest {
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(metadata.statusCode()).as(metadata.body()).isEqualTo(200);
         JsonNode document = MAPPER.readTree(metadata.body());
-        assertThat(document.get("resource").asText()).isEqualTo(mcpResource);
-        assertThat(document.get("authorization_servers").get(0).asText())
+        assertThat(document.get("resource").asString()).isEqualTo(mcpResource);
+        assertThat(document.get("authorization_servers").get(0).asString())
                 .isEqualTo("http://localhost:" + port);
 
         // No token: 401, and the challenge names where the metadata lives.
@@ -496,7 +496,7 @@ class OAuthIssuerUnificationIntegrationTest {
 
         // A member-API token is not the MCP audience: the gate refuses it.
         HttpResponse<String> memberToken = exchange("alice", "{\"appName\":\"shop\"}");
-        String wrongAudience = MAPPER.readTree(memberToken.body()).path("token").asText();
+        String wrongAudience = MAPPER.readTree(memberToken.body()).path("token").asString();
         assertThat(mcp(mcpResource, wrongAudience).statusCode()).isEqualTo(401);
 
         // A token granted FOR the MCP resource opens it: the whole chain, once more, with the
@@ -524,7 +524,7 @@ class OAuthIssuerUnificationIntegrationTest {
                                 + "&code_verifier=" + enc(VERIFIER)))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(minted.statusCode()).as(minted.body()).isEqualTo(200);
-        String access = MAPPER.readTree(minted.body()).get("access_token").asText();
+        String access = MAPPER.readTree(minted.body()).get("access_token").asString();
 
         HttpResponse<String> opened = mcp(mcpResource, access);
         assertThat(opened.statusCode()).as(opened.body()).isEqualTo(200);
@@ -558,7 +558,7 @@ class OAuthIssuerUnificationIntegrationTest {
                         + "/.well-known/oauth-protected-resource/%E5%8F%97%E6%B3%A8/_tesseraql/mcp"))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(metadata.statusCode()).as(metadata.body()).isEqualTo(200);
-        assertThat(MAPPER.readTree(metadata.body()).get("resource").asText()).isEqualTo(wire);
+        assertThat(MAPPER.readTree(metadata.body()).get("resource").asString()).isEqualTo(wire);
 
         HttpResponse<String> challenged = mcp(wire, null);
         assertThat(challenged.statusCode()).isEqualTo(401);
@@ -591,10 +591,10 @@ class OAuthIssuerUnificationIntegrationTest {
                                 + "&code_verifier=" + enc(VERIFIER)))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(minted.statusCode()).as(minted.body()).isEqualTo(200);
-        String access = MAPPER.readTree(minted.body()).get("access_token").asText();
+        String access = MAPPER.readTree(minted.body()).get("access_token").asString();
         JsonNode payload = MAPPER.readTree(
                 Base64.getUrlDecoder().decode(access.split("\\.")[1]));
-        assertThat(payload.get("aud").asText()).isEqualTo(wire);
+        assertThat(payload.get("aud").asString()).isEqualTo(wire);
 
         HttpResponse<String> opened = mcp(wire, access);
         assertThat(opened.statusCode()).as(opened.body()).isEqualTo(200);
@@ -647,7 +647,7 @@ class OAuthIssuerUnificationIntegrationTest {
     private static String acquireBearer(String loginId) throws Exception {
         HttpResponse<String> exchanged = exchange(loginId, null);
         assertThat(exchanged.statusCode()).as(exchanged.body()).isEqualTo(200);
-        return MAPPER.readTree(exchanged.body()).path("token").asText();
+        return MAPPER.readTree(exchanged.body()).path("token").asString();
     }
 
     private static HttpResponse<String> exchange(String loginId, String body) throws Exception {
@@ -662,7 +662,7 @@ class OAuthIssuerUnificationIntegrationTest {
         assertThat(login.statusCode()).as(login.body()).isEqualTo(200);
         String setCookie = login.headers().firstValue("Set-Cookie").orElseThrow();
         String cookie = setCookie.substring(0, setCookie.indexOf(';'));
-        String csrf = MAPPER.readTree(login.body()).path("csrfToken").asText();
+        String csrf = MAPPER.readTree(login.body()).path("csrfToken").asString();
 
         HttpRequest.Builder request = HttpRequest.newBuilder(
                 URI.create("http://localhost:" + port + "/_tesseraql/token"))

@@ -2,7 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -22,6 +21,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mssqlserver.MSSQLServerContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Live runtime portability test on SQL Server (design ch. 42): booting exercises the
@@ -40,7 +40,7 @@ class SqlServerPortabilityIntegrationTest {
             "mcr.microsoft.com/mssql/server:2022-latest")
             .acceptLicense();
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -69,7 +69,7 @@ class SqlServerPortabilityIntegrationTest {
                         "http://localhost:" + runtime.port() + "/api/users")).build(),
                 HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(MAPPER.readTree(response.body()).path("data").get(0).path("name").asText())
+        assertThat(MAPPER.readTree(response.body()).path("data").get(0).path("name").asString())
                 .isEqualTo("sato");
     }
 

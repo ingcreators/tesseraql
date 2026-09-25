@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * End-to-end test for asynchronous file transfers (design ch. 28): a CSV upload imports rows
@@ -39,7 +39,7 @@ class FileTransferIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     static TesseraqlRuntime runtime;
@@ -75,7 +75,7 @@ class FileTransferIntegrationTest {
                 "name,qty\nalpha,1\nbeta,2\n");
         JsonNode status = awaitTerminal("/api/items/import/" + transferId);
 
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("rowCount").asLong()).isEqualTo(2);
         assertThat(itemCount("alpha")).isEqualTo(1);
         assertThat(itemCount("beta")).isEqualTo(1);
@@ -87,7 +87,7 @@ class FileTransferIntegrationTest {
                 "name,qty\ngamma,3\nbroken,not-a-number\n");
         JsonNode status = awaitTerminal("/api/items/import/" + transferId);
 
-        assertThat(status.get("status").asText()).isEqualTo("FAILED");
+        assertThat(status.get("status").asString()).isEqualTo("FAILED");
         assertThat(status.get("errors")).isNotNull();
         assertThat(status.get("errors").get(0).get("row").asLong()).isEqualTo(2);
         // All-or-nothing: the clean first row was rolled back with the bad one.
@@ -100,7 +100,7 @@ class FileTransferIntegrationTest {
                 "name,qty\ndelta,4\nbroken,not-a-number\n");
         JsonNode status = awaitTerminal("/api/items/import-lenient/" + transferId);
 
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("rowCount").asLong()).isEqualTo(1);
         assertThat(status.get("errors").get(0).get("row").asLong()).isEqualTo(2);
         assertThat(itemCount("delta")).isEqualTo(1);
@@ -114,16 +114,16 @@ class FileTransferIntegrationTest {
                 "name,qty\nzeta,1\nzeta,2\n");
         JsonNode status = awaitTerminal("/api/items/import-strict/" + transferId);
 
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("rowCount").asLong()).isEqualTo(1);
         JsonNode error = status.get("errors").get(0);
         assertThat(error.get("row").asLong()).isEqualTo(2);
         // The message is the framework's sentence for the class — no SQL, no constraint name,
         // and no values from the row that was already there.
-        assertThat(error.get("message").asText())
+        assertThat(error.get("message").asString())
                 .isEqualTo("A record with these values already exists.");
         // The driver's own text is kept, on this operational face and not on the report.
-        assertThat(error.get("detail").asText()).contains("items_pkey");
+        assertThat(error.get("detail").asString()).contains("items_pkey");
         assertThat(itemCount("zeta")).isEqualTo(1);
     }
 
@@ -134,10 +134,10 @@ class FileTransferIntegrationTest {
 
         String transferId = startTransfer("/api/orders/export", "");
         JsonNode status = awaitTerminal("/api/orders/export/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
-        assertThat(status.get("fileUrl").asText()).endsWith(transferId + "/file");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
+        assertThat(status.get("fileUrl").asString()).endsWith(transferId + "/file");
         // When it started (docs/job-inbox.md decision 3), an ISO-8601 instant like the rest.
-        assertThat(java.time.Instant.parse(status.get("createdAt").asText()))
+        assertThat(java.time.Instant.parse(status.get("createdAt").asString()))
                 .isBeforeOrEqualTo(java.time.Instant.now());
 
         // The extract-timed follow-up already marked the rows, before any download happened.
@@ -170,7 +170,7 @@ class FileTransferIntegrationTest {
         String location = browser.headers().firstValue("location").orElse("");
         assertThat(location).startsWith("/api/orders/export/");
         JsonNode status = awaitTerminal(location);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
 
         HttpResponse<String> json = HTTP.send(HttpRequest.newBuilder(
                 URI.create("http://localhost:" + runtime.port() + "/api/orders/export"))
@@ -179,7 +179,7 @@ class FileTransferIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(""))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(json.statusCode()).isEqualTo(202);
-        assertThat(MAPPER.readTree(json.body()).get("statusUrl").asText())
+        assertThat(MAPPER.readTree(json.body()).get("statusUrl").asString())
                 .startsWith("/api/orders/export/");
     }
 
@@ -187,9 +187,9 @@ class FileTransferIntegrationTest {
     void aSplitExportDeliversTheBundleItIs() throws Exception {
         String transferId = startTransfer("/api/orders/export-split", "");
         JsonNode status = awaitTerminal("/api/orders/export-split/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         // The status face names the bundle, not the per-document pattern.
-        assertThat(status.get("filename").asText()).isEqualTo("orders.zip");
+        assertThat(status.get("filename").asString()).isEqualTo("orders.zip");
         // So does the row the ops console renders: the bundle's format and name are recorded,
         // not derived on the way out from a {key} in the pattern.
         var row = runtime.fileTransfers().recent(50).stream()
@@ -238,8 +238,8 @@ class FileTransferIntegrationTest {
         String transferId = startTransfer("/api/orders/export-named-split?month=2026%2F09", "");
         String statusPath = "/api/orders/export-named-split/" + transferId;
         JsonNode status = awaitTerminal(statusPath);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
-        assertThat(status.get("filename").asText()).isEqualTo("orders-2026_09.zip");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
+        assertThat(status.get("filename").asString()).isEqualTo("orders-2026_09.zip");
         HttpResponse<byte[]> bundleHead = sendBytes("HEAD", statusPath + "/file");
         assertThat(bundleHead.headers().firstValue("content-disposition").orElse(""))
                 .contains("filename=\"orders-2026_09.zip\"");
@@ -272,8 +272,8 @@ class FileTransferIntegrationTest {
         // agree - a plain csv, never a bundle named orders-blank.zip and never a 2858.
         String transferId = startTransfer("/api/orders/export-blank-split", "");
         JsonNode status = awaitTerminal("/api/orders/export-blank-split/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
-        assertThat(status.get("filename").asText()).isEqualTo("orders-blank.csv");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
+        assertThat(status.get("filename").asString()).isEqualTo("orders-blank.csv");
         var row = runtime.fileTransfers().recent(50).stream()
                 .filter(transfer -> transfer.transferId().equals(transferId))
                 .findFirst().orElseThrow();
@@ -311,7 +311,7 @@ class FileTransferIntegrationTest {
 
         String transferId = startTransfer("/api/orders/export-on-download", "");
         JsonNode status = awaitTerminal("/api/orders/export-on-download/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
 
         // Nothing is marked until the file is actually fetched.
         assertThat(downloadMarkedCount()).isZero();
@@ -342,7 +342,7 @@ class FileTransferIntegrationTest {
     void aHeadOfTheFileTakesNeitherTheClaimNorTheFollowUp() throws Exception {
         String transferId = startTransfer("/api/orders/export-head", "");
         String path = "/api/orders/export-head/" + transferId;
-        assertThat(awaitTerminal(path).get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(awaitTerminal(path).get("status").asString()).isEqualTo("COMPLETED");
 
         HttpResponse<byte[]> head = sendBytes("HEAD", path + "/file");
         assertThat(head.statusCode()).isEqualTo(200);
@@ -384,7 +384,7 @@ class FileTransferIntegrationTest {
         execute("insert into download_log (id) values (1)");
         String transferId = startTransfer("/api/orders/export-fragile", "");
         String path = "/api/orders/export-fragile/" + transferId;
-        assertThat(awaitTerminal(path).get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(awaitTerminal(path).get("status").asString()).isEqualTo("COMPLETED");
 
         HttpResponse<String> failed = get(path + "/file");
         assertThat(failed.statusCode()).as("the fetch whose follow-up failed: %s", failed.body())
@@ -434,10 +434,10 @@ class FileTransferIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(multipart, StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
-        String transferId = MAPPER.readTree(response.body()).get("transferId").asText();
+        String transferId = MAPPER.readTree(response.body()).get("transferId").asString();
 
         JsonNode status = awaitTerminal("/api/items/import/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         assertThat(status.get("rowCount").asLong()).isEqualTo(1);
         assertThat(itemCount("multi")).isEqualTo(1);
 
@@ -456,7 +456,7 @@ class FileTransferIntegrationTest {
         String transferId = startTransfer("/api/events/import",
                 "name,held_on,fee\nexpo,2026/06/11,\"1.234,56\"\n");
         JsonNode status = awaitTerminal("/api/events/import/" + transferId);
-        assertThat(status.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).isEqualTo("COMPLETED");
         try (Connection connection = connect();
                 Statement statement = connection.createStatement();
                 ResultSet rs = statement.executeQuery(
@@ -469,7 +469,7 @@ class FileTransferIntegrationTest {
 
         // The export renders dates and numbers back in the route's locale.
         String exportId = startTransfer("/api/events/export", "");
-        assertThat(awaitTerminal("/api/events/export/" + exportId).get("status").asText())
+        assertThat(awaitTerminal("/api/events/export/" + exportId).get("status").asString())
                 .isEqualTo("COMPLETED");
         HttpResponse<String> file = get("/api/events/export/" + exportId + "/file");
         assertThat(file.body())
@@ -488,7 +488,7 @@ class FileTransferIntegrationTest {
         String transferId = startTransfer("/api/events/import",
                 "name,held_on,fee\nmisgrouped,2026/06/13,\"1.234.50\"\n");
         JsonNode status = awaitTerminal("/api/events/import/" + transferId);
-        assertThat(status.get("status").asText()).as(status.toString()).isEqualTo("FAILED");
+        assertThat(status.get("status").asString()).as(status.toString()).isEqualTo("FAILED");
         assertThat(status.get("errors").get(0).get("row").asLong()).isEqualTo(1);
         assertThat(status.get("errors").get(0).toString()).contains("fee");
         try (Connection connection = connect();
@@ -511,7 +511,7 @@ class FileTransferIntegrationTest {
         String transferId = startTransfer("/api/events/import-by-domain",
                 "name,held_on,fee\nfair,2026/06/12,\"2.345,67\"\n");
         JsonNode status = awaitTerminal("/api/events/import-by-domain/" + transferId);
-        assertThat(status.get("status").asText()).as(status.toString()).isEqualTo("COMPLETED");
+        assertThat(status.get("status").asString()).as(status.toString()).isEqualTo("COMPLETED");
         try (Connection connection = connect();
                 Statement statement = connection.createStatement();
                 ResultSet rs = statement.executeQuery(
@@ -545,7 +545,7 @@ class FileTransferIntegrationTest {
         }
 
         String id = startTransfer("/api/events/export-filtered?min=1000", "");
-        assertThat(awaitTerminal("/api/events/export-filtered/" + id).get("status").asText())
+        assertThat(awaitTerminal("/api/events/export-filtered/" + id).get("status").asString())
                 .isEqualTo("COMPLETED");
 
         HttpResponse<String> file = get("/api/events/export-filtered/" + id + "/file");
@@ -646,7 +646,7 @@ class FileTransferIntegrationTest {
     void aFileExportRunsTheDialectVariant() throws Exception {
         String id = startTransfer("/api/events/export-variant", "");
 
-        assertThat(awaitTerminal("/api/events/export-variant/" + id).get("status").asText())
+        assertThat(awaitTerminal("/api/events/export-variant/" + id).get("status").asString())
                 .isEqualTo("COMPLETED");
     }
 
@@ -657,14 +657,14 @@ class FileTransferIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
                 .build(), HttpResponse.BodyHandlers.ofString());
         assertThat(response.statusCode()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     private static JsonNode awaitTerminal(String statusPath) throws Exception {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(20));
         while (true) {
             JsonNode status = MAPPER.readTree(get(statusPath).body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value) && !"STARTED".equals(value)) {
                 return status;
             }

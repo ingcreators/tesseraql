@@ -2,12 +2,11 @@ package io.tesseraql.yaml.lint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Every property in the shipped schema carries a {@code description}, because a description here
@@ -34,7 +33,8 @@ class SchemaDescriptionCoverageTest {
                 "/schema/tesseraql-rules-v1.schema.json",
                 "/schema/tesseraql-decisions-v1.schema.json",
                 "/schema/tesseraql-catalogs-v1.schema.json")) {
-            JsonNode schema = new ObjectMapper().readTree(getClass().getResourceAsStream(resource));
+            JsonNode schema = io.tesseraql.yaml.JsonMappers.constrained()
+                    .readTree(getClass().getResourceAsStream(resource));
             collectUndescribed(schema, resource, undescribed);
         }
 
@@ -54,7 +54,8 @@ class SchemaDescriptionCoverageTest {
         if (node.isObject()) {
             JsonNode properties = node.get("properties");
             if (properties != null && properties.isObject()) {
-                for (Iterator<String> names = properties.fieldNames(); names.hasNext();) {
+                for (Iterator<String> names = properties.propertyNames().iterator(); names
+                        .hasNext();) {
                     String name = names.next();
                     JsonNode property = properties.get(name);
                     if (!property.hasNonNull("description") && !property.has("$ref")) {
@@ -62,7 +63,7 @@ class SchemaDescriptionCoverageTest {
                     }
                 }
             }
-            for (Iterator<String> names = node.fieldNames(); names.hasNext();) {
+            for (Iterator<String> names = node.propertyNames().iterator(); names.hasNext();) {
                 collectUndescribed(node.get(names.next()), path, out);
             }
         } else if (node.isArray()) {

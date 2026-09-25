@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.operations.batch.JobExecution;
 import io.tesseraql.operations.batch.JobStatus;
 import io.tesseraql.operations.batch.StepExecution;
@@ -35,6 +33,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for milestone M3: a batch job runs its pipeline, mutates the database, and
@@ -50,7 +50,7 @@ class BatchJobIntegrationTest {
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine")
             .withCommand("postgres", "-c", "log_statement=all");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -207,8 +207,8 @@ class BatchJobIntegrationTest {
         assertThat(run.headers().firstValue("Location").orElse(""))
                 .startsWith("/_tesseraql/ops/batch/executions/");
         JsonNode runBody = MAPPER.readTree(run.body());
-        assertThat(runBody.path("status").asText()).isEqualTo("COMPLETED");
-        assertThat(runBody.path("executionId").asText()).isNotBlank();
+        assertThat(runBody.path("status").asString()).isEqualTo("COMPLETED");
+        assertThat(runBody.path("executionId").asString()).isNotBlank();
 
         HttpResponse<String> list = send("GET", "/_tesseraql/ops/batch/executions", token, null);
         assertThat(list.statusCode()).isEqualTo(200);
@@ -222,18 +222,18 @@ class BatchJobIntegrationTest {
         JsonNode shifted = null;
         JsonNode overlap = null;
         for (JsonNode job : jobs) {
-            if ("user.calShifted".equals(job.path("id").asText())) {
+            if ("user.calShifted".equals(job.path("id").asString())) {
                 shifted = job;
             }
-            if ("user.overlapSkip".equals(job.path("id").asText())) {
+            if ("user.overlapSkip".equals(job.path("id").asString())) {
                 overlap = job;
             }
         }
         assertThat(shifted).isNotNull();
-        assertThat(shifted.path("trigger").asText())
+        assertThat(shifted.path("trigger").asString())
                 .startsWith("every 1s, calendar shift-cal (day ");
         assertThat(overlap).isNotNull();
-        assertThat(overlap.path("overlap").asText()).isEqualTo("skip");
+        assertThat(overlap.path("overlap").asString()).isEqualTo("skip");
     }
 
     @Test
@@ -243,20 +243,20 @@ class BatchJobIntegrationTest {
         // Defaulted: the firing's local date, recorded on the execution.
         HttpResponse<String> defaulted = send("POST",
                 "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token, "{}");
-        String executionId = MAPPER.readTree(defaulted.body()).path("executionId").asText();
+        String executionId = MAPPER.readTree(defaulted.body()).path("executionId").asString();
         JsonNode recorded = MAPPER.readTree(send("GET",
                 "/_tesseraql/ops/batch/executions/" + executionId, token, null).body());
-        assertThat(recorded.path("businessDate").asText())
+        assertThat(recorded.path("businessDate").asString())
                 .isEqualTo(java.time.LocalDate.now().toString());
 
         // Overridden: the reserved businessDate parameter — running the 31st's close later.
         HttpResponse<String> overridden = send("POST",
                 "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", token,
                 "{\"businessDate\": \"2026-07-31\"}");
-        String overriddenId = MAPPER.readTree(overridden.body()).path("executionId").asText();
+        String overriddenId = MAPPER.readTree(overridden.body()).path("executionId").asString();
         JsonNode overriddenRun = MAPPER.readTree(send("GET",
                 "/_tesseraql/ops/batch/executions/" + overriddenId, token, null).body());
-        assertThat(overriddenRun.path("businessDate").asText()).isEqualTo("2026-07-31");
+        assertThat(overriddenRun.path("businessDate").asString()).isEqualTo("2026-07-31");
 
         // The ambient bind reaches step SQL: the stamped row carries the date the run
         // was for, not the date it ran on.
@@ -498,7 +498,7 @@ class BatchJobIntegrationTest {
                 "/_tesseraql/ops/batch/executions/" + execution.id(), token, null).body());
         assertThat(detail.path("skips")).hasSize(2);
         List<String> skippedKeys = new java.util.ArrayList<>();
-        detail.path("skips").forEach(skip -> skippedKeys.add(skip.path("rowKey").asText()));
+        detail.path("skips").forEach(skip -> skippedKeys.add(skip.path("rowKey").asString()));
         assertThat(skippedKeys).containsExactlyInAnyOrder("a04", "a08");
 
         // A completed step clears its checkpoint: the next run reads from the top.
@@ -964,12 +964,12 @@ class BatchJobIntegrationTest {
         assertThat(tree.statusCode()).isEqualTo(200);
         JsonNode roots = MAPPER.readTree(tree.body());
         assertThat(roots).anySatisfy(root -> {
-            assertThat(root.get("span").get("name").asText()).isEqualTo("tesseraql.job");
+            assertThat(root.get("span").get("name").asString()).isEqualTo("tesseraql.job");
             // job -> step -> sql (three levels).
             assertThat(root.get("children")).anySatisfy(step -> {
-                assertThat(step.get("span").get("name").asText()).isEqualTo("tesseraql.job.step");
+                assertThat(step.get("span").get("name").asString()).isEqualTo("tesseraql.job.step");
                 assertThat(step.get("children"))
-                        .anySatisfy(sql -> assertThat(sql.get("span").get("name").asText())
+                        .anySatisfy(sql -> assertThat(sql.get("span").get("name").asString())
                                 .isEqualTo("tesseraql.sql.execute"));
             });
         });
@@ -995,7 +995,7 @@ class BatchJobIntegrationTest {
                 "/_tesseraql/ops/batch/jobs/user.dailyMaintenance/run", scoped, "{}");
         assertThat(deniedRun.statusCode()).isEqualTo(404);
         JsonNode denied = MAPPER.readTree(deniedRun.body());
-        assertThat(denied.path("error").path("code").asText()).isEqualTo("TQL-BATCH-4040");
+        assertThat(denied.path("error").path("code").asString()).isEqualTo("TQL-BATCH-4040");
 
         // The matching per-app grant restores visibility, and executions carry their app.
         String granted = token(List.of("BATCH_OPERATOR"),
@@ -1003,11 +1003,11 @@ class BatchJobIntegrationTest {
         JsonNode executions = MAPPER.readTree(
                 send("GET", "/_tesseraql/ops/batch/executions", granted, null).body());
         assertThat(executions).isNotEmpty();
-        assertThat(executions.get(0).path("app").asText()).isEqualTo("user-admin");
+        assertThat(executions.get(0).path("app").asString()).isEqualTo("user-admin");
         JsonNode tree = MAPPER.readTree(
                 send("GET", "/_tesseraql/ops/traces/tree", granted, null).body());
         assertThat(tree).anySatisfy(root -> assertThat(
-                root.get("span").get("attributes").path("app").asText()).isEqualTo("user-admin"));
+                root.get("span").get("attributes").path("app").asString()).isEqualTo("user-admin"));
     }
 
     @Test

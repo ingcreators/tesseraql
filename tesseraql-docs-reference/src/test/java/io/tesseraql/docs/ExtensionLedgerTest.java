@@ -2,8 +2,6 @@ package io.tesseraql.docs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -15,6 +13,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
 
 /**
  * The VS Code extension's tests are where its test runner looks, and the command names its
@@ -36,8 +35,9 @@ class ExtensionLedgerTest {
 
     @Test
     void everyTestFileIsWhereTheRunnerLooks() throws IOException {
-        String runner = new ObjectMapper().readTree(EXTENSION.resolve("package.json").toFile())
-                .path("scripts").path("test").asText();
+        String runner = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(EXTENSION.resolve("package.json").toFile())
+                .path("scripts").path("test").asString();
         assertThat(runner).as("the test script").contains("out/test/*.test.js");
 
         List<String> misplaced = new ArrayList<>();
@@ -61,10 +61,11 @@ class ExtensionLedgerTest {
 
     @Test
     void everyAdvertisedCommandNameIsOneTheManifestDeclares() throws IOException {
-        JsonNode manifest = new ObjectMapper().readTree(EXTENSION.resolve("package.json").toFile());
+        JsonNode manifest = io.tesseraql.yaml.JsonMappers.constrained()
+                .readTree(EXTENSION.resolve("package.json").toFile());
         TreeSet<String> titles = new TreeSet<>();
         manifest.path("contributes").path("commands")
-                .forEach(command -> titles.add(command.path("title").asText()));
+                .forEach(command -> titles.add(command.path("title").asString()));
         assertThat(titles).as("declared command titles").isNotEmpty();
 
         List<String> unknown = new ArrayList<>();

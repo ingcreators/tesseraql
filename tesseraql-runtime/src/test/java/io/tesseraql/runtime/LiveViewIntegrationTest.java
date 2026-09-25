@@ -216,8 +216,8 @@ class LiveViewIntegrationTest {
 
             HttpResponse<String> accepted = startExport("/orders/export-on-download");
             assertThat(accepted.statusCode()).as(accepted.body()).isEqualTo(202);
-            String transferId = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readTree(accepted.body()).get("transferId").asText();
+            String transferId = io.tesseraql.yaml.JsonMappers.constrained()
+                    .readTree(accepted.body()).get("transferId").asString();
             String path = "/orders/export-on-download/" + transferId;
             awaitCompleted(path);
             // Completed and unfetched: nothing was written, so nothing arrived. The heartbeat
@@ -311,8 +311,8 @@ class LiveViewIntegrationTest {
         while (true) {
             HttpResponse<String> polled = get(statusPath);
             assertThat(polled.statusCode()).as(polled.body()).isEqualTo(200);
-            String status = new com.fasterxml.jackson.databind.ObjectMapper()
-                    .readTree(polled.body()).path("status").asText();
+            String status = io.tesseraql.yaml.JsonMappers.constrained()
+                    .readTree(polled.body()).path("status").asString();
             if ("COMPLETED".equals(status)) {
                 return;
             }

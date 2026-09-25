@@ -3,7 +3,6 @@ package io.tesseraql.compiler.binding;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.error.TqlException;
 import io.tesseraql.pipeline.Beans;
 import io.tesseraql.pipeline.Exchange;
@@ -17,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Declarative views rendered through the {@code tql/view/*} pattern fragments (roadmap Phase 39,
@@ -29,7 +29,7 @@ class HtmlResponseRendererViewTest {
     private static final io.tesseraql.core.files.FileCodecs CODECS = io.tesseraql.core.files.FileCodecs
             .discover(HtmlResponseRendererViewTest.class.getClassLoader());
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     /** A POST action route with the input: block a form view derives its fields from. */
     private static RouteDefinition actionRoute() {

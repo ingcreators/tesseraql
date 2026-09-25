@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
@@ -24,6 +22,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration test for shared-schema multi-tenancy (design ch. 30): the tenant is resolved from a
@@ -36,7 +36,7 @@ class TenantScopingIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static TesseraqlRuntime runtime;
     static Path appHome;
@@ -62,11 +62,11 @@ class TenantScopingIntegrationTest {
     void returnsOnlyTheRequestedTenantsRows() throws Exception {
         JsonNode acme = get("acme");
         assertThat(acme.get("data")).hasSize(2);
-        acme.get("data").forEach(row -> assertThat(row.get("name").asText()).startsWith("acme-"));
+        acme.get("data").forEach(row -> assertThat(row.get("name").asString()).startsWith("acme-"));
 
         JsonNode globex = get("globex");
         assertThat(globex.get("data")).hasSize(1);
-        assertThat(globex.get("data").get(0).get("name").asText()).isEqualTo("globex-1");
+        assertThat(globex.get("data").get(0).get("name").asString()).isEqualTo("globex-1");
     }
 
     @Test

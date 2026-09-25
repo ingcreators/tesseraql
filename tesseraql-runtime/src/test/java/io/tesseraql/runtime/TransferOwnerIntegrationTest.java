@@ -2,8 +2,6 @@ package io.tesseraql.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tesseraql.core.files.FileTransferService;
 import io.tesseraql.pipeline.TesseraqlProperties;
 import java.io.IOException;
@@ -33,6 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * A transfer records who started it, and the owner queries list a subject's own and nothing
@@ -49,7 +49,7 @@ class TransferOwnerIntegrationTest {
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final String JWT_SECRET = "owner-secret-for-tests-only-not-a-real-key";
     private static final String APP = "owner-demo";
@@ -157,7 +157,7 @@ class TransferOwnerIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.ofString("name,qty\nalpha,1\nbeta,2\n"))
                 .build());
         assertThat(review.statusCode()).as(review.body()).isEqualTo(200);
-        String token = MAPPER.readTree(review.body()).get("token").asText();
+        String token = MAPPER.readTree(review.body()).get("token").asString();
 
         HttpResponse<String> commit = send(HttpRequest.newBuilder(
                 uri("/api/items/import/" + token + "/commit"))
@@ -166,9 +166,9 @@ class TransferOwnerIntegrationTest {
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build());
         assertThat(commit.statusCode()).as(commit.body()).isEqualTo(202);
-        String transferId = MAPPER.readTree(commit.body()).get("transferId").asText();
+        String transferId = MAPPER.readTree(commit.body()).get("transferId").asString();
         JsonNode done = awaitTerminal("/api/items/import/" + transferId, jwt("user-a"));
-        assertThat(done.get("status").asText()).isEqualTo("COMPLETED");
+        assertThat(done.get("status").asString()).isEqualTo("COMPLETED");
 
         // The frozen request copy the commit launches carries the confirmer the commit checked
         // — the copy that once dropped the topics, the tenant and the pool.
@@ -201,14 +201,14 @@ class TransferOwnerIntegrationTest {
         }
         HttpResponse<String> response = send(request.build());
         assertThat(response.statusCode()).as(response.body()).isEqualTo(202);
-        return MAPPER.readTree(response.body()).get("transferId").asText();
+        return MAPPER.readTree(response.body()).get("transferId").asString();
     }
 
     private static JsonNode awaitTerminal(String statusPath, String bearer) throws Exception {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
         while (true) {
             JsonNode status = MAPPER.readTree(get(statusPath, bearer).body());
-            String value = status.get("status").asText();
+            String value = status.get("status").asString();
             if (!"RUNNING".equals(value)) {
                 return status;
             }

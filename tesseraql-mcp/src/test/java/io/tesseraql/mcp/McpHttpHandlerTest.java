@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 class McpHttpHandlerTest {
 
@@ -16,7 +17,7 @@ class McpHttpHandlerTest {
     private McpServer server() {
         return McpServer.builder("http", "1.0")
                 .tool(McpTool.builder("echo")
-                        .handler((args, ctx) -> McpToolResult.text(args.path("text").asText()))
+                        .handler((args, ctx) -> McpToolResult.text(args.path("text").asString()))
                         .build())
                 .build();
     }
@@ -33,9 +34,9 @@ class McpHttpHandlerTest {
                 INIT)).headers().get(McpHttpHandler.SESSION_HEADER);
     }
 
-    private static com.fasterxml.jackson.databind.JsonNode body(McpHttpHandler.Response response) {
+    private static tools.jackson.databind.JsonNode body(McpHttpHandler.Response response) {
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.body());
+            return new JsonMapper().readTree(response.body());
         } catch (Exception ex) {
             throw new AssertionError(response.body(), ex);
         }
@@ -96,7 +97,7 @@ class McpHttpHandlerTest {
         McpHttpHandler handler = new McpHttpHandler(server(), null);
         McpHttpHandler.Response refused = handler.handle(post(CALL, "bogus"));
         assertThat(refused.status()).isEqualTo(404);
-        assertThat(body(refused).path("error").path("code").asText()).isEqualTo("TQL-MCP-4269");
+        assertThat(body(refused).path("error").path("code").asString()).isEqualTo("TQL-MCP-4269");
     }
 
     /**
@@ -109,7 +110,7 @@ class McpHttpHandlerTest {
         McpHttpHandler handler = new McpHttpHandler(server(), null);
         McpHttpHandler.Response refused = handler.handle(post(CALL, null));
         assertThat(refused.status()).isEqualTo(400);
-        assertThat(body(refused).path("error").path("code").asText()).isEqualTo("TQL-MCP-4268");
+        assertThat(body(refused).path("error").path("code").asString()).isEqualTo("TQL-MCP-4268");
         assertThat(refused.body()).doesNotContain("\"text\":\"hi\"");
     }
 
@@ -163,7 +164,7 @@ class McpHttpHandlerTest {
         McpHttpHandler.Response refused = handler.handle(
                 from("http://evil.example", "text/plain", CALL, null));
         assertThat(refused.status()).isEqualTo(403);
-        assertThat(body(refused).path("error").path("code").asText()).isEqualTo("TQL-MCP-4265");
+        assertThat(body(refused).path("error").path("code").asString()).isEqualTo("TQL-MCP-4265");
         assertThat(refused.headers()).doesNotContainKey("WWW-Authenticate");
     }
 
@@ -221,7 +222,7 @@ class McpHttpHandlerTest {
                 "application/x-www-form-urlencoded", "multipart/form-data; boundary=x", null)) {
             McpHttpHandler.Response refused = handler.handle(from(null, contentType, INIT, null));
             assertThat(refused.status()).as(String.valueOf(contentType)).isEqualTo(415);
-            assertThat(body(refused).path("error").path("code").asText())
+            assertThat(body(refused).path("error").path("code").asString())
                     .isEqualTo("TQL-MCP-4266");
         }
         for (String contentType : java.util.List.of("application/json",
@@ -242,7 +243,7 @@ class McpHttpHandlerTest {
         McpHttpHandler.Response refused = handler.handle(new McpHttpHandler.Request("POST", null,
                 session, "1999-01-01", null, JSON, CALL));
         assertThat(refused.status()).isEqualTo(400);
-        assertThat(body(refused).path("error").path("code").asText()).isEqualTo("TQL-MCP-4267");
+        assertThat(body(refused).path("error").path("code").asString()).isEqualTo("TQL-MCP-4267");
 
         assertThat(handler.handle(new McpHttpHandler.Request("POST", null, session, "2025-06-18",
                 null, JSON, CALL)).status()).isEqualTo(200);
@@ -261,8 +262,8 @@ class McpHttpHandlerTest {
         for (String raw : java.util.List.of("{bad", "", "   ")) {
             McpHttpHandler.Response refused = handler.handle(post(raw, null));
             assertThat(refused.status()).as(raw).isEqualTo(400);
-            com.fasterxml.jackson.databind.JsonNode error = body(refused);
-            assertThat(error.path("jsonrpc").asText()).isEqualTo("2.0");
+            tools.jackson.databind.JsonNode error = body(refused);
+            assertThat(error.path("jsonrpc").asString()).isEqualTo("2.0");
             assertThat(error.path("id").isNull()).isTrue();
             assertThat(error.path("error").path("code").asInt()).isEqualTo(McpServer.PARSE_ERROR);
         }

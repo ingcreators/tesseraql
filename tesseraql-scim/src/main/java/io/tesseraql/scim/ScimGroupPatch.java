@@ -1,6 +1,5 @@
 package io.tesseraql.scim;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,6 +7,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Normalizes a SCIM PATCH request into a full group (design ch. 10.15, RFC 7644 §3.5.2): it applies
@@ -112,11 +112,11 @@ public final class ScimGroupPatch {
         if (node.isObject()) {
             return new ScimGroup.Member(text(node.get("value")), text(node.get("display")), null);
         }
-        return new ScimGroup.Member(node.asText(), null, null);
+        return new ScimGroup.Member(node.asString(""), null, null);
     }
 
     private static String text(JsonNode value) {
-        return value == null || value.isNull() ? null : value.asText();
+        return value == null || value.isNull() ? null : value.asString("");
     }
 
     /** Mutable working copy of a group's attributes and ordered, value-keyed members. */
