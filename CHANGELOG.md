@@ -288,6 +288,13 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Content after a JSON value or a YAML document is refused.** A request body such as
+  `{"a":1} {"b":2}`, stored JSON with trailing text, or an application file with a second `---`
+  document used to be read as its first value with the rest dropped silently; each is now the
+  refusal that route or document already has for malformed input (`TQL-FIELD-2002` for a body,
+  `TQL-YAML-1001` for a file). Jackson 3's own default, adopted on its evidence alone; the other
+  defaults it changed stay at Jackson 2's value. `docs/jackson-3.md` decision 11.
+
 - **Jackson 3.1, the long-term-support line.** The framework's JSON and YAML run on Jackson 3.1
   (`tools.jackson`) instead of 2.22, and stay on the LTS line: patch releases flow, minor ones
   wait for Jackson's next LTS. Every mapper factory keeps Jackson 2's value for each default

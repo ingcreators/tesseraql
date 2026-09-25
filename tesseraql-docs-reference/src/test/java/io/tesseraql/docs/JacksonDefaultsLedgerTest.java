@@ -57,8 +57,8 @@ class JacksonDefaultsLedgerTest {
         DeserializationConfig read = mapper.deserializationConfig();
         // An absent boolean in authored YAML means false: refused, permanently.
         assertThat(read.isEnabled(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)).isFalse();
-        // Adopted in S2; until then off, as in Jackson 2.
-        assertThat(read.isEnabled(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)).isFalse();
+        // Adopted in S2: content after the value is refused, not dropped.
+        assertThat(read.isEnabled(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)).isTrue();
         // An unknown property stays a refusal: refused, permanently.
         assertThat(read.isEnabled(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)).isTrue();
         // Declaration order is the deterministic-output contract: refused, permanently.

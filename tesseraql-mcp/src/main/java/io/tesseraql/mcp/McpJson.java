@@ -34,7 +34,7 @@ final class McpJson {
                 // .JacksonDefaults, which this module sits below; JacksonDefaultsLedgerTest
                 // holds the two equal (docs/jackson-3.md decision 4).
                 .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-                .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .disable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
                 .disable(EnumFeature.READ_ENUMS_USING_TO_STRING)

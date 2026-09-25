@@ -8,7 +8,8 @@ import tools.jackson.databind.cfg.MapperBuilder;
 
 /**
  * Jackson 2's value for every default Jackson 3 changed that an application would observe
- * (docs/jackson-3.md decision 4). Every mapper factory in and above this module builds through
+ * (docs/jackson-3.md decision 4) — except trailing tokens, the one 3.x default adopted on its
+ * own evidence (decision 11, S2). Every mapper factory in and above this module builds through
  * {@link #pin}; {@code SecurityJson} and {@code McpJson} live below it and repeat these lines,
  * and {@code JacksonDefaultsLedgerTest} holds all of them to the same states.
  *
@@ -27,8 +28,10 @@ public final class JacksonDefaults {
                 // An absent boolean in authored YAML means false: that is the authored contract,
                 // and on 3.x's default every optional boolean record component refuses to load.
                 .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
-                // Adopted on its own evidence in S2; until then a value is read as 2.x read it.
-                .disable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                // Adopted (docs/jackson-3.md S2): content after the value — `{"a":1} x` in a body,
+                // a second `---` document in an application file — is refused. Jackson 2 read the
+                // first value and dropped the rest without a word.
+                .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                 // An unknown property stays a refusal. The authored models opt out class by class
                 // and TQL-YAML-1043 owns unknown keys; relaxing it everywhere is silent tolerance.
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)

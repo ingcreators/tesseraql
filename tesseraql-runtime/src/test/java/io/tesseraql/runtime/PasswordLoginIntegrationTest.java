@@ -164,6 +164,21 @@ class PasswordLoginIntegrationTest {
         assertThat(truncated.body()).contains("The request body must be a JSON object");
     }
 
+    /**
+     * Content after the JSON value is refused, not dropped (docs/jackson-3.md S2). Jackson 2 read
+     * the first object and ignored the second, so this body was a sign-in attempt for whoever
+     * the first object named — a 401 — while the caller had sent two.
+     */
+    @Test
+    void aValueFollowedByMoreContentIsRefused() throws Exception {
+        HttpResponse<String> trailing = post("/_tesseraql/login",
+                "{\"loginId\":\"nobody\",\"password\":\"x\"} {\"loginId\":\"admin\"}");
+
+        assertThat(trailing.statusCode()).isEqualTo(400);
+        assertThat(trailing.body()).contains("TQL-FIELD-2002");
+        assertThat(trailing.body()).contains("The request body must be a JSON object");
+    }
+
     /** Valid JSON that is not an object: the old wording called this "not valid JSON". */
     @Test
     void aJsonArrayIsRefusedAsNotAnObject() throws Exception {
