@@ -165,6 +165,19 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * The in-flight bound this runtime's gate admits: what the front door compares its share
+     * against when it starts (docs/capacity-defaults.md decision 1).
+     */
+    int maxInFlightBound() {
+        return maxInFlight(config);
+    }
+
+    /** The event-stream bound this runtime's gate admits, beside {@link #maxInFlightBound()}. */
+    int maxEventStreamsBound() {
+        return maxEventStreams(config);
+    }
+
+    /**
      * A stop cut {@code requests} at {@code bound} — this runtime's own drain, or the stack's
      * front (docs/deployment-maturity.md decision 9): recorded on the dashboard and paged now,
      * while the outbox's pool is still open, so a surviving node delivers {@code TQL-OPS-9013}.
@@ -329,15 +342,17 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * The Vert.x sizing for this runtime's HTTP server (docs/http-threading.md decision 1).
      *
      * <p>Route execution no longer sits here (docs/http-edge.md decision 1): the runtime's own
-     * edge runs each request on a virtual thread. What the pool still bounds is the work that
-     * genuinely hands off to it — the stack relay and the multi-app gateway — so it is sized for
-     * those rather than for concurrent route execution.
+     * edge runs each request on a virtual thread. What the pool still does is Vert.x's own file
+     * I/O — an upload spooled to disk, an {@code AsyncFile} — which Vert.x dispatches to it and
+     * nothing else competes for. The relay and the gateway never used it: nothing in the
+     * framework calls {@code executeBlocking}, and the front door runs on a Vert.x of its own.
+     * So nothing derives from this number any more (docs/capacity-defaults.md decision 3).
      *
      * <p>It was the ceiling on route execution when every exchange went to
-     * {@code executeBlocking}, and that is why the pairing below exists: Vert.x's own default of
-     * 20 was chosen for a framework where blocking is the exception, and against the connection
-     * pool's default of 10 it left half the workers able to do nothing but wait in
-     * {@code getConnection()}. Both now default to 10 and are raised together.
+     * {@code executeBlocking}, which is where its default of 10 came from: Vert.x's own 20 was
+     * chosen for a framework where blocking is the exception, and against the connection pool's
+     * default of 10 it left half the workers able to do nothing but wait in
+     * {@code getConnection()}.
      *
      * <p>The event loop count keeps Vert.x's default unless asked otherwise: loops are not where
      * blocking work sits, and a host running several runtimes is the case that wants them lowered.
@@ -385,18 +400,30 @@ public final class TesseraqlRuntime implements AutoCloseable {
     }
 
     /**
+     * The number of requests a runtime holds in flight when it declares none — and, because the
+     * front door cannot read a member's configuration, also the number the front door forwards
+     * to one member when the stack declares none (docs/capacity-defaults.md decisions 1 and 3).
+     * One constant, so the two cannot drift apart.
+     *
+     * <p>Forty is the number four times the old worker pool produced. It is stated rather than
+     * derived, because the worker pool stopped running routes (docs/http-edge.md decision 1):
+     * raising the threads that read files used to raise the queue a runtime admitted.
+     */
+    static final int DEFAULT_MAX_IN_FLIGHT = 40;
+
+    /**
      * How many requests this runtime will hold in flight (docs/http-threading.md decision 3).
      *
-     * <p>Four times the worker pool by default: enough room for the ordinary burst a queue exists
-     * to absorb, while keeping the queue a number an operator can see rather than "however much
+     * <p>{@link #DEFAULT_MAX_IN_FLIGHT} unless declared: enough room for the ordinary burst a
+     * queue exists to absorb — ten connections' worth of routes running and three times that
+     * waiting — while keeping the queue a number an operator can see rather than "however much
      * heap it takes". Beyond it the answer is an immediate 503, which is a slowdown a caller can
      * retry — where an unbounded queue is an outage that takes health and readiness with it.
      */
-    private static int maxInFlight(AppConfig config) {
+    static int maxInFlight(AppConfig config) {
         return threadCount("tesseraql.http.maxInFlight",
                 config.getString("tesseraql.http.maxInFlight"))
-                .orElseGet(() -> threadCount("tesseraql.http.workerThreads",
-                        config.getString("tesseraql.http.workerThreads")).orElse(10) * 4);
+                .orElse(DEFAULT_MAX_IN_FLIGHT);
     }
 
     /**
@@ -418,7 +445,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
      * Matching {@code maxInFlight} keeps today's effective stream ceiling exactly where it is,
      * so this change moves only whose permits a stream spends.
      */
-    private static int maxEventStreams(AppConfig config) {
+    static int maxEventStreams(AppConfig config) {
         return threadCount("tesseraql.http.maxEventStreams",
                 config.getString("tesseraql.http.maxEventStreams"))
                 .orElseGet(() -> maxInFlight(config));

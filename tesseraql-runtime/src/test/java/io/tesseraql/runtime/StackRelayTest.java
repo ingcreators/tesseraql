@@ -207,6 +207,41 @@ class StackRelayTest {
     }
 
     /**
+     * A member's assets and its own health pass the share, as they pass the member's own gate.
+     *
+     * <p>The front door counted both, so ten slow queries at a member refused its stylesheets
+     * and answered its health with 503 — the coupling http-threading.md decisions 3 and 6
+     * removed at the member, put back one hop earlier (docs/capacity-defaults.md decision 2).
+     * The comparison is on a segment boundary of the target as transmitted, so a spelling the
+     * member might normalise, and a sibling that only starts with the word, stay counted.
+     */
+    @Test
+    void aMembersAssetsAndHealthPassItsShareAsTheyPassItsOwnGate() throws Exception {
+        List<java.util.concurrent.CompletableFuture<HttpResponse<String>>> holding = List.of(
+                java.util.concurrent.CompletableFuture.supplyAsync(
+                        () -> getBounded("/slow")),
+                java.util.concurrent.CompletableFuture.supplyAsync(
+                        () -> getBounded("/slow")));
+        Thread.sleep(400);
+        assertThat(boundedRelay.forwardsInFlight(APP))
+                .as("the two forwards hold the member's whole share").isEqualTo(2);
+
+        assertThat(getBounded("/assets/app.css").statusCode()).isEqualTo(200);
+        assertThat(getBounded("/assets").statusCode()).isEqualTo(200);
+        assertThat(getBounded("/_tesseraql/health/live").statusCode()).isEqualTo(200);
+        assertThat(boundedRelay.forwardsInFlight(APP))
+                .as("neither took a permit").isEqualTo(2);
+
+        assertThat(getBounded("/%61ssets/app.css").statusCode()).isEqualTo(503);
+        assertThat(getBounded("/assets-report").statusCode()).isEqualTo(503);
+        assertThat(getBounded("/_tesseraql/healthz").statusCode()).isEqualTo(503);
+
+        for (java.util.concurrent.CompletableFuture<HttpResponse<String>> held : holding) {
+            assertThat(held.get().statusCode()).isEqualTo(200);
+        }
+    }
+
+    /**
      * The outbound client carries what the front door admits, in both protocol modes.
      *
      * <p>The client's own defaults are five connections per origin on HTTP/1 and one connection
@@ -284,14 +319,17 @@ class StackRelayTest {
     /** The outbound client carries both shares at once, so an admitted stream never queues. */
     @Test
     void theOutboundClientIsSizedToTheSumOfBothShares() {
-        int sized = MultiAppGateway.outboundSizing(10, 40);
+        int sized = MultiAppGateway.outboundSizing(
+                MultiAppGateway.maxConcurrentPerMember(null),
+                MultiAppGateway.maxStreamsPerMember(null,
+                        MultiAppGateway.maxConcurrentPerMember(null)));
 
-        assertThat(sized).isEqualTo(50);
-        assertThat(StackRelay.outboundPool(sized).getHttp1MaxSize()).isEqualTo(50);
-        assertThat(StackRelay.outboundPool(sized).getHttp2MaxSize()).isEqualTo(50);
-        assertThat(StackRelay.outboundPool(sized).getMaxWaitQueueSize()).isEqualTo(50);
+        assertThat(sized).isEqualTo(80);
+        assertThat(StackRelay.outboundPool(sized).getHttp1MaxSize()).isEqualTo(80);
+        assertThat(StackRelay.outboundPool(sized).getHttp2MaxSize()).isEqualTo(80);
+        assertThat(StackRelay.outboundPool(sized).getMaxWaitQueueSize()).isEqualTo(80);
         assertThat(StackRelay.outboundOptions(true, sized).getHttp2MultiplexingLimit())
-                .isEqualTo(50);
+                .isEqualTo(80);
     }
 
     /**

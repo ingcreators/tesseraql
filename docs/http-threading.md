@@ -252,6 +252,18 @@ somebody's report. Without it, a hung member is contained by the bound above rat
 reclaimed: it holds its own permits and nothing else, and the stack answers 503 for that member
 while serving the rest.
 
+#### The default moved — 2026-09-25
+
+This decision's number was the stack's worker count, from when a route ran on the worker pool.
+[http-edge.md](http-edge.md) decision 1 moved every route onto a virtual thread and left the
+worker count sizing file I/O only. So the share stayed at ten while a member's own gate
+admitted forty, and under a stack the forty were never reached. A closed-loop load test at 32
+workers was refused 65% of the time at the door ([gateway-performance.md](gateway-performance.md)
+row 2). The share now defaults to what a member's gate admits, and the stream share to the
+request share. A member's assets and health pass it, as they pass the member's gate
+([capacity-defaults.md](capacity-defaults.md) decisions 1-3). The rule above stands; only the
+number it names changed.
+
 ### 6. Static assets are answered off the worker pool
 
 Decision 1 lowered the worker pool from Vert.x's 20 to 10, reasoning that against a connection

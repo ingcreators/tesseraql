@@ -187,7 +187,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | `tesseraql.http.outbound.retry.attempts` | [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | — |
 | `tesseraql.http.outbound.retry.backoff` | [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | — |
 | `tesseraql.http.outbound.retry.multiplier` | [HttpOutbound.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/http/HttpOutbound.java) | — |
-| `tesseraql.http.workerThreads` | [MultiAppGateway.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/MultiAppGateway.java), [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [capacity](capacity.md), [deployment](deployment.md) |
+| `tesseraql.http.workerThreads` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | [capacity](capacity.md), [deployment](deployment.md) |
 
 ## tesseraql.i18n
 

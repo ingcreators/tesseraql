@@ -139,24 +139,28 @@ stops the container image with `docker stop -t 60` on every pull request and rea
 
 ## Request threads
 
-Every HTTP request runs on the **worker pool**: route processing is blocking work, and the
-platform HTTP layer hands each exchange to a pool of platform threads. The pool size is
-therefore this runtime's ceiling on concurrent route execution, and it is one of the numbers
-that decide how much work the runtime does at once.
+Every HTTP request runs on a **virtual thread** of its own. Route processing is blocking work, and
+a virtual thread that blocks costs nothing while it waits, so no thread count is this runtime's
+ceiling on concurrent route execution. Two numbers are. The **connection pool** is one, because a
+route that reads or writes the database runs only while it holds a connection. **`maxInFlight`**
+is the other: the requests the runtime holds at once, running or waiting for a connection,
+before it refuses.
 
 | Key | Default | What it sizes |
 | --- | --- | --- |
-| `tesseraql.http.workerThreads` | 10 | Concurrent route executions |
-| `tesseraql.http.eventLoopThreads` | `2 x cores` | Connection I/O; blocking work never runs here |
-| `tesseraql.http.maxInFlight` | `workerThreads x 4` | Requests other than event streams, held at once before refusing |
+| `tesseraql.http.maxInFlight` | 40 | Requests other than event streams, held at once (running or waiting) before refusing |
 | `tesseraql.http.maxEventStreams` | same as `maxInFlight` | Event streams held open at once before refusing |
+| `tesseraql.http.workerThreads` | 10 | Vert.x's own file I/O, such as an upload spooled to disk; no route runs here |
+| `tesseraql.http.eventLoopThreads` | `2 x cores` | Connection I/O; blocking work never runs here |
 | `tesseraql.http.maxBodyBytes` | 10 MB | Largest request body, uploads included; takes units (`25MB`); `-1` removes the bound |
 | `tesseraql.http.maxFormFields` | 10,000 | Fields one form body may carry; `-1` removes the bound |
 | `tesseraql.http.idleTimeoutSeconds` | 300 | Silence on a connection before the transport closes it; `-1` removes the bound |
 
 **Beyond `maxInFlight` the runtime answers 503 with `Retry-After`**, immediately, rather than
-adding the request to a queue with no bound. Four times the worker count leaves room for the
-ordinary burst a queue exists to absorb while keeping the queue a number you can see. A caller
+adding the request to a queue with no bound. Forty is a pool's worth of routes running and three
+times that waiting. That leaves room for the ordinary burst a queue exists to absorb, while
+keeping the queue a number you can see. It is a number of its own rather than a multiple of
+`workerThreads`, because that pool runs no route. A caller
 that gets this refusal should retry; a monitor that sees it should read it as "this runtime is
 at capacity", which is `TQL-RATE-4293`.
 
@@ -211,9 +215,16 @@ first. It is declared in `tesseraql-stack.yml`:
 
 | Key | Default | What it does |
 | --- | --- | --- |
-| `tesseraql.gateway.maxConcurrentPerMember` | `tesseraql.http.workerThreads` | Non-stream forwards in flight to one member |
-| `tesseraql.gateway.maxStreamsPerMember` | `maxConcurrentPerMember` x 4 | Event-stream forwards held open to one member |
+| `tesseraql.gateway.maxConcurrentPerMember` | 40, what a member's own `maxInFlight` admits by default | Non-stream forwards in flight to one member |
+| `tesseraql.gateway.maxStreamsPerMember` | same as `maxConcurrentPerMember` | Event-stream forwards held open to one member |
 | `tesseraql.gateway.readIdleTimeoutSeconds` | off | Reclaim a forward whose member has sent nothing for this long |
+
+**The share mirrors a member's own gate**, so under a stack a member's whole queue is usable.
+The front door reads only the stack file and cannot follow a member's own settings. A member
+that declares a larger `maxInFlight` or `maxEventStreams` is therefore named in a warning at
+start, with the stack key to raise. **A member's assets and its own health take no permit here,**
+as they take none at the member's gate: a stylesheet does not wait on the database, and health
+answers when nothing else can.
 
 **Event streams are counted separately here too**, under `maxStreamsPerMember`. A forwarded
 response holds its permit until it ends, and an event stream does not end while the page is
@@ -226,8 +237,8 @@ A stream is recognised by the path the member mounts it at, not by the `Accept` 
 serves MCP over the same endpoint shape and its clients send `Accept: text/event-stream` on
 calls that are not streams, and a header is the caller's to set in any case.
 
-The outbound client is sized to the **sum** of the two shares — fifty by default rather than ten
-— so an admitted stream never queues in the transport behind the requests it was separated from.
+The outbound client is sized to the **sum** of the two shares, eighty by default, so an admitted
+stream never queues in the transport behind the requests it was separated from.
 
 Beyond the bound the gateway answers 503 with `Retry-After` and `TQL-RATE-4294` — **for that
 member only**. A member whose database has stalled holds its own permits and nothing else, so
@@ -236,15 +247,13 @@ timeout off unless you need it: a hung member and one running a legitimately lon
 the same from the front door, so a timeout short enough to catch the first will eventually
 cancel the second. Set it only if you know your slowest legitimate response.
 
-Health (`/_tesseraql/health` and below) is checked before the bound, so the gate never refuses
-it. It still needs a worker to answer, so it can be slow when every worker is blocked — bounded
-now by `maxInFlight` rather than unbounded, which is the improvement rather than a promise of
-promptness. Use `/health/live` for liveness: it touches no dependency.
+Health (`/_tesseraql/health` and below) is checked before the bound, so no gate refuses it.
+Use `/health/live` for liveness: it touches no dependency.
 
-**Raise it together with the connection pool.** The worker pool feeds
-`tesseraql.datasources.<name>.maximumPoolSize`, so a worker count above the pool size buys
-nothing except threads waiting in connection acquisition — for up to `connectionTimeoutMillis`
-each. The defaults are deliberately the same number.
+**Raise `maxInFlight` together with the connection pool.** The pool decides how many routes that
+need the database run at once, and `maxInFlight` decides how many more may wait for a connection.
+Raising the pool alone shrinks the queue. Raising `maxInFlight` alone lengthens the wait, each
+waiter for up to `connectionTimeoutMillis`. The defaults keep four to one.
 
 Each datasource takes its pool settings under `tesseraql.datasources.<name>`:
 
@@ -268,11 +277,12 @@ measure rather than hiding in a second pool. Watch `tesseraql_pool_threads_await
 [metrics](#metrics-prometheus) below; a non-zero reading is the pool, not the database, being
 the constraint.
 
-Size it from measured latency rather than from a guess: concurrency is throughput times
-latency, so routes averaging 50 ms saturate 10 workers at roughly 200 requests a second, and
-routes averaging a second saturate them at 10. If the answer is "many more threads", check
-first whether the database can absorb the connections that come with them — the pool that
-matters is the one at the far end.
+Size it from measured latency rather than from a guess. Concurrency is throughput times latency,
+so routes holding a connection for 50 ms saturate a pool of 10 at roughly 200 requests a second,
+and routes holding one for a second saturate it at 10. If the answer is "many more connections",
+check first whether the database can absorb them: the limit that matters is the one at the far
+end, and every pool holds its full size from boot unless `minimumIdle` says otherwise
+([capacity](capacity.md#from-one-node-to-replicas)).
 
 A count that is not a positive integer refuses at startup (`TQL-YAML-1112`) rather than
 starting with a pool nobody asked for.

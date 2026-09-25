@@ -288,6 +288,27 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **The front door admits what a member admits.** Under `tesseraql host`,
+  `tesseraql.gateway.maxConcurrentPerMember` defaults to 40, the number a member's own
+  `maxInFlight` admits by default. It used to be the stack's `workerThreads` (10), from when a
+  route ran on the worker pool, so under a stack a member's queue of 40 was never reached: a
+  closed-loop load test at 32 workers was refused 65% of the time with `TQL-RATE-4294`.
+  `maxStreamsPerMember` defaults to the request share, as a member's `maxEventStreams` defaults
+  to its `maxInFlight`, so it stays at 40. The outbound client is sized to the sum, 80. A member
+  whose own bounds exceed the share is named in a warning at start, with the stack key to raise:
+  the front door reads only the stack file. A member's assets (`/<name>/assets/…`) and its own
+  health (`/<name>/_tesseraql/health…`) no longer take a permit at the front door, as they take
+  none at the member's gate. They are matched on a segment boundary of the path as sent, so an
+  encoded spelling is still counted. `docs/capacity-defaults.md` decisions 1-2.
+
+- **`tesseraql.http.maxInFlight` defaults to 40, and no longer derives from `workerThreads`.**
+  The number is unchanged for a runtime that declared neither. A runtime that raised
+  `workerThreads` to raise its queue now declares `maxInFlight` instead: routes run on virtual
+  threads, and the worker pool sizes only Vert.x's own file I/O. `maxEventStreams` still defaults
+  to `maxInFlight`. `docs/capacity.md` and `docs/deployment.md` "Request threads" now describe the
+  model that runs: the connection pool and `maxInFlight` are the ceilings, raised together, and a
+  pool holds its full size from boot. `docs/capacity-defaults.md` decisions 3-4.
+
 - **Content after a JSON value or a YAML document is refused.** A request body such as
   `{"a":1} {"b":2}`, stored JSON with trailing text, or an application file with a second `---`
   document used to be read as its first value with the rest dropped silently; each is now the

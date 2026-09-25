@@ -13,7 +13,11 @@
 > **S1 (the front door and the bounds).** The front door's per-member share defaults to what a
 > member's own gate admits. Assets and health pass the share, as they already pass the member's
 > gate. `maxInFlight` stops deriving from `workerThreads`. [capacity.md](capacity.md) describes the
-> model that runs.
+> model that runs. **Shipped, #1458**, as designed, with one correction. Beyond 40 the refusal
+> stays the front door's `TQL-RATE-4294`: its count includes the relay's own time, so it reaches
+> the shared number first ("What this breaks"). Measured again at the defaults, 32 workers are
+> refused none of the time, where 65% were refused before. capacity.md's worked example, measured
+> again on a 5 ms route, saturates at the pool, and doubles with a pool of 20 and a queue of 80.
 >
 > **S2 (the pools a deployment names).** `tesseraql.batch.datasource` names the pool jobs run on.
 > The stack's framework pool is sized by declaration rather than by HikariCP's own defaults.
@@ -211,7 +215,10 @@ names a real coordinate.
   default.
 - **S2:** [jobs.md](jobs.md) and [deployment.md](deployment.md) describe the batch key and the
   stack pool keys, and the generated configuration reference is regenerated.
-  `TQL-BATCH-4213` is allocated.
+  `TQL-BATCH-4213` is allocated. deployment.md's pool section says background work borrows from
+  the same pools "deliberately", so that contention shows as request latency. S2 rewrites that
+  paragraph: the shared pool stays the default, and the batch key is the named way out of it,
+  recommended for production by S3's profile. Found while S1 rewrote the section around it.
 - **S3:** [deployment.md](deployment.md)'s profile section points at the generated files, and the
   getting-started text `tesseraql new` prints is checked.
 - **CHANGELOG:** each slice, under Changed or Added.
@@ -220,8 +227,11 @@ names a real coordinate.
 
 1.0 has not shipped, so no migration steps follow. This records what changes and why.
 
-- **The front door forwards up to 40 requests per member, where it forwarded 10.** Above that, a
-  member's own gate usually refuses first (`TQL-RATE-4293` where the answer was `TQL-RATE-4294`).
+- **The front door forwards up to 40 requests per member, where it forwarded 10.** Beyond that
+  the answer is still the front door's `TQL-RATE-4294`, because its count includes the relay's
+  own time and so reaches the shared number first. What changes is that the member's whole queue
+  of 40 is usable. (The record first said the member's `TQL-RATE-4293` would answer instead; S1's
+  reading corrected it.)
 - **Asset and health forwards no longer count against the share.**
 - **An application that raised `workerThreads` to raise its queue** gets 40 unless it declares
   `maxInFlight`.
@@ -244,8 +254,8 @@ Decisions 1-4.
   - The runtime's `maxInFlight` is 40 with `workerThreads: 20` declared.
   - `HttpServerOptionsLedgerTest` and `HttpClientLedgerTest` stay green.
 - **Measurement:** row 2 of [gateway-performance.md](gateway-performance.md) again, at the defaults
-  and on the same harness shape. The expectation is no refusals at `c`=32, and the member's
-  `TQL-RATE-4293` beyond 40 at `c`=64. The result is recorded there.
+  and on the same harness shape. The expectation is no refusals at `c`=32, and the front door's
+  `TQL-RATE-4294` beyond 40 at `c`=64. The result is recorded there.
 - **Docs:** capacity.md with its worked example re-measured, deployment.md, and http-threading.md's
   note.
 
