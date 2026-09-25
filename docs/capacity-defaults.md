@@ -8,7 +8,7 @@
 > the minimum is 0, and whether a new application could start from best-practice pool settings,
 > batch included. They chose every recommended option.
 >
-> There are six slices, the last two added after S3:
+> There are seven slices. S4 and S5 were added after S3, and S6 after S5:
 >
 > **S1 (the front door and the bounds).** The front door's per-member share defaults to what a
 > member's own gate admits. Assets and health pass the share, as they already pass the member's
@@ -67,6 +67,14 @@
 > built. Two revert probes turned the tests red: lending an override again (both identity
 > assertions), and closing every named pool again (the ownership assertion). The origin sign-in
 > test passes on the borrowed pool.
+>
+> **Amended 2026-09-25, after S5: decision 13 is new, with slice S6.** The maintainer asked
+> whether reporting the framework pool had been left out because it was hard. It had not: it was
+> outside the two items they asked for, and where to report it was a choice to make. But the
+> trigger decision 9 recorded for it was circular: without the metric, nobody could suspect that
+> sign-in waits on the pool. They chose the recommended place: the surface gets a scrape of its
+> own, configured from the stack file, and the origin's `/_tesseraql/metrics` reports the sign-in
+> pool as `main`.
 >
 > **Amended 2026-09-25, after S1: decisions 5 and 7 are replaced, and decisions 5a and 5b are
 > new.** The record first designed `tesseraql.batch.datasource`, a key naming another datasource
@@ -352,7 +360,9 @@ names a real coordinate.
 | Role pools under a datasource other than `main` | Jobs on another datasource take that datasource's pool, and transfers run only on `main`, so the block would configure nothing. Refused with `TQL-YAML-1115` | A route transfer that runs on a named datasource, or jobs on one needing isolation from its routes |
 | Grouping tenants onto one pool (A, B and C on one, D, E and F on another) | One pool per tenant id, the mode is application-wide, and structural isolation has no `tenant.id` predicate to separate tenants that share tables (row 13). Grouping would be a shard mode of its own, with its own routing, lint and migrations | A deployment whose tenant count makes a pool per tenant unaffordable. Tenant pools already take `maximumPoolSize` / `minimumIdle` per block in the meantime |
 | A lint of lanes against a job pool | Lanes do not govern jobs (row 9) | Jobs gaining lanes |
-| Reporting the stack's framework pool on a scrape (found in S5) | The surface exposes no scrape, and no member's scrape includes the pool. A scrape for the pools the stack owns is an observability move of its own, not a pool default | Sign-in suspected of waiting on the framework pool in production |
+| ~~Reporting the stack's framework pool on a scrape (found in S5)~~ **Superseded by decision 13** | The surface exposed no scrape, and no member's scrape includes the pool. The trigger recorded here, sign-in suspected of waiting on the pool, could not fire without the metric, so the maintainer took it up after S5 | — |
+| Reporting the framework pool on every member's scrape (decision 13's alternative) | Every member would report the same pool, so a sum over instances counts it once per member, and an alert on it fires once per member | None: decision 13 reports it once, where it is used |
+| A scrape of the front door's own (decision 13's alternative) | The gateway already reports its per-member share on each member's scrape; a stack-level scrape is a surface of its own, with its own auth | A signal that belongs to no runtime, such as the front door's total in flight |
 | Sizing the surface's own `main` from the `framework.datasource` block (decision 12's alternative) | It would keep two pools of one size on one database for one sign-in, and leave in place the split row 19 found | Surface work that is not sign-in, such as a portal route running SQL at request rate, which would then compete with sign-in on one pool |
 | epoll, an in-process handoff, process separation | [gateway-performance.md](gateway-performance.md) | The triggers recorded there |
 
@@ -386,6 +396,9 @@ names a real coordinate.
   surface's own `main` where `framework.datasource` is declared.
   [root-portal.md](root-portal.md)'s "Datasources" paragraph gets a dated note: where the host
   holds a framework pool, the surface's `main` is that pool.
+- **S6:** [hosting.md](hosting.md)'s stack-file section gains `metrics:`, and its sign-in pool
+  paragraph points at the origin's scrape. [deployment.md](deployment.md)'s metrics section says
+  that under a stack the origin's scrape reports the sign-in pool.
 - **CHANGELOG:** each slice, under Changed or Added.
 
 ### 11 — A pool built from an override is sized by its datasource's declaration (amended)
@@ -433,6 +446,43 @@ The alternative was to size the surface's own `main` from the `framework.datasou
 less code, but it keeps two pools of one size on one database for one sign-in, and leaves the
 split row 19 found in place. Decision 9 records the refusal and its trigger.
 
+### 13 — The surface has a scrape of its own, and it reports the sign-in pool (amended)
+
+The stack file's `metrics:` subtree is grafted onto the surface runtime's configuration as
+`tesseraql.metrics`, as its `security:` subtree already is (`TesseraqlRuntime.withStackContext`).
+The portal is bundled, so an operator has no other place to configure it. `metrics.enabled: true`
+mounts the surface's scrape, and the front door already forwards every origin `/_tesseraql/*`
+path to the surface except its own health pair (`StackRelay.insideTheOriginFence`). So the
+scrape is the origin's `/_tesseraql/metrics`, beside each member's `/<name>/_tesseraql/metrics`.
+
+```yaml
+# tesseraql-stack.yml
+metrics:
+  enabled: true              # the origin's /_tesseraql/metrics
+security:
+  policies:
+    ops.metrics.view:        # a bearer the surface validates, holding this policy
+      anyOf:
+        - role: OPS
+```
+
+- **It reports the sign-in pool as `pool="main"`.** Where the stack declares
+  `framework.datasource`, that is the framework pool (decision 12). Otherwise it is the surface's
+  own `main`. Either way it is the pool sign-in rides, so `tesseraql_pool_threads_awaiting` at the
+  origin answers whether sign-in waits for a connection.
+- **The same keys and the same gate as a member.** `metrics.unauthenticated: true` opens it to a
+  scraper the network already guards. Otherwise a bearer holding `ops.metrics.view` reads it. The
+  surface validates bearers with the stack file's `security.jwt`, or with the stack issuer's key
+  set when the authorization server is on, and the policy is declared under the stack file's
+  `security.policies`, which the existing graft already carries.
+- **The rest of the surface's scrape** is what any runtime's is: its own routes (sign-in, the
+  account pages, the portal), its edge signals, and the process's JVM figures, which every
+  member's scrape in the same process also carries.
+- **Opt-in, like every scrape.** A stack file without `metrics:` changes nothing.
+- **No new alert channel.** The dashboard's pool alert (`TQL-OPS-9011`) pages through a runtime's
+  alerts channel, and the surface declares none. Prometheus rules over the origin's scrape cover
+  it, and the shipped rule for `tesseraql_pool_threads_awaiting` already matches.
+
 ## What this breaks
 
 1.0 has not shipped, so no migration steps follow. This records what changes and why.
@@ -457,8 +507,10 @@ split row 19 found in place. Decision 9 records the refusal and its trigger.
   PostgreSQL's 100.
 - **A stack that declares `framework.datasource` opens 10 fewer connections per node (S5).** The
   framework pool now carries the whole of sign-in, so a stack that sized it for sessions alone
-  sizes it again for the credential check too. No scrape reports that pool, before S5 or after
-  it.
+  sizes it again for the credential check too. No scrape reported that pool before S5 or after
+  it; S6 adds the origin's.
+- **Nothing changes until a stack file declares `metrics:` (S6).** The origin's
+  `/_tesseraql/metrics` answers 404 until then, as it does now.
 
 ## The slices
 
@@ -544,6 +596,19 @@ Decision 12.
     defaults.
   - A revert probe that builds the surface its own pool again turns the identity assertion red.
 - **Docs:** as decision 10 lists for S5.
+
+### S6 — the surface's scrape (S)
+
+Decision 13.
+
+- **Tests:** Testcontainers, on a host whose stack file supplies `framework.datasource`.
+  - With `metrics.enabled` and `metrics.unauthenticated` declared, the surface's
+    `/_tesseraql/metrics` answers 200, and its `pool="main"` series count the framework pool's
+    connections: one the test holds shows as active.
+  - With `metrics.enabled` alone, a request without a bearer is refused.
+  - Without `metrics:`, the path answers 404.
+  - A revert probe that drops the graft turns the first case red.
+- **Docs:** as decision 10 lists for S6.
 
 ## Error codes
 
