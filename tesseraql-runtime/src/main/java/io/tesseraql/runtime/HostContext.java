@@ -41,6 +41,12 @@ package io.tesseraql.runtime;
  *                            query string so its {@code currentSchema} isolation survives
  *                            (docs/cli-surface.md decision 4b); {@code null} for the ordinary
  *                            case, the application's own declaration
+ * @param borrowedMain        the host's framework pool, set only on the stack surface runtime's
+ *                            context when the host holds one: the surface binds it as its
+ *                            {@code main}, so sign-in's credential check rides the pool its
+ *                            sessions do, and never closes it — the host does, after the surface
+ *                            (docs/capacity-defaults.md decision 12); {@code null} everywhere
+ *                            else
  * @param stackMembers        the stack's member list, set only on the stack surface runtime's
  *                            context so the portal and the ops shell can list them
  *                            (docs/root-portal.md, docs/stack-shells.md); {@code null} for every
@@ -87,6 +93,7 @@ package io.tesseraql.runtime;
 public record HostContext(String basePath, String cookiePath, String externalOrigin,
         javax.sql.DataSource frameworkDataSource,
         DataSources.MainDatasourceOverride mainDataSourceOverride,
+        com.zaxxer.hikari.HikariDataSource borrowedMain,
         java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
         MemberOrigins memberOrigins,
         java.io.File extraModules,
@@ -174,7 +181,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      * catalogue declared for the runtime being started.
      */
     public static HostContext stack() {
-        return new HostContext(null, "/", null, null, null, null, null, null, null, null,
+        return new HostContext(null, "/", null, null, null, null, null, null, null, null, null,
                 null, false, null);
     }
 
@@ -187,32 +194,36 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext forApplication(String basePath,
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, null, null, extraModules, null, null, stackIssuerJwt,
-                workshop, vertx);
+                mainDataSourceOverride, null, null, null, extraModules, null, null,
+                stackIssuerJwt, workshop, vertx);
     }
 
     /**
-     * These settings, for the stack surface runtime: the origin root, the framework coordinate
-     * as its {@code main}, the member list the portal exists to show (docs/root-portal.md), and
-     * the live member-origin lookup the ops shell delegates through (docs/stack-shells.md).
-     * The surface carries no {@code --modules} override — it serves the framework's own
-     * declarations, not the stack's.
+     * These settings, for the stack surface runtime: the origin root, its {@code main}, the
+     * member list the portal exists to show (docs/root-portal.md), and the live member-origin
+     * lookup the ops shell delegates through (docs/stack-shells.md). The surface carries no
+     * {@code --modules} override — it serves the framework's own declarations, not the stack's.
+     *
+     * <p>Its {@code main} is the host's framework pool, borrowed, when the host holds one
+     * ({@code borrowedMain}); otherwise a pool of its own on the coordinate the applications agreed
+     * on ({@code mainDataSourceOverride}) — docs/capacity-defaults.md decision 12.
      */
     HostContext forSurface(DataSources.MainDatasourceOverride mainDataSourceOverride,
+            com.zaxxer.hikari.HikariDataSource borrowedMain,
             java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
             MemberOrigins memberOrigins,
             java.util.Map<String, Object> surfaceSecurity,
             DeployPen deployPen) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, java.util.List.copyOf(stackMembers), memberOrigins, null,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+                mainDataSourceOverride, borrowedMain, java.util.List.copyOf(stackMembers),
+                memberOrigins, null, surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
     HostContext withStackSettings(String externalOrigin,
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
                 surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
@@ -222,14 +233,14 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      */
     HostContext withWorkshop(boolean workshop) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
                 surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /** These settings, carrying the development loop's {@code --modules} override. */
     HostContext withExtraModules(java.io.File extraModules) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
                 surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
@@ -243,7 +254,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      */
     HostContext withVertx(io.vertx.core.Vertx vertx) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
                 surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
@@ -253,7 +264,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      */
     HostContext withStackIssuer(java.util.Map<String, Object> stackIssuerJwt) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, stackMembers, memberOrigins, extraModules,
+                mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
                 surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
     }
 }

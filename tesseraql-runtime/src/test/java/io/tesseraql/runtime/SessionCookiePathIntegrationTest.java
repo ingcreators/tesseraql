@@ -69,7 +69,7 @@ class SessionCookiePathIntegrationTest {
     void aStandaloneApplicationScopesItsCookieToItsOwnPrefix() throws Exception {
         try (TesseraqlRuntime runtime = TesseraqlRuntime.start(appHome, 0,
                 new HostContext("/myapp", null, null, null, null, null, null, null, null, null,
-                        null, false, null))) {
+                        null, null, false, null))) {
             assertThat(setCookieOnLogin(runtime)).contains("Path=/myapp");
         }
     }

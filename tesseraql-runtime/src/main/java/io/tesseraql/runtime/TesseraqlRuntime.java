@@ -79,6 +79,12 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     private final RuntimeContext runtimeContext;
     private final Map<String, HikariDataSource> dataSources;
+    /**
+     * The named pools this runtime built, which {@code close()} closes. The stack surface's
+     * {@code main} is the host's framework pool, lent to it, so it is named here but not owned
+     * (docs/capacity-defaults.md decision 12).
+     */
+    private final java.util.List<HikariDataSource> ownedPools;
     private final HikariDataSource mainDataSource;
     private final int port;
     private final JobRepository jobRepository;
@@ -112,6 +118,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
 
     private TesseraqlRuntime(RuntimeContext runtimeContext,
             Map<String, HikariDataSource> dataSources,
+            java.util.List<HikariDataSource> ownedPools,
             int port,
             JobRepository jobRepository, JobExecutor jobExecutor, JdbcOutboxStore outboxStore,
             Map<String, JobFile> jobs, Map<String, String> jobOwners, String appName,
@@ -124,6 +131,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
             io.tesseraql.core.outbox.OutboxEventSink outboxSink, AppModules appModules) {
         this.runtimeContext = runtimeContext;
         this.dataSources = dataSources;
+        this.ownedPools = java.util.List.copyOf(ownedPools);
         this.mainDataSource = dataSources.get("main");
         this.jobOwners = Map.copyOf(jobOwners);
         this.hostedApps = java.util.Set.copyOf(hostedApps);
@@ -688,6 +696,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
         // named phase that releases its own partial work on failure
         // (docs/boot-phases.md slice 4) - the pre-try boot leak retired by ownership.
         RuntimePools pools = RuntimePools.build(context, manifest, appHome, override,
+                hostContext == null ? null : hostContext.borrowedMain(),
                 stackFrameworkDataSource, modules, tracer, meter);
         Map<String, HikariDataSource> dataSources = pools.dataSources();
         HikariDataSource dataSource = pools.dataSource();
@@ -2172,10 +2181,10 @@ public final class TesseraqlRuntime implements AutoCloseable {
             HttpBadRequest.install(context, maxFormFields(manifest.config()));
             sseEndpoints.forEach(Runnable::run);
             LOG.info("TesseraQL runtime started on port {} for app {}", boundPort, appHome);
-            return new TesseraqlRuntime(context, dataSources, boundPort, jobRepository, jobExecutor,
-                    outboxStore, jobs, jobOwners, appName, hostedApps, lanes, tenantDataSources,
-                    manifest.config(), pinningSource, otelSdk, opsDashboard, readiness,
-                    edgeMetrics, alertSweep, outboxSink, modules);
+            return new TesseraqlRuntime(context, dataSources, pools.ownedDataSources(), boundPort,
+                    jobRepository, jobExecutor, outboxStore, jobs, jobOwners, appName, hostedApps,
+                    lanes, tenantDataSources, manifest.config(), pinningSource, otelSdk,
+                    opsDashboard, readiness, edgeMetrics, alertSweep, outboxSink, modules);
         } catch (Exception | Error ex) {
             // A failed boot releases what it took (docs/audit-hardening.md Decision 5). Closing
             // the TesseraQL objects is not enough: everything registered through addService above
@@ -2196,7 +2205,8 @@ public final class TesseraqlRuntime implements AutoCloseable {
             closeQuietly(lanes);
             closeQuietly(tenantDataSources);
             closeQuietly(mainRoles);
-            dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
+            // What this runtime built: a borrowed main is the host's (capacity-defaults.md 12).
+            pools.ownedDataSources().forEach(TesseraqlRuntime::closeQuietly);
             closeQuietly(modules);
             // A refusal keeps its code and its key-naming message on every path — the contract
             // the pools phase already pins (BootFailureReleaseTest) — and an Error is not this
@@ -2706,7 +2716,7 @@ public final class TesseraqlRuntime implements AutoCloseable {
                             MainRoles.class));
                 } finally {
                     try {
-                        dataSources.values().forEach(HikariDataSource::close);
+                        ownedPools.forEach(HikariDataSource::close);
                     } finally {
                         // After the pools: a pool's driver may live in this loader.
                         closeQuietly(appModules);

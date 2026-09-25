@@ -58,6 +58,16 @@
 > A revert probe that restored the bare builder turned the declared-sizing test red. The defaults
 > case stays green either way, because HikariCP's numbers are TesseraQL's.
 >
+> **S5 (the surface borrows the framework pool).** **Shipped, #1465**, as designed, with one
+> correction to decision 12. The surface exposes no scrape: the portal enables no metrics, and
+> the stack file grafts only its `security:` subtree onto the surface. So the framework pool is
+> not reported "as the surface's `main`". It stays unreported, as it was before S5, because no
+> member's scrape includes it either. The surface's readiness does probe it. `HostContext` carries
+> the lent pool as `borrowedMain`, and the runtime's three release paths walk only the pools it
+> built. Two revert probes turned the tests red: lending an override again (both identity
+> assertions), and closing every named pool again (the ownership assertion). The origin sign-in
+> test passes on the borrowed pool.
+>
 > **Amended 2026-09-25, after S1: decisions 5 and 7 are replaced, and decisions 5a and 5b are
 > new.** The record first designed `tesseraql.batch.datasource`, a key naming another datasource
 > for jobs. The maintainer's questions in conversation took it apart:
@@ -342,6 +352,7 @@ names a real coordinate.
 | Role pools under a datasource other than `main` | Jobs on another datasource take that datasource's pool, and transfers run only on `main`, so the block would configure nothing. Refused with `TQL-YAML-1115` | A route transfer that runs on a named datasource, or jobs on one needing isolation from its routes |
 | Grouping tenants onto one pool (A, B and C on one, D, E and F on another) | One pool per tenant id, the mode is application-wide, and structural isolation has no `tenant.id` predicate to separate tenants that share tables (row 13). Grouping would be a shard mode of its own, with its own routing, lint and migrations | A deployment whose tenant count makes a pool per tenant unaffordable. Tenant pools already take `maximumPoolSize` / `minimumIdle` per block in the meantime |
 | A lint of lanes against a job pool | Lanes do not govern jobs (row 9) | Jobs gaining lanes |
+| Reporting the stack's framework pool on a scrape (found in S5) | The surface exposes no scrape, and no member's scrape includes the pool. A scrape for the pools the stack owns is an observability move of its own, not a pool default | Sign-in suspected of waiting on the framework pool in production |
 | Sizing the surface's own `main` from the `framework.datasource` block (decision 12's alternative) | It would keep two pools of one size on one database for one sign-in, and leave in place the split row 19 found | Surface work that is not sign-in, such as a portal route running SQL at request rate, which would then compete with sign-in on one pool |
 | epoll, an in-process handoff, process separation | [gateway-performance.md](gateway-performance.md) | The triggers recorded there |
 
@@ -405,8 +416,9 @@ the TOTP check and the token. That is the pool decision 6 sizes and
   it does now.
 - **It is still `main` to the surface.** It is bound under that name, and walked by the per-datasource
   migrations (the portal has none) and the operations-table migration, on the same database as
-  before. The surface's scrape reports it as `main`, and its readiness probes it. So the stack's
-  framework pool appears in a scrape, as the surface's `main`.
+  before. Its readiness probes it. (The record first said the surface's scrape would report it as
+  `main`. The surface exposes no scrape, so S5 corrected that: the framework pool stays unreported,
+  as it was.)
 - **Its size covers the whole of sign-in.** Every step is a point query, and the password hash is
   checked in the JVM rather than in the database, so the 5 that decision 8 recommends stays. The
   surface's two sweeps add a query a minute each.
@@ -444,8 +456,9 @@ split row 19 found in place. Decision 9 records the refusal and its trigger.
   declares more than 10 now opens that many against the embedded server, whose ceiling is
   PostgreSQL's 100.
 - **A stack that declares `framework.datasource` opens 10 fewer connections per node (S5).** The
-  framework pool now carries the whole of sign-in. A stack that sized it for sessions alone reads
-  the surface's `main` on the scrape to see whether sign-in waits.
+  framework pool now carries the whole of sign-in, so a stack that sized it for sessions alone
+  sizes it again for the credential check too. No scrape reports that pool, before S5 or after
+  it.
 
 ## The slices
 

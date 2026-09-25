@@ -160,10 +160,11 @@ that is one node's capacity. Then:
   from boot: `minimumIdle` defaults to the pool size, so nothing is handed back when idle. Per
   node, count every pool each application declares. That includes main's `jobPool` and
   `fileTransferPool` at their maximum, and in a per-tenant mode each tenant's pool and role
-  pools, against that tenant's database. Under a stack, add the stack surface's own `main` pool
-  (10 connections) and, when `tesseraql-stack.yml` declares `framework.datasource`, the stack
-  framework pool (its `maximumPoolSize`, 10 by default). Multiply by the nodes, and keep the
-  total under the database's ceiling.
+  pools, against that tenant's database. Under a stack, add the stack's own sign-in pool: when
+  `tesseraql-stack.yml` declares `framework.datasource`, the stack framework pool (its
+  `maximumPoolSize`, 10 by default), which the stack surface also uses as its `main`; otherwise
+  the surface's own `main`, 10 connections. Multiply by the nodes, and keep the total under the
+  database's ceiling.
   An application used a few minutes a day can declare `minimumIdle` below its maximum, with
   `idleTimeoutMillis`, so that it hands its connections back while idle. Role pools are best
   declared that way from the start

@@ -86,7 +86,7 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
      * catalogue entry addresses it. {@code #} keeps it out of any legal application name's way,
      * like the canary slot.
      */
-    private static final String SURFACE_SLOT = "#portal";
+    static final String SURFACE_SLOT = "#portal";
 
     /** How long the ready probe keeps asking before the replace fails as a no-op. */
     private static final int READY_ATTEMPTS = 10;
@@ -308,9 +308,12 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
             }
             // The stack surface runtime, after the members so a datasource misconfiguration
             // fails with a member's own message first (docs/root-portal.md). Its main
-            // application is the bundled portal app, its main pool is the stack's framework
-            // coordinate, and its failure fails the stack — it is the stack's sign-in, and a
-            // stack that comes up without it would be a silent degradation.
+            // application is the bundled portal app, and its failure fails the stack — it is the
+            // stack's sign-in, and a stack that comes up without it would be a silent
+            // degradation. Its main is the host's framework pool, lent, whenever the host holds
+            // one: what the surface runs on main is sign-in, and its sessions already ride that
+            // pool (docs/capacity-defaults.md decision 12). Otherwise it builds its own on the
+            // coordinate the applications agreed on.
             if (!applications.isEmpty()) {
                 Path surfaceHome = new io.tesseraql.yaml.apps.ClasspathAppSource("portal",
                         "tesseraql/apps/portal", MultiAppHost.class.getClassLoader())
@@ -318,7 +321,10 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
                 host.slots.put(SURFACE_SLOT, new Slot(null,
                         TesseraqlRuntime.start(surfaceHome, 0,
                                 context.forSurface(
-                                        surfaceMainOverride(settings, configs, dev, embedded),
+                                        frameworkPool != null
+                                                ? null
+                                                : agreedFrameworkOverride(configs),
+                                        frameworkPool,
                                         applications, host.memberOrigins(),
                                         settings.surfaceSecurity(), host.deployPen())),
                         Set.of()));
@@ -667,26 +673,14 @@ public final class MultiAppHost implements AutoCloseable, StackReconciler.HostOp
     }
 
     /**
-     * The coordinate the stack surface runtime's {@code main} pool is built from: the stack's
-     * framework coordinate, however this start resolved it (docs/root-portal.md). The portal
-     * application declares no datasources of its own, so this override is its whole answer —
-     * and its {@code security} component then validates against the schema the host migrated
-     * on the same coordinate.
+     * The coordinate the stack surface runtime builds its own {@code main} on when the host
+     * holds no framework pool to lend it (docs/capacity-defaults.md decision 12): the one the
+     * applications agree on (docs/root-portal.md). The portal application declares no
+     * datasources of its own, so this override is its whole answer — and its {@code security}
+     * component then validates against the schema the host migrated on the same coordinate.
      */
-    private static DataSources.MainDatasourceOverride surfaceMainOverride(
-            io.tesseraql.operations.app.StackSettings settings,
-            Map<String, io.tesseraql.yaml.config.AppConfig> configs,
-            DevMode dev, boolean embedded) {
-        if (embedded) {
-            return dev.embeddedDb();
-        }
-        java.util.Optional<io.tesseraql.operations.app.StackSettings.Coordinate> supplied = settings
-                .frameworkDatasource();
-        if (supplied.isPresent()) {
-            io.tesseraql.operations.app.StackSettings.Coordinate coordinate = supplied.get();
-            return new DataSources.MainDatasourceOverride(coordinate.jdbcUrl(),
-                    coordinate.username(), coordinate.password());
-        }
+    private static DataSources.MainDatasourceOverride agreedFrameworkOverride(
+            Map<String, io.tesseraql.yaml.config.AppConfig> configs) {
         // The coordinate the applications agree on — TQL-APP-4211 has already refused
         // disagreement, so the first application's resolved coordinate is the stack's. Nothing
         // declared at all cannot be reached here: a member with no main jdbcUrl has already

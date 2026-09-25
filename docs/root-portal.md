@@ -184,6 +184,13 @@ runs no jobs and serves no ops console, so the tables are inert bookkeeping. Whe
 config needs a placeholder `db.main` declaration for the override to land on is an implementation
 detail to verify against `carryingDeclaredQuery`.
 
+*(2026-09-25: where the host holds a framework pool — the stack file supplies `framework.datasource`,
+or `dev --embedded-db` supplies the coordinate — the surface's `main` is that pool, lent by the host
+and never closed by the surface, rather than a second pool on the same coordinate. What the surface
+runs on `main` is sign-in, and its sessions already rode the framework pool
+([capacity-defaults.md](capacity-defaults.md) decision 12). Where the stack supplies none, the
+surface still builds its own `main` on the agreed coordinate.)*
+
 **The name `portal` is an ordinary name, and a member may also use it.** The grammar cannot fence
 it (no leading underscore is *forbidden*, not reserved-for-framework), and a reserved-word guard
 would be a second mechanism defending a shape. The overlap, measured: a member named `portal` owns

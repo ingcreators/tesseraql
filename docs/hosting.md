@@ -58,9 +58,15 @@ arrangement is refused (`TQL-APP-4212`) rather than silently repointed.
 
 The pool takes the keys an application's datasource takes, with the same defaults: 10
 connections, a 30 s wait, and `minimumIdle` at the pool size
-([deployment](deployment.md#connection-pools)). Sign-in is short point queries, so a few
-connections carry a lot of it. Under `dev --embedded-db` the embedded server supplies the
-coordinate, and the block still supplies the sizing.
+([deployment](deployment.md#connection-pools)). Under `dev --embedded-db` the embedded server
+supplies the coordinate, and the block still supplies the sizing.
+
+The pool carries the whole of sign-in. The stack surface, which serves sign-in, the account pages
+and IAM Admin at the origin, uses it as its own `main` instead of opening a pool of its own. So
+the credential check, the TOTP check and the session all ride it. Every step is a short point
+query, and the password hash is checked in the JVM, so a few connections carry a lot of sign-ins.
+A stack that declares no `framework.datasource` gives the surface a pool of its own, 10
+connections on the coordinate its applications agree on.
 
 The host also migrates the framework's `security` schema **once**, before any application starts;
 each hosted runtime then validates it and refuses to start on a mismatch (`TQL-APP-4214`). A
