@@ -133,7 +133,7 @@
          Version-managed only: the framework never depends on it. -->
     <mariadb.version>3.5.10</mariadb.version>
     <picocli.version>4.7.7</picocli.version>
-    <slf4j.version>2.0.18</slf4j.version>
+    <slf4j.version>2.0.19</slf4j.version>
     <!-- Test-only: an in-process SFTP server for the Phase 26 poll-trigger integration test. -->
     <sshd.version>2.19.0</sshd.version>
     <!-- Test-only: an in-process FTPS server, so the ftps poll source is exercised for real
@@ -155,20 +155,20 @@
     <hypermedia-editor-kit.version>0.2.0</hypermedia-editor-kit.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
     <webjars-locator.version>1.1.4</webjars-locator.version>
-    <flyway.version>13.6.0</flyway.version>
+    <flyway.version>13.7.0</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
     <openhtmltopdf.version>1.1.85</openhtmltopdf.version>
     <pdfbox.version>3.0.8</pdfbox.version>
     <awssdk.version>2.51.4</awssdk.version>
-    <s3mock.version>4.12.4</s3mock.version>
+    <s3mock.version>5.2.3</s3mock.version>
     <ojdbc.version>23.26.3.0.0</ojdbc.version>
     <mssql-jdbc.version>13.6.0.jre11</mssql-jdbc.version>
     <!-- DuckDB analytics engine (docs/duckdb.md): MIT licensed, module-channel only — the jar
          bundles per-platform native libraries and never ships in the CLI fat jar. -->
     <duckdb.version>1.3.1.0</duckdb.version>
-    <greenmail.version>2.1.13</greenmail.version>
+    <greenmail.version>2.1.14</greenmail.version>
     <h2.version>2.4.240</h2.version>
     <!-- Embedded PostgreSQL for the serve embedded-db option (run a tqlapp with no external DB).
          The lib is a small pure-Java process supervisor; the platform-specific postgres binary is
