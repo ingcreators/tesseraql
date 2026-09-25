@@ -35,6 +35,14 @@ does your CI.
     -Dtesseraql.jdbcUrl=jdbc:postgresql://localhost:5432/scaffold_demo
 ```
 
+## Environments
+
+Without `--env`, `tesseraql dev` runs the base configuration: one connection pool.
+`config/env/prod.yml` and `config/env/staging.yml` apply with `TESSERAQL_ENV=prod` or
+`TESSERAQL_ENV=staging` (`--env` on `tesseraql dev`), and give jobs and file transfers
+pools of their own beside the requests' pool. With those two declared, a profile that
+has no file here refuses to start.
+
 ## Layout
 
 See the [application layout](https://github.com/ingcreators/tesseraql/blob/main/docs/app-layout.md):

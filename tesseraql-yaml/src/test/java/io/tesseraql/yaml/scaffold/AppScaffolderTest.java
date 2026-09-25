@@ -26,6 +26,8 @@ class AppScaffolderTest {
         assertThat(files).extracting(ScaffoldedFile::path).containsExactly(
                 "config/application.yml",
                 "config/tesseraql.yml",
+                "config/env/prod.yml",
+                "config/env/staging.yml",
                 "db/migration/V1__create_items.sql",
                 "templates/nav.html",
                 "config/menu.yml",
@@ -93,6 +95,44 @@ class AppScaffolderTest {
         @SuppressWarnings("unchecked")
         java.util.Map<String, Object> policyMap = (java.util.Map<String, Object>) policies;
         assertThat(policyMap.keySet()).containsExactlyInAnyOrder("app.read", "app.write");
+    }
+
+    /**
+     * The deployed profiles separate the pools (docs/capacity-defaults.md decision 7): prod and
+     * staging carry one layout, and the base configuration the development loop runs has none of
+     * it.
+     */
+    @Test
+    void theDeployedProfilesSeparateThePoolsAndTheBaseDoesNot(@TempDir Path target) {
+        List<ScaffoldedFile> files = scaffolder.scaffold("demo-app");
+        String prod = content(files, "config/env/prod.yml");
+        String staging = content(files, "config/env/staging.yml");
+        assertThat(prod).contains("TESSERAQL_ENV=prod");
+        assertThat(staging).contains("TESSERAQL_ENV=staging");
+        assertThat(layout(staging)).as("staging rehearses production").isEqualTo(layout(prod));
+        assertThat(content(files, "config/tesseraql.yml"))
+                .doesNotContain("jobPool", "fileTransferPool", "minimumIdle");
+
+        scaffolder.writeNew(target, files);
+        System.setProperty("tesseraql.env", "prod");
+        try {
+            io.tesseraql.yaml.config.AppConfig config = new ManifestLoader().load(target).config();
+            String main = "tesseraql.datasources.main.";
+            assertThat(config.getString(main + "maximumPoolSize")).hasValue("10");
+            assertThat(config.getString(main + "connectionTimeoutMillis")).hasValue("10000");
+            assertThat(config.getString(main + "jobPool.maximumPoolSize")).hasValue("3");
+            assertThat(config.getString(main + "jobPool.minimumIdle")).hasValue("0");
+            assertThat(config.getString(main + "fileTransferPool.maximumPoolSize"))
+                    .hasValue("5");
+            assertThat(config.getString(main + "fileTransferPool.minimumIdle")).hasValue("0");
+        } finally {
+            System.clearProperty("tesseraql.env");
+        }
+    }
+
+    /** A profile without its leading comment block: the configuration it carries. */
+    private static String layout(String profile) {
+        return profile.substring(profile.indexOf("tesseraql:"));
     }
 
     @Test

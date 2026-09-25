@@ -43,7 +43,65 @@
               },
               "maximumPoolSize": {
                 "type": "integer",
-                "description": "The pool's maximum size. The scaffolded config sets it; HikariCP's default applies when it is absent."
+                "description": "Connections this datasource may open. Default 10, TesseraQL's own. Raise it together with tesseraql.http.maxInFlight (docs/capacity.md)."
+              },
+              "connectionTimeoutMillis": {
+                "type": "integer",
+                "description": "How long a borrower waits for a connection before failing, in milliseconds. Default 30000."
+              },
+              "minimumIdle": {
+                "type": "integer",
+                "description": "Connections kept open when idle. Default: the pool size, so the pool is fixed-size."
+              },
+              "idleTimeoutMillis": {
+                "type": "integer",
+                "description": "When a surplus idle connection is retired, in milliseconds. It applies only when minimumIdle is below maximumPoolSize."
+              },
+              "jobPool": {
+                "type": "object",
+                "description": "main only: a second pool onto main's database that every kind: job run uses. It takes the same pool keys as its datasource; undeclared, jobs run on main. Under another datasource it refuses the boot (TQL-YAML-1115). Documented in deployment.md, Role pools.",
+                "properties": {
+                  "maximumPoolSize": {
+                    "type": "integer",
+                    "description": "Connections jobs may hold at once. Default 10."
+                  },
+                  "minimumIdle": {
+                    "type": "integer",
+                    "description": "Connections kept open when idle. 0 hands every connection back between runs."
+                  },
+                  "idleTimeoutMillis": {
+                    "type": "integer",
+                    "description": "When a surplus idle connection is retired, in milliseconds."
+                  },
+                  "connectionTimeoutMillis": {
+                    "type": "integer",
+                    "description": "How long a job waits for a connection before failing, in milliseconds. Default 30000."
+                  }
+                },
+                "additionalProperties": true
+              },
+              "fileTransferPool": {
+                "type": "object",
+                "description": "main only: a second pool onto main's database that the asynchronous transfers a file-export or file-import route starts use (a list page's export, My exports, a CSV import). Its size is how many run at once. It takes the same pool keys as its datasource; undeclared, transfers run on main. Under another datasource it refuses the boot (TQL-YAML-1115). Documented in deployment.md, Role pools.",
+                "properties": {
+                  "maximumPoolSize": {
+                    "type": "integer",
+                    "description": "Transfers that run at once. Default 10."
+                  },
+                  "minimumIdle": {
+                    "type": "integer",
+                    "description": "Connections kept open when idle. 0 hands every connection back between transfers."
+                  },
+                  "idleTimeoutMillis": {
+                    "type": "integer",
+                    "description": "When a surplus idle connection is retired, in milliseconds."
+                  },
+                  "connectionTimeoutMillis": {
+                    "type": "integer",
+                    "description": "How long a queued transfer waits for a connection before failing, in milliseconds. Default 30000."
+                  }
+                },
+                "additionalProperties": true
               }
             },
             "additionalProperties": true

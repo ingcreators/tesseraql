@@ -281,7 +281,10 @@ The stack's framework pool takes the same keys, with the same defaults, under
 ([hosting](hosting.md#the-stacks-own-settings--tesseraql-stackyml)).
 
 Background work — [jobs](jobs.md), [file transfers](file-transfers.md), streams — borrows from
-these same pools by default. Contention then shows up as request latency you can measure. Watch
+these same pools by default. Contention then shows up as request latency you can measure. Jobs
+and file transfers can be given
+[pools of their own](#role-pools-jobs-and-file-transfers-off-the-online-pool), as the production
+profile a new application carries does ([environment profiles](#environment-profiles)). Watch
 `tesseraql_pool_threads_awaiting` in the [metrics](#metrics-prometheus) below: a non-zero reading
 means the pool, not the database, is the constraint.
 
@@ -407,6 +410,14 @@ profile means no layer — existing apps are unchanged.
 This replaces ad-hoc `${...}` indirection for the common cases: put the per-environment
 datasource, pool sizing, metrics/audit switches and timeouts in `config/env/<profile>.yml`
 and keep secrets in real environment variables or the secret provider as before.
+
+`tesseraql new` writes `config/env/prod.yml` and `config/env/staging.yml` with one pool layout.
+`main` stays fixed at its size and waits 10 s for a connection. A `fileTransferPool` of 5 and a
+`jobPool` of 3 hold nothing while idle
+([role pools](#role-pools-jobs-and-file-transfers-off-the-online-pool)). The files repeat no
+credentials, because a role pool takes main's coordinate. The base configuration, which
+`tesseraql dev` runs, keeps one pool. With both files present the application declares its
+environments, so a profile it has no file for refuses to start.
 
 ## Business-route audit log and error pages
 

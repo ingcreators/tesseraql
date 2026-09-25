@@ -4,7 +4,8 @@ tesseraql:
     work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
 
   # Environment profiles overlay this file from config/env/<profile>.yml, selected
-  # by TESSERAQL_ENV (or -Dtesseraql.env) — see docs/deployment.md.
+  # by TESSERAQL_ENV (or -Dtesseraql.env) — see docs/deployment.md. prod and staging
+  # are declared, so any other profile refuses to start.
 
   datasources:
     main:

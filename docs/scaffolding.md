@@ -21,6 +21,8 @@ The skeleton is a runnable app home:
 config/application.yml       server port, main database coordinates (env-overridable)
 config/tesseraql.yml         app name, datasource, managed identity realm, security
                              defaults, JWT dev secret, the app.read / app.write policies
+config/env/prod.yml          the production and staging profiles: jobs and file transfers
+config/env/staging.yml       get pools of their own beside the requests' pool
 config/menu.yml              the sidebar menu, rendered server-side into the shell
 db/migration/V1__create_items.sql
                              a starter table following the transactional-writes conventions:

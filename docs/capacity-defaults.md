@@ -37,7 +37,13 @@
 > in production. Neither is in this record's decisions, so both are left open.
 >
 > **S3 (the skeleton).** `tesseraql new` writes a production profile that separates the online pool
-> from the two role pools. The stack marker states the production posture.
+> from the two role pools. The stack marker states the production posture. **Shipped, #1462**, as
+> amended, and with it the campaign is complete. The generated README gained a short
+> "Environments" section, and the base configuration's comment says the same: an application
+> that declares `prod` and `staging` refuses any other profile. A freshly generated application
+> boots under `prod` against PostgreSQL with the layout above, and a job holds its connection on
+> `tesseraql-main-jobs`. The same test without the profile turns all three cases red. The two
+> override pools S2b left open are still open.
 >
 > **Amended 2026-09-25, after S1: decisions 5 and 7 are replaced, and decisions 5a and 5b are
 > new.** The record first designed `tesseraql.batch.datasource`, a key naming another datasource

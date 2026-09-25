@@ -40,11 +40,14 @@ final class NewCommand implements Callable<Integer> {
             # file. Everything below is optional; placeholders like ${ENV_VAR:default} and
             # ${secret.env.NAME} resolve exactly as they do in an application's config.
             #
+            # Recommended in production: sign-in then rides a pool of its own, so a long business
+            # query cannot starve it.
             # framework:
             #   datasource:              # one sign-in across the stack rides this connection
             #     jdbcUrl: jdbc:postgresql://${DB_HOST:localhost}:5432/stack
             #     username: ${secret.env.STACK_DB_USER}
             #     password: ${secret.env.STACK_DB_PASSWORD}
+            #     maximumPoolSize: 5     # sign-in is millisecond point queries
             #
             # externalOrigin: https://apps.example.com   # required only when MCP or the token
             #                                            # issuer reads it; dev defaults it
