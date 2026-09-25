@@ -141,10 +141,9 @@ public final class MultiAppGateway implements AutoCloseable {
         this.server = door.server();
         try {
             // What the front door will forward to one member at a time (docs/http-threading.md
-            // decision 5), read from the stack's own file — the same place the host reads the
-            // worker count it defaults to, because the two answer one question: how much
-            // concurrent work does a member do. The client is sized to match, so what the relay
-            // admits the transport carries rather than queues behind.
+            // decision 5), read from the stack's own file and defaulting to what a member's own
+            // gate admits (docs/capacity-defaults.md decision 1). The client is sized to match,
+            // so what the relay admits the transport carries rather than queues behind.
             int perMember = maxConcurrentPerMember(stackSettings);
             int perMemberStreams = maxStreamsPerMember(stackSettings, perMember);
             // Sized to the SUM of the two shares, because on HTTP/1 one forward pins one pooled
@@ -152,6 +151,10 @@ public final class MultiAppGateway implements AutoCloseable {
             // client, which is the queue this decision exists to remove. One number for both
             // protocol modes is kept deliberately — the point of decision 5 is that a protocol
             // flag never decides a capacity.
+            // A member that admits more than its share has a queue the door never lets it use;
+            // say so at start rather than let the difference show as 503s under load.
+            membersAboveTheShare(memberBounds(host, hostedApps), perMember, perMemberStreams)
+                    .forEach(LOG::warn);
             int outbound = outboundSizing(perMember, perMemberStreams);
             this.client = vertx.createHttpClient(StackRelay.outboundOptions(settings.http2(),
                     outbound, readIdleSeconds(stackSettings)), StackRelay.outboundPool(outbound));
@@ -398,29 +401,30 @@ public final class MultiAppGateway implements AutoCloseable {
     /**
      * How many forwards the front door will have in flight to one member.
      *
-     * <p>Defaults to the member worker count the stack declares, because a front door that admits
-     * more than a member can run only moves the queue one hop earlier, and one that admits fewer
-     * makes the member's own pool unreachable. Where the stack declares neither, ten — the same
-     * number both sides default to everywhere else in this design.
+     * <p>Defaults to what a member's own gate admits when it declares nothing,
+     * {@link TesseraqlRuntime#DEFAULT_MAX_IN_FLIGHT} (docs/capacity-defaults.md decision 1). A
+     * front door that admits more than a member takes only moves the queue one hop earlier, and
+     * one that admits fewer makes the member's own queue unreachable — which is what the old
+     * default did: it was the stack's worker count, ten, from when a route ran on the worker pool,
+     * and under a stack a member's forty were never reached. The worker count no longer feeds it.
+     * A member that declares more than this is named at start ({@link #membersAboveTheShare}).
      */
-    private static int maxConcurrentPerMember(
-            io.tesseraql.operations.app.StackSettings stackSettings) {
+    static int maxConcurrentPerMember(io.tesseraql.operations.app.StackSettings stackSettings) {
+        int member = TesseraqlRuntime.DEFAULT_MAX_IN_FLIGHT;
         if (stackSettings == null) {
-            return 10;
+            return member;
         }
-        io.tesseraql.yaml.config.AppConfig config = stackSettings.config();
-        return config.getString("tesseraql.gateway.maxConcurrentPerMember")
-                .or(() -> config.getString("tesseraql.http.workerThreads"))
+        return stackSettings.config().getString("tesseraql.gateway.maxConcurrentPerMember")
                 .map(declared -> {
                     try {
                         return Math.max(1, Integer.parseInt(declared.trim()));
                     } catch (NumberFormatException notANumber) {
                         LOG.warn("tesseraql.gateway.maxConcurrentPerMember is not a number: {}."
-                                + " Using 10.", declared);
-                        return 10;
+                                + " Using {}.", declared, member);
+                        return member;
                     }
                 })
-                .orElse(10);
+                .orElse(member);
     }
 
     /**
@@ -480,6 +484,53 @@ public final class MultiAppGateway implements AutoCloseable {
                 .orElse(300);
     }
 
+    /** A member's own gate: what it admits in flight, and in event streams. */
+    record MemberBounds(String member, int maxInFlight, int maxEventStreams) {
+    }
+
+    private static List<MemberBounds> memberBounds(MultiAppHost host,
+            List<InstalledApp> hostedApps) {
+        return hostedApps.stream()
+                .map(app -> {
+                    TesseraqlRuntime runtime = host.app(app.name());
+                    return new MemberBounds(app.name(), runtime.maxInFlightBound(),
+                            runtime.maxEventStreamsBound());
+                })
+                .toList();
+    }
+
+    /**
+     * One sentence per member whose own gate admits more than the front door forwards to it
+     * (docs/capacity-defaults.md decision 1).
+     *
+     * <p>The share is the stack's to declare — the front door reads the stack file, and one
+     * outbound client is sized to it at start — so a member that raised its own
+     * {@code maxInFlight} is not followed silently. Nor is it ignored silently: the part of its
+     * queue above the share would only ever be seen as the front door's 503. The host tells a
+     * member its thread counts are the host's the same way.
+     */
+    static List<String> membersAboveTheShare(List<MemberBounds> members, int perMember,
+            int perMemberStreams) {
+        List<String> warnings = new java.util.ArrayList<>();
+        for (MemberBounds bounds : members) {
+            if (bounds.maxInFlight() > perMember) {
+                warnings.add(bounds.member() + " admits " + bounds.maxInFlight()
+                        + " requests in flight (tesseraql.http.maxInFlight), and the front door"
+                        + " forwards at most " + perMember + " to it, so the rest of its queue"
+                        + " is never used. Raise tesseraql.gateway.maxConcurrentPerMember in "
+                        + io.tesseraql.operations.app.StackSettings.FILE_NAME + " to match.");
+            }
+            if (bounds.maxEventStreams() > perMemberStreams) {
+                warnings.add(bounds.member() + " admits " + bounds.maxEventStreams()
+                        + " event streams (tesseraql.http.maxEventStreams), and the front door"
+                        + " holds at most " + perMemberStreams + " open to it. Raise"
+                        + " tesseraql.gateway.maxStreamsPerMember in "
+                        + io.tesseraql.operations.app.StackSettings.FILE_NAME + " to match.");
+            }
+        }
+        return warnings;
+    }
+
     /**
      * What the outbound client must carry: both per-member shares at once.
      *
@@ -496,17 +547,17 @@ public final class MultiAppGateway implements AutoCloseable {
      * How many event-stream forwards one member may hold open
      * (docs/http-edge-robustness.md decision 3).
      *
-     * <p>Four times the request share, which is the same shape a runtime derives its own
-     * in-flight bound from its worker count, and lands on the number a member's own gate
-     * admits. The campaign proposed 256 — "the member's own stream budget" — and that is not a
+     * <p>The request share, by the rule a member's own gate uses: its {@code maxEventStreams}
+     * defaults to its {@code maxInFlight}, so forty against forty (docs/capacity-defaults.md
+     * decision 1). It was four times a request share of ten, which landed on the same forty; a
+     * share that now defaults to forty would have made it 160, three quarters of them answered by
+     * the member one hop later. The campaign's 256 — "the member's own stream budget" — is not a
      * number this door can know: the gateway reads the stack file and cannot see a member's
-     * manifest. It would also be wrong if it could. A member admits forty in flight, so 216 of
-     * 256 stream forwards would be answered by the member one hop later, which is the exact
-     * failure the existing share was introduced to prevent.
+     * manifest.
      */
-    private static int maxStreamsPerMember(
+    static int maxStreamsPerMember(
             io.tesseraql.operations.app.StackSettings stackSettings, int perMember) {
-        int derived = perMember * 4;
+        int derived = perMember;
         if (stackSettings == null) {
             return derived;
         }

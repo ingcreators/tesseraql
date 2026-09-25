@@ -115,7 +115,7 @@ final class StackRelay {
      * continues over HTTP/1.1, so enabling this cannot make a hosted application unreachable.
      */
     static HttpClientOptions outboundOptions(boolean http2) {
-        return outboundOptions(http2, 10);
+        return outboundOptions(http2, TesseraqlRuntime.DEFAULT_MAX_IN_FLIGHT);
     }
 
     /**
@@ -293,7 +293,7 @@ final class StackRelay {
      * the whole stack was a number nobody chose and nobody could see, and enabling h2c replaced
      * it with no limit at all.
      */
-    private volatile int maxConcurrentPerMember = 10;
+    private volatile int maxConcurrentPerMember = TesseraqlRuntime.DEFAULT_MAX_IN_FLIGHT;
 
     /**
      * How many event-stream forwards one member may hold open, beside its request share.
@@ -304,7 +304,7 @@ final class StackRelay {
      * three signed-in users saturated a member's front door and every ordinary request to it was
      * answered 503 while the member sat idle.
      */
-    private volatile int maxStreamsPerMember = 40;
+    private volatile int maxStreamsPerMember = TesseraqlRuntime.DEFAULT_MAX_IN_FLIGHT;
 
     /** One permit set per member, created on first forward to it. */
     private final Map<String, java.util.concurrent.Semaphore> memberPermits = new ConcurrentHashMap<>();
@@ -376,6 +376,28 @@ final class StackRelay {
         String path = io.tesseraql.core.http.PercentEncoding.upperHex(rawPath);
         return mountedAt(path, base + "/_tesseraql/events")
                 || mountedAt(path, base + "/_tesseraql/ui/copilot/stream");
+    }
+
+    /**
+     * Whether this forward passes the member's share untaken: its asset mount or its own health,
+     * the two things the member's gate lets through ({@code HttpAdmission}; docs/http-threading.md
+     * decisions 3 and 6). The front door counted both, which put back at the front the coupling
+     * the member had removed — a stylesheet refused because ten queries were slow, a member's
+     * health answered 503 because it was busy (docs/capacity-defaults.md decision 2).
+     *
+     * <p>Compared on the request target as transmitted, like {@link #isStreamForward}, and on a
+     * segment boundary where the member's own test is a bare prefix: a percent-encoded or
+     * dot-segmented spelling, or a sibling that merely starts with the word, is counted. That is
+     * the fail-safe direction — it is what every such forward did before.
+     */
+    private static boolean passesTheShare(String rawPath, InstalledApp member) {
+        if (member == null) {
+            return false;
+        }
+        String base = member.basePath() == null ? "" : wirePrefix(member);
+        String path = io.tesseraql.core.http.PercentEncoding.upperHex(rawPath);
+        return addresses(base + "/assets", path)
+                || addresses(base + "/_tesseraql/health", path);
     }
 
     /** Exact, or exact with one trailing slash: the member routes both to the same handler. */
@@ -659,6 +681,15 @@ final class StackRelay {
             // own health answered above, before this: a stack that cannot say "that member is
             // busy" is one an orchestrator removes for the silence.
             boolean stream = isStreamForward(rawPath, entryOf.apply(appName));
+            // A member's assets and its own health take no permit here, as they take none at
+            // the member's gate: a stylesheet must not wait on the database, and health must
+            // answer when nothing else can (docs/capacity-defaults.md decision 2).
+            if (!stream && passesTheShare(rawPath, entryOf.apply(appName))) {
+                proxies.computeIfAbsent(appName,
+                        name -> proxyFor(name, () -> portOf.applyAsInt(name)))
+                        .handle(request);
+                return;
+            }
             java.util.concurrent.Semaphore permits = stream
                     ? streamPermits.computeIfAbsent(appName,
                             name -> new java.util.concurrent.Semaphore(maxStreamsPerMember))
