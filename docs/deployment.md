@@ -648,6 +648,12 @@ with a Capacity row over the four families above, and the alerting rules at
 carry the sample alerts of this table. Every expression in both names a family the sources
 declare; a test holds that.
 
+Under a stack, scrape the origin too. Each member's scrape is at `/<name>/_tesseraql/metrics`,
+and the stack surface's, which serves sign-in, is the origin's `/_tesseraql/metrics` once the
+stack file declares `metrics:` ([hosting](hosting.md#the-stacks-own-settings--tesseraql-stackyml)).
+It reports the pool sign-in rides as `pool="main"`, so the pool-waiters alert above covers
+sign-in as well.
+
 ## Next
 
 - [capacity.md](capacity.md) — sizing a node: the arithmetic, the signals, `tesseraql bench`.

@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **The stack surface has a scrape, and it reports the sign-in pool.** `metrics:` in
+  `tesseraql-stack.yml` configures the surface's scrape with the keys an application uses under
+  `tesseraql.metrics` (`enabled`, `unauthenticated`), because the surface is bundled and has no
+  configuration an operator can edit. The origin's `/_tesseraql/metrics` then answers. It reports
+  the pool sign-in rides as `pool="main"`: the framework pool where `framework.datasource` is
+  declared, and the surface's own otherwise. No scrape reported that pool before. The gate is a
+  member's: `unauthenticated`, or a bearer holding `ops.metrics.view`, declared under the stack
+  file's `security.policies`. Without `metrics:` nothing changes. `docs/capacity-defaults.md`
+  decision 13; `docs/hosting.md`.
+
 - **Role pools: jobs and file transfers off the online pool.** `tesseraql.datasources.main` may
   declare a `jobPool`, which every execution of a `kind: job` runs on: scheduled, external,
   manual, an `after:` chain, a poll-triggered import. It may also declare a `fileTransferPool`,

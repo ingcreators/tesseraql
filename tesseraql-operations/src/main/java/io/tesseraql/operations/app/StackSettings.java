@@ -168,6 +168,22 @@ public final class StackSettings {
         return security instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
     }
 
+    /**
+     * The stack's {@code metrics:} subtree — {@code metrics.enabled} and
+     * {@code metrics.unauthenticated} — or {@code null} when the stack supplies none.
+     *
+     * <p>The host grafts it onto the surface runtime's configuration (as
+     * {@code tesseraql.metrics.*}), as it grafts {@link #surfaceSecurity()}: the portal is
+     * bundled, so the stack file is the only place its scrape can be configured. The origin's
+     * {@code /_tesseraql/metrics} then reports the pool sign-in rides
+     * (docs/capacity-defaults.md decision 13). Members keep their own declarations.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> surfaceMetrics() {
+        Object metrics = config.navigate("metrics");
+        return metrics instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+    }
+
     /** A JDBC connection declared by the stack: url, and credentials when not carried in it. */
     public record Coordinate(String jdbcUrl, String username, String password) {
     }

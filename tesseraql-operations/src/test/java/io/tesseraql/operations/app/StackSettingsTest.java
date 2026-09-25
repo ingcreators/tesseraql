@@ -95,6 +95,7 @@ class StackSettingsTest {
 
         assertThat(settings.frameworkDatasource()).isEmpty();
         assertThat(settings.externalOrigin()).isEmpty();
+        assertThat(settings.surfaceMetrics()).isNull();
     }
 
     @Test
@@ -103,5 +104,26 @@ class StackSettingsTest {
 
         assertThat(settings.frameworkDatasource()).isEmpty();
         assertThat(settings.externalOrigin()).isEmpty();
+    }
+
+    /**
+     * The surface's scrape settings (docs/capacity-defaults.md decision 13): the {@code metrics:}
+     * subtree as declared, for the host to graft onto the surface as {@code tesseraql.metrics}.
+     * A placeholder travels unresolved, as in {@link StackSettings#surfaceSecurity()}: the
+     * surface's configuration resolves it when it reads the key.
+     */
+    @Test
+    void theMetricsSubtreeIsTheSurfacesScrape(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve(StackSettings.FILE_NAME), """
+                metrics:
+                  enabled: true
+                  unauthenticated: ${SCRAPE_OPEN:false}
+                """);
+
+        java.util.Map<String, Object> metrics = StackSettings.load(dir).surfaceMetrics();
+        assertThat(metrics).containsOnlyKeys("enabled", "unauthenticated");
+        assertThat(String.valueOf(metrics.get("enabled"))).isEqualTo("true");
+        assertThat(String.valueOf(metrics.get("unauthenticated")))
+                .as("handed over as declared").isEqualTo("${SCRAPE_OPEN:false}");
     }
 }

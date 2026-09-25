@@ -71,7 +71,12 @@ package io.tesseraql.runtime;
  *                            deploy endpoint's bearer validation ride it (docs/stack-shells.md,
  *                            the deploy surface); {@code null} everywhere else, and members keep
  *                            their own declared JWT configuration
- * @param deployPen           the host's narrow deploy pen, set only on the surface runtime's
+ * @param surfaceMetrics      the stack file's {@code metrics:} subtree, set only on the surface
+ *                            runtime's context and grafted onto its configuration as
+ *                            {@code tesseraql.metrics.*}, so the origin's scrape reports the pool
+ *                            sign-in rides (docs/capacity-defaults.md decision 13); {@code null}
+ *                            everywhere else, and members keep their own declarations
+ * @param deployPen          the host's narrow deploy pen, set only on the surface runtime's
  *                            context so the authenticated deploy endpoint can write the install
  *                            root's intent through the host that owns it; {@code null} everywhere
  *                            else — no pen, no endpoint
@@ -98,6 +103,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
         MemberOrigins memberOrigins,
         java.io.File extraModules,
         java.util.Map<String, Object> surfaceSecurity,
+        java.util.Map<String, Object> surfaceMetrics,
         DeployPen deployPen,
         java.util.Map<String, Object> stackIssuerJwt,
         boolean workshop,
@@ -182,7 +188,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
      */
     public static HostContext stack() {
         return new HostContext(null, "/", null, null, null, null, null, null, null, null, null,
-                null, false, null);
+                null, null, false, null);
     }
 
     /** These settings, for the application the catalogue addresses at {@code basePath}. */
@@ -194,7 +200,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext forApplication(String basePath,
             DataSources.MainDatasourceOverride mainDataSourceOverride) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
-                mainDataSourceOverride, null, null, null, extraModules, null, null,
+                mainDataSourceOverride, null, null, null, extraModules, null, null, null,
                 stackIssuerJwt, workshop, vertx);
     }
 
@@ -213,10 +219,12 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             java.util.List<io.tesseraql.operations.app.InstalledApp> stackMembers,
             MemberOrigins memberOrigins,
             java.util.Map<String, Object> surfaceSecurity,
+            java.util.Map<String, Object> surfaceMetrics,
             DeployPen deployPen) {
         return new HostContext("", cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, borrowedMain, java.util.List.copyOf(stackMembers),
-                memberOrigins, null, surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+                memberOrigins, null, surfaceSecurity, surfaceMetrics, deployPen, stackIssuerJwt,
+                workshop, vertx);
     }
 
     /** These settings, carrying what the stack's own file declared (decision 22). */
@@ -224,7 +232,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
             javax.sql.DataSource frameworkDataSource) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+                surfaceSecurity, surfaceMetrics, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /**
@@ -234,14 +242,14 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext withWorkshop(boolean workshop) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+                surfaceSecurity, surfaceMetrics, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /** These settings, carrying the development loop's {@code --modules} override. */
     HostContext withExtraModules(java.io.File extraModules) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+                surfaceSecurity, surfaceMetrics, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /**
@@ -255,7 +263,7 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext withVertx(io.vertx.core.Vertx vertx) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+                surfaceSecurity, surfaceMetrics, deployPen, stackIssuerJwt, workshop, vertx);
     }
 
     /**
@@ -265,6 +273,6 @@ public record HostContext(String basePath, String cookiePath, String externalOri
     HostContext withStackIssuer(java.util.Map<String, Object> stackIssuerJwt) {
         return new HostContext(basePath, cookiePath, externalOrigin, frameworkDataSource,
                 mainDataSourceOverride, borrowedMain, stackMembers, memberOrigins, extraModules,
-                surfaceSecurity, deployPen, stackIssuerJwt, workshop, vertx);
+                surfaceSecurity, surfaceMetrics, deployPen, stackIssuerJwt, workshop, vertx);
     }
 }
