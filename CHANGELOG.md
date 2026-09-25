@@ -348,6 +348,17 @@ All notable changes to TesseraQL are documented here. The format follows
   the coordinate, and the block still supplies the sizing. `docs/capacity-defaults.md`
   decision 6; `docs/hosting.md`.
 
+- **The stack surface signs in on the framework pool.** The surface (sign-in, the account pages,
+  IAM Admin at the origin) used to build a `main` pool of its own: 10 connections on the same
+  coordinate as the stack's framework pool, with no key to size them. The credential check and
+  the TOTP check ran there, while the session rode the framework pool, so one sign-in touched two
+  pools on one database. Where the host holds a framework pool (`framework.datasource` in
+  `tesseraql-stack.yml`, or `dev --embedded-db`), the surface now uses that pool as its `main`
+  and never closes it; the host closes it after the surface. Each node holds 10 fewer standing
+  connections, and the framework pool's size now covers the whole of sign-in. A stack without
+  `framework.datasource` is unchanged. `docs/capacity-defaults.md` decision 12;
+  `docs/hosting.md`.
+
 - **Content after a JSON value or a YAML document is refused.** A request body such as
   `{"a":1} {"b":2}`, stored JSON with trailing text, or an application file with a second `---`
   document used to be read as its first value with the rest dropped silently; each is now the

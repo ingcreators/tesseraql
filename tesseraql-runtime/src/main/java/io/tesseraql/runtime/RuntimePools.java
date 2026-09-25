@@ -29,12 +29,29 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
         io.tesseraql.core.diag.RingSqlExecutionLog slowSqlLog,
         io.tesseraql.core.diag.PinningMonitor pinningMonitor,
         io.tesseraql.core.diag.JfrPinningSource pinningSource,
-        TenantDataSources tenantDataSources, MainRoles mainRoles) {
+        TenantDataSources tenantDataSources, MainRoles mainRoles,
+        HikariDataSource borrowedMain) {
 
     private static final Logger LOG = LoggerFactory.getLogger(RuntimePools.class);
 
+    /**
+     * The pools this runtime built and therefore closes: every named pool except a borrowed
+     * {@code main}, which belongs to the host that lent it (docs/capacity-defaults.md decision 12).
+     * All three release paths — this phase's failure, the boot's catch and {@code close()} —
+     * walk this list rather than the named map.
+     */
+    static java.util.List<HikariDataSource> owned(Map<String, HikariDataSource> dataSources,
+            HikariDataSource borrowedMain) {
+        return dataSources.values().stream().filter(pool -> pool != borrowedMain).toList();
+    }
+
+    /** The pools this runtime built: {@link #owned(Map, HikariDataSource)} of this record. */
+    java.util.List<HikariDataSource> ownedDataSources() {
+        return owned(dataSources, borrowedMain);
+    }
+
     static RuntimePools build(RuntimeContext context, AppManifest manifest, Path appHome,
-            DataSources.MainDatasourceOverride override,
+            DataSources.MainDatasourceOverride override, HikariDataSource borrowedMain,
             javax.sql.DataSource stackFrameworkDataSource, AppModules modules,
             io.tesseraql.core.telemetry.Tracer tracer, io.tesseraql.core.telemetry.Meter meter) {
         Map<String, HikariDataSource> dataSources = null;
@@ -47,7 +64,8 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             // Every datasource declared under tesseraql.datasources gets a pool, registered by name
             // so routes, contracts and per-datasource migrations can address it (design ch. 5.2).
             dataSources = DataSources.createAll(manifest.config(),
-                    override, appHome, modules.present() ? modules.loader() : null);
+                    override, appHome, modules.present() ? modules.loader() : null,
+                    borrowedMain);
             HikariDataSource dataSource = dataSources.get("main");
             dataSources.forEach((name, pool) -> context.bind(name, pool));
             // main's role pools (docs/capacity-defaults.md decision 5): bound as one object, never
@@ -230,7 +248,8 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             }
             return new RuntimePools(dataSources, dataSource, frameworkDataSource,
                     aggregatingMeter, effectiveTracer, effectiveMeter, otelSdk, lanes,
-                    slowSqlLog, pinningMonitor, pinningSource, tenantDataSources, mainRoles);
+                    slowSqlLog, pinningMonitor, pinningSource, tenantDataSources, mainRoles,
+                    borrowedMain);
         } catch (RuntimeException | Error failure) {
             // This phase owns what it built until the record is handed back: released here in
             // the same order the boot's catch and close() release — executors before the pools
@@ -243,7 +262,7 @@ record RuntimePools(Map<String, HikariDataSource> dataSources, HikariDataSource 
             TesseraqlRuntime.closeQuietly(tenantDataSources);
             TesseraqlRuntime.closeQuietly(mainRoles);
             if (dataSources != null) {
-                dataSources.values().forEach(TesseraqlRuntime::closeQuietly);
+                owned(dataSources, borrowedMain).forEach(TesseraqlRuntime::closeQuietly);
             }
             throw failure;
         }

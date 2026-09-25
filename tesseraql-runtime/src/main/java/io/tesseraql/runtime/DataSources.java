@@ -165,6 +165,18 @@ public final class DataSources {
     public static java.util.LinkedHashMap<String, HikariDataSource> createAll(AppConfig config,
             MainDatasourceOverride override, java.nio.file.Path appHome,
             ClassLoader moduleLoader) {
+        return createAll(config, override, appHome, moduleLoader, null);
+    }
+
+    /**
+     * Like {@link #createAll(AppConfig, MainDatasourceOverride, java.nio.file.Path, ClassLoader)},
+     * with {@code main} lent rather than built when {@code borrowedMain} is non-null: the stack
+     * surface rides the host's framework pool (docs/capacity-defaults.md decision 12). The map
+     * then holds a pool its caller did not build and must not close.
+     */
+    static java.util.LinkedHashMap<String, HikariDataSource> createAll(AppConfig config,
+            MainDatasourceOverride override, java.nio.file.Path appHome,
+            ClassLoader moduleLoader, HikariDataSource borrowedMain) {
         // Before any pool connects: a role pool under the wrong datasource configures nothing,
         // and is refused rather than read and ignored (docs/capacity-defaults.md decision 5).
         MainRoles.refuseMisplaced(config);
@@ -173,13 +185,19 @@ public final class DataSources {
         if (declared instanceof java.util.Map<?, ?> map) {
             for (Object name : map.keySet()) {
                 String poolName = String.valueOf(name);
+                if (borrowedMain != null && "main".equals(poolName)) {
+                    pools.put(poolName, borrowedMain);
+                    continue;
+                }
                 pools.put(poolName, override != null && "main".equals(poolName)
                         ? overriddenMain(config, override)
                         : create(config, poolName, appHome, override, moduleLoader));
             }
         }
         if (!pools.containsKey("main")) {
-            if (override != null) {
+            if (borrowedMain != null) {
+                pools.put("main", borrowedMain);
+            } else if (override != null) {
                 pools.put("main", overriddenMain(config, override));
             } else {
                 pools.values().forEach(HikariDataSource::close);

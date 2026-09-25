@@ -222,6 +222,20 @@ class MultiAppHostIntegrationTest {
     }
 
     /**
+     * The stack surface's {@code main} is the host's framework pool, lent
+     * (docs/capacity-defaults.md decision 12). What the surface runs on {@code main} is sign-in —
+     * the identity service looks its realm's datasource up by that name — and its sessions ride
+     * the framework pool, so one pool now carries the whole of sign-in.
+     */
+    @Test
+    void theSurfaceSignsInOnTheStacksFrameworkPool() {
+        TesseraqlRuntime surface = host.app(MultiAppHost.SURFACE_SLOT);
+
+        assertThat(surface.context().lookup("main", javax.sql.DataSource.class))
+                .isSameAs(host.context().frameworkDataSource());
+    }
+
+    /**
      * The stack's framework pool reads the same sizing keys as an application's datasource
      * (docs/capacity-defaults.md decision 6). Before, it was built on a bare HikariCP
      * configuration, so the block's sizing was read by nothing.
