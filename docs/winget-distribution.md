@@ -7,7 +7,7 @@
 > 0.19.0 first so that the first listed version carries the release's fixes. This resumes
 > [Phase 38](roadmap.md#phase-38--cli-distribution-and-upgrade-delivery)'s Tier 2 for WinGet alone.
 > Everything below was read in the code, in the 0.19.0 release asset, or in WinGet's own source
-> and manifests (rows 1-9). The maintainer chose every recommendation but one: the token that
+> and manifests (rows 1-10). The maintainer chose every recommendation but one: the token that
 > submits updates is issued on the maintainer's own account rather than a machine account, and
 > decision 6 records the limits that choice is kept within.
 >
@@ -16,6 +16,13 @@
 > **S1 (the first submission).** The three manifests below, for 0.19.0, are validated and
 > installed on Windows, then submitted to `microsoft/winget-pkgs` from the maintainer's account.
 > It has no framework change; the record gains its status line when the package is merged.
+> **In progress: the first submission is 0.19.1.** Installing 0.19.0 from the manifests found
+> two things. The archive scan refuses the zip (row 10), so decision 5 overrides it, as
+> winget-pkgs' own sandbox test does. And every command the installed CLI ran printed the JVM's
+> refusal of a stale class-data archive on stdout. The image had shipped the archive its build's
+> smoke test wrote, and WinGet's extraction does not keep the jar's time
+> ([jvm-baseline.md](jvm-baseline.md) has the fix). 0.19.1 carries the fix, and decision 3's
+> manifests are submitted with its version, URL, hash and date.
 >
 > **S2 (every release after).** `release.yml` submits each new version the way it bumps
 > Homebrew and Scoop, and the documentation and the update hint name WinGet.
@@ -72,6 +79,14 @@
 9. **The Microsoft Store would take an MSIX (signed by the Store) or a signed MSI/EXE.** jpackage
    makes neither from this build, and the Store lists desktop applications; a command-line tool is
    reached from a terminal.
+10. **A zip installed from a local manifest is scanned, and ours fails by construction** (found in
+    S1). `winget install --manifest` reported "malware" in the 0.19.0 zip. The scan is not
+    antivirus: winget-cli hands the zip to `pure`, a static checker for zip bombs, which recurses
+    into nested archives and allows 10,000 files in all. The CLI's fat jar alone has 32,106
+    entries, and its directory entries are the 2-byte deflated form `JarOutputStream` writes, which
+    `pure` refuses for a directory. Reproduced by compiling `pure` from winget-cli's tree. The scan
+    runs only for `--manifest` (`ScanArchiveFromLocalManifest`), never for an install from the
+    community source, and winget-pkgs' own `Tools/SandboxTest.ps1` overrides it on every run.
 
 ## The decisions
 
@@ -192,14 +207,16 @@ account holder, after two checks on a Windows machine:
 
 ```powershell
 winget validate --manifest <dir>
-winget settings --enable LocalManifestFiles     # once, as administrator
-winget install --manifest <dir>
+winget settings --enable LocalManifestFiles                 # once, as administrator
+winget settings --enable LocalArchiveMalwareScanOverride    # once, as administrator (row 10)
+winget install --manifest <dir> --ignore-local-archive-malware-scan
 ```
 
-In a new terminal, `tesseraql --version` answers `TesseraQL 0.19.0`, and `winget uninstall
-ingcreators.TesseraQL` removes it again. Then `komac submit <dir>` with the token of decision 6 in `GITHUB_TOKEN` and
-`KOMAC_FORK_OWNER=ingcreators`, or a pull request made by hand from `ingcreators/winget-pkgs`. A moderator reviews a new package; if a check asks the account to
-agree to a contributor licence agreement, the account holder agrees once.
+In a new terminal, `tesseraql --version` answers the version and nothing else, twice, and
+`winget uninstall ingcreators.TesseraQL` removes it again. Then `komac submit <dir>` with the
+token of decision 6 in `GITHUB_TOKEN` and `KOMAC_FORK_OWNER=ingcreators`, or a pull request made
+by hand from `ingcreators/winget-pkgs`. A moderator reviews a new package; if a check asks the
+account to agree to a contributor licence agreement, the account holder agrees once.
 
 ### 6 — The token is the maintainer's, and only a release tag can read it
 
@@ -265,10 +282,11 @@ Decisions 1-3, 5 and 6.
 - `ingcreators/winget-pkgs` exists (done 2026-09-26), and the maintainer holds a classic token
   with `public_repo` alone and an expiry. If the organisation refuses classic tokens, its
   personal-access-token setting admits them.
-- The three manifests of decision 3 pass `winget validate`, install from the manifest on
-  Windows, answer `tesseraql --version` with `TesseraQL 0.19.0` in a new terminal, and uninstall.
+- The three manifests of decision 3, at 0.19.1, pass `winget validate`, install from the
+  manifest on Windows, answer `tesseraql --version` with `TesseraQL 0.19.1` and nothing else in a
+  new terminal, twice, and uninstall.
 - The pull request to `microsoft/winget-pkgs` is merged, and `winget install
-  ingcreators.TesseraQL` installs 0.19.0 on a machine that never saw the manifests.
+  ingcreators.TesseraQL` installs 0.19.1 on a machine that never saw the manifests.
 - **Docs:** this record's status line.
 
 ### S2 — every release after (S)
@@ -276,7 +294,7 @@ Decisions 1-3, 5 and 6.
 Decisions 4 and 7.
 
 - **Before wiring the job**, the pinned komac, run with `--dry-run --output` and the account's
-  token against the published 0.19.0, writes a manifest with `Architecture: x64`, the nested
+  token against the published 0.19.1, writes a manifest with `Architecture: x64`, the nested
   `tesseraql\tesseraql.exe` and `ArchiveBinariesDependOnPath: true` (row 7 says komac cannot infer
   the first two from the zip).
 - `WorkflowLedgerTest` passes with the new job: pinned actions, a timeout, a checkout before the

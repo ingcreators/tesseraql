@@ -154,9 +154,9 @@ What does not ship:
 | --- | --- |
 | Fat jar + launchers | Written on first run into the user cache (`XDG_CACHE_HOME` / `LOCALAPPDATA`); skipped silently when that cannot be written. |
 | `deploy/Dockerfile`, `Dockerfile.demo` | Trained at build time against the baked application — a container filesystem is often read-only, and every replica would otherwise pay separately. |
-| jpackage app images | Written on first run into `$APPDIR`, which the jpackage launcher substitutes to the installed path. |
+| jpackage app images | Written on first run into `$APPDIR`, which the jpackage launcher substitutes to the installed path. The image ships none (below). |
 
-Four things this arrangement has to get right, each found by running it rather than by reading
+Five things this arrangement has to get right, each found by running it rather than by reading
 about it:
 
 - **A training run must carry the same flags as the run that reads the archive.** An archive
@@ -176,9 +176,20 @@ about it:
   launcher actually maps, and the layouts that cannot be used are deleted. The cost is ~25 MB
   per platform artifact and a slower first run (941 ms); every run after it is 467 ms against
   623 ms before.
-- **`-Xlog:cds=error`** on the launchers. Writing an archive normally reports the classes it
-  skipped; in a terminal those read as failures. Errors stay: an archive the JVM refuses still
-  says so — which is what an operator who moved an installation would need to see.
+- **`-Xlog:disable -Xlog:all=warning,cds=error:stderr`** on every launcher, the jpackage images
+  included. Writing an archive reports every class it skipped, at warning level, on the JVM's
+  default output, which is stdout; in a terminal those read as failures, and they land on the
+  stream `--format json` writes to. `-Xlog:cds=error:stderr` alone adds an output and leaves
+  that one, which is how the app images kept printing after the dist launchers had been fixed
+  ([codec-discovery.md](codec-discovery.md) decision 8). Errors stay, on stderr: an archive the
+  JVM refuses still says so, which is what an operator who moved an installation needs to see.
+- **An app image ships no application archive.** Its smoke test writes one against the build's
+  jar, and 0.19.0 packaged it. An extractor that does not keep file times (WinGet's) leaves the
+  jar newer than the archive, the JVM refuses it at every start, and it is never rebuilt (the
+  second point above). The image now drops it before it is archived, and the installed image
+  writes its own on its first run. WinGet removes the extracted directory on an upgrade, and
+  Scoop installs each version into a directory of its own, so an archive never outlives the
+  version that wrote it.
 
 ### What does not disturb the archive
 
