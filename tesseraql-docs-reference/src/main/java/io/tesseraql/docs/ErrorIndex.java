@@ -635,7 +635,8 @@ final class ErrorIndex {
             "editor-named-sources.md", "audit-low-leads.md", "route-filename-placeholders.md",
             "caching.md", "deployment-maturity.md", "procurement-documents-and-edi.md",
             "list-export.md", "job-inbox.md", "host-development.md", "jackson-3.md",
-            "gateway-performance.md", "capacity-defaults.md", "connection-liveness.md");
+            "gateway-performance.md", "capacity-defaults.md", "connection-liveness.md",
+            "deployment-decisions.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {
