@@ -383,4 +383,7 @@ export const EXCLUDED = [
   // worker pool, jobs name their pool, and a new application's production profile separates
   // its pools - designed 2026-09-25.
   'capacity-defaults.md',
+  // Connection liveness: a PostgreSQL connection says whose it is, a vanished database host is
+  // noticed in about a minute, and the server's side is documented - designed 2026-09-26.
+  'connection-liveness.md',
 ];
