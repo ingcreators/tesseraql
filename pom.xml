@@ -5,7 +5,7 @@
 
   <groupId>io.tesseraql</groupId>
   <artifactId>tesseraql-parent</artifactId>
-  <version>0.19.0-SNAPSHOT</version>
+  <version>0.19.0</version>
   <packaging>pom</packaging>
 
   <name>TesseraQL Parent</name>
@@ -87,7 +87,7 @@
       cut if the release notes want the date to mean something — nothing in the build reads it as
       a date, only as a constant.
     -->
-    <project.build.outputTimestamp>2026-09-20T00:54:26Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2026-09-26T07:37:48Z</project.build.outputTimestamp>
 
     <!-- Third-party library versions -->
     <!--
