@@ -106,7 +106,7 @@
       through camel-platform-http-vertx; that component left the build, and this moved to 5 the
       same day because nothing was holding it back any more.
     -->
-    <vertx.version>5.1.8</vertx.version>
+    <vertx.version>5.2.0</vertx.version>
     <!--
       The SFTP client the poll connector drives directly (docs/camel-removal.md slice 1). It was
       on the classpath all along, under camel-ftp, which is exactly why it is declared here:
@@ -164,9 +164,9 @@
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
-    <openhtmltopdf.version>1.1.85</openhtmltopdf.version>
+    <openhtmltopdf.version>1.1.86</openhtmltopdf.version>
     <pdfbox.version>3.0.8</pdfbox.version>
-    <awssdk.version>2.51.4</awssdk.version>
+    <awssdk.version>2.55.2</awssdk.version>
     <s3mock.version>5.2.3</s3mock.version>
     <ojdbc.version>23.26.3.0.0</ojdbc.version>
     <mssql-jdbc.version>13.6.0.jre11</mssql-jdbc.version>
