@@ -103,7 +103,14 @@ jobs:
           # $APPDIR is substituted by the jpackage launcher at run time, so the application
           # archive is written and validated against the installed path. It cannot be built
           # here: an archive records the classpath it saw, and this build path is not where
-          # the application ends up.
+          # the application ends up. The smoke test below writes one all the same, and the
+          # image drops it before it is uploaded.
+          #
+          # The JVM's default log output is stdout at warning level, and the run that writes the
+          # archive reports every class it skipped there; -Xlog:cds=error:stderr alone ADDS an
+          # output and leaves that one. So the default is switched off and rebuilt on stderr,
+          # with cds at errors only - the dist launchers' spelling (docs/codec-discovery.md
+          # decision 8). A refused archive still says so, on stderr.
           jpackage --type app-image --name tesseraql \
             --input build/jpackage-input --main-jar tesseraql.jar \
             --main-class io.tesseraql.cli.TesseraqlCli \
@@ -112,7 +119,8 @@ jobs:
             --java-options --sun-misc-unsafe-memory-access=allow \
             --java-options -XX:+AutoCreateSharedArchive \
             --java-options '-XX:SharedArchiveFile=$APPDIR/app-cds.jsa' \
-            --java-options -Xlog:cds=error:stderr \
+            --java-options -Xlog:disable \
+            --java-options -Xlog:all=warning,cds=error:stderr \
             --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.jfr,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
             --app-version "$APPVER" \
             "${console[@]}" \
@@ -140,6 +148,28 @@ jobs:
             macOS) LAUNCHER=build/jpackage/tesseraql.app/Contents/MacOS/tesseraql ;;
             Windows) LAUNCHER=build/jpackage/tesseraql/tesseraql.exe ;;
           esac
+          # stdout carries the command's output and nothing of the JVM's: first on the run that
+          # writes the class-data archive (it reports every class it skipped), then with the jar's
+          # time changed, as an extractor that does not keep file times leaves it (winget's does
+          # not), where the archive is refused. 0.19.0 printed both on stdout, on every command a
+          # WinGet install ran, ahead of `--format json`.
+          version_only() {
+            # tr: a Windows console line ends in CR LF, and the CR would fail the exact match.
+            out=$("$LAUNCHER" --version 2>launcher-stderr.txt | tr -d '\r')
+            printf 'stdout: %s\n' "$out"
+            sed 's/^/stderr: /' launcher-stderr.txt
+            [ "$(printf '%s\n' "$out" | wc -l)" -eq 1 ] && grep -qx 'TesseraQL [^[:space:]]*' <<<"$out" \
+              || { echo "$1: stdout carried more than the version" >&2; exit 1; }
+          }
+          version_only "the run that writes the archive"
+          if grep -q '\[cds' launcher-stderr.txt; then
+            echo "the run that writes the archive reported cds warnings" >&2
+            exit 1
+          fi
+          version_only "the run that reads it"
+          JAR=$(find build/jpackage -name tesseraql.jar | head -1)
+          touch "$JAR"
+          version_only "a refused archive"
           # Assert the launcher actually writes to stdout: a Windows GUI-subsystem launcher (built
           # without --win-console) runs and exits 0 but prints nothing, so an exit-code-only check
           # would miss it. Capturing and grepping the output guards that regression.
@@ -152,6 +182,19 @@ jobs:
           # already printed above it.
           grep -q '[^[:space:]]' <<<"$out" \
             || { echo "launcher produced no stdout (Windows console subsystem?)" >&2; exit 1; }
+
+      # The runs above wrote an application archive against this build's jar. Shipped, it was
+      # refused wherever an extractor did not keep the jar's time, and AutoCreateSharedArchive
+      # never rebuilds a refused archive. The installed image writes its own on its first run.
+      - name: Ship no application archive
+        shell: bash
+        run: |
+          find build/jpackage -name app-cds.jsa -print -delete
+          if [ -n "$(find build/jpackage -name app-cds.jsa)" ]; then
+            echo "an application archive is still in the image" >&2
+            exit 1
+          fi
+          rm -f launcher-stderr.txt
 
       - name: Upload the app image
         if: github.event_name != 'pull_request'
@@ -246,7 +289,8 @@ jobs:
           cp tesseraql-host/target/tesseraql-host-*-all.jar build/jpackage-input/tesseraql-host.jar
           # --win-console for the same reason the CLI image carries it — and here the service
           # wrapper captures the console streams as the service log, so a silent GUI-subsystem
-          # launcher would produce an unsupervised service with an empty log.
+          # launcher would produce an unsupervised service with an empty log. The JVM logs off
+          # stdout for the CLI image's reason, and the image ships no application archive either.
           jpackage --type app-image --name tesseraql-host \
             --input build/jpackage-input --main-jar tesseraql-host.jar \
             --main-class io.tesseraql.cli.TesseraqlHostCli \
@@ -255,7 +299,8 @@ jobs:
             --java-options --sun-misc-unsafe-memory-access=allow \
             --java-options -XX:+AutoCreateSharedArchive \
             --java-options '-XX:SharedArchiveFile=$APPDIR/app-cds.jsa' \
-            --java-options -Xlog:cds=error:stderr \
+            --java-options -Xlog:disable \
+            --java-options -Xlog:all=warning,cds=error:stderr \
             --add-modules java.se,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.jfr,jdk.localedata,jdk.unsupported,jdk.management,jdk.naming.dns,jdk.zipfs,jdk.httpserver,jdk.net,jdk.security.auth \
             --app-version "$APPVER" \
             --win-console \
@@ -434,6 +479,13 @@ jobs:
           VERSION=${VERSION%-SNAPSHOT}
           ARCH=$(uname -m)
           ASSET="tesseraql-host-${VERSION}-windows-${ARCH}.zip"
+          # The launcher runs above wrote an application archive against this build's jar; the
+          # installed image writes its own (see the CLI image's "Ship no application archive").
+          find build/jpackage -name app-cds.jsa -print -delete
+          if [ -n "$(find build/jpackage -name app-cds.jsa)" ]; then
+            echo "an application archive is still in the host image" >&2
+            exit 1
+          fi
           cp deploy/windows/tesseraql-host-service.xml build/jpackage/
           ( cd build/jpackage && 7z a -tzip "$ROOT/$ASSET" tesseraql-host tesseraql-host-service.xml > /dev/null )
           echo "ASSET=$ASSET" >> "$GITHUB_ENV"

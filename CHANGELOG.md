@@ -4,6 +4,24 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+
+- **The app images print only what the command prints.** The Windows, macOS and Linux app
+  images, and the host's Windows image, shipped the class-data archive their own build's smoke
+  test had written. An extractor that does not keep file times, WinGet's among them, leaves the
+  jar newer than that archive, so the JVM refused it at every start and never rebuilt it. The
+  launcher's `-Xlog:cds=error:stderr` only added an output: the JVM's default output, stdout,
+  still carried the refusal. Every command a WinGet install ran printed six lines of it ahead
+  of its own output, `--format json` included. The images now ship no application archive, so
+  the installed image writes its own on its first run. Their launchers log with the dist
+  launchers' spelling, `-Xlog:disable -Xlog:all=warning,cds=error:stderr`, so nothing of the
+  JVM's reaches stdout, and a refused archive still says so on stderr. `jpackage.yml`'s smoke
+  test asserts that stdout carries only the version on the run that writes the archive and
+  after the jar's time changes. `WorkflowLedgerTest` holds the options and the removal.
+  `docs/jvm-baseline.md`; `docs/winget-distribution.md`, S1.
+
 ## 0.19.0 - 2026-09-26
 
 This release is about running in production. Two replicas on Kubernetes are proven end to end

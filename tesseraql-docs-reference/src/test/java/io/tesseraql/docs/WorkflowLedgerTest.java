@@ -433,6 +433,72 @@ class WorkflowLedgerTest {
                 .isEmpty();
     }
 
+    /**
+     * A jpackage launcher that writes a class-data archive logs off stdout, and the image it
+     * builds ships no application archive (docs/winget-distribution.md, S1's finding).
+     *
+     * <p>The run that writes the archive reports every class it skipped at warning level, on the
+     * JVM's default output, stdout; {@code -Xlog:cds=error:stderr} alone adds an output and leaves
+     * that one. The dist launchers had been fixed (docs/codec-discovery.md decision 8), the app
+     * images had not: 0.19.0 also shipped the archive its own smoke test wrote, which an extractor
+     * that does not keep the jar's time (WinGet's) refuses on every start, so every command a
+     * WinGet install ran printed the refusal on stdout. Verified red on {@code jpackage.yml}'s two
+     * launchers and its two archiving steps.
+     */
+    @Test
+    void anAppImageLogsOffStdoutAndShipsNoApplicationArchive() throws IOException {
+        String quiet = "-Xlog:disable -Xlog:all=warning,cds=error:stderr";
+        assertThat(Files.readString(Path.of("..", "tesseraql-cli", "src", "main", "dist", "bin",
+                "tesseraql"))).as("the dist launcher's spelling, which the app images repeat")
+                .contains(quiet);
+
+        List<String> lines = Files.readAllLines(WORKFLOWS.resolve("jpackage.yml"));
+        List<String> problems = new ArrayList<>();
+        int launchers = 0;
+        int archives = 0;
+        int removedAt = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            String text = lines.get(i).strip();
+            if (text.startsWith("jpackage ")) {
+                StringBuilder command = new StringBuilder();
+                for (int j = i; j < lines.size(); j++) {
+                    String part = lines.get(j).strip();
+                    boolean continued = part.endsWith("\\");
+                    command.append(continued ? part.substring(0, part.length() - 1).strip() : part)
+                            .append(' ');
+                    if (!continued) {
+                        break;
+                    }
+                }
+                String options = command.toString().replace("--java-options ", "");
+                if (options.contains("-XX:+AutoCreateSharedArchive")) {
+                    launchers++;
+                    if (!options.contains(quiet)) {
+                        problems.add("jpackage.yml:" + (i + 1) + " writes an archive without "
+                                + quiet);
+                    }
+                }
+            }
+            if (text.contains("app-cds.jsa -print -delete")) {
+                removedAt = i;
+            }
+            if (text.contains("7z a -tzip") || text.contains("tar -C build/jpackage")) {
+                archives++;
+                if (removedAt < 0 || lines.subList(removedAt, i).stream()
+                        .anyMatch(line -> line.strip().startsWith("jpackage "))) {
+                    problems.add("jpackage.yml:" + (i + 1)
+                            + " archives an image without removing app-cds.jsa after its runs");
+                }
+            }
+        }
+
+        assertThat(launchers).as("the walk finds the launchers that write an archive")
+                .isGreaterThanOrEqualTo(2);
+        assertThat(archives).as("the walk finds the steps that archive an image")
+                .isGreaterThanOrEqualTo(2);
+        assertThat(problems).isEmpty();
+    }
+
     /** The entries of the first {@code permissions:} block at the given indent, stripped. */
     private static List<String> permissions(List<String> lines, int indent) {
         List<String> entries = new ArrayList<>();
