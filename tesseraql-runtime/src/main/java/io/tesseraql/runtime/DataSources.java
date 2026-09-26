@@ -126,6 +126,7 @@ public final class DataSources {
         if (override.password() != null) {
             hikari.setPassword(override.password());
         }
+        identify(hikari, null, poolName);
         return new HikariDataSource(hikari);
     }
 
@@ -303,6 +304,10 @@ public final class DataSources {
             }
         } else {
             coordinate(hikari, config, coordinatePrefix);
+        }
+        // Before a module-defined driver is bound: it copies the properties it is handed.
+        identify(hikari, config, poolName);
+        if (override == null) {
             bindModuleDriver(hikari, moduleLoader);
         }
         sized(hikari, config, sizingPrefix);
@@ -314,7 +319,22 @@ public final class DataSources {
         HikariConfig hikari = new HikariConfig();
         hikari.setPoolName(poolName);
         coordinate(hikari, config, prefix);
+        identify(hikari, config, poolName);
         return sized(hikari, config, prefix);
+    }
+
+    /**
+     * Who the pool's connections are, on PostgreSQL (docs/connection-liveness.md decision 1):
+     * {@code tesseraql/<app>/<pool>}, or {@code tesseraql/<pool>} for a pool the stack owns,
+     * whose configuration names no application. A URL's own {@code ApplicationName} wins.
+     */
+    private static void identify(HikariConfig hikari, AppConfig config, String poolName) {
+        String app = config == null
+                ? null
+                : io.tesseraql.yaml.app.ApplicationName.ifValid(config).orElse(null);
+        io.tesseraql.core.jdbc.PostgresProperties.apply(hikari.getJdbcUrl(),
+                io.tesseraql.core.jdbc.PostgresProperties.poolLabel(app, poolName),
+                hikari::addDataSourceProperty);
     }
 
     /** Where a pool connects: the {@code jdbcUrl}, {@code username} and {@code password} at a prefix. */

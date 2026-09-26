@@ -283,6 +283,19 @@ The stack's framework pool takes the same keys, with the same defaults, under
 `framework.datasource` in `tesseraql-stack.yml`
 ([hosting](hosting.md#the-stacks-own-settings--tesseraql-stackyml)).
 
+On PostgreSQL, every connection says whose it is in `application_name`, so
+`pg_stat_activity` tells the pools apart:
+
+| Opened by | `application_name` |
+| --- | --- |
+| An application's pool | `tesseraql/<app>/<pool>`: `main`, `main-jobs`, `main-transfers`, `tenant-<id>`, or a named datasource's name |
+| The stack's framework pool | `tesseraql/stack-framework` |
+| `tesseraql job run` | `tesseraql/<app>/job-run` |
+| Any other CLI or Maven plugin command | `tesseraql/tool` |
+
+A character outside printable ASCII is percent-encoded, and the value is cut at PostgreSQL's 63
+bytes. A `jdbcUrl` that declares its own `ApplicationName` keeps it.
+
 Background work — [jobs](jobs.md), [file transfers](file-transfers.md), streams — borrows from
 these same pools by default. Contention then shows up as request latency you can measure. Jobs
 and file transfers can be given

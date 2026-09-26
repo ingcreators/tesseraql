@@ -8,6 +8,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **Every PostgreSQL connection says whose it is.** Its `application_name` was the driver's
+  "PostgreSQL JDBC Driver" for every pool of every application, so `pg_stat_activity` could not
+  say which application or pool a backend served, and a dead node's leftovers could not be picked
+  out. It is now `tesseraql/<app>/<pool>` (`main`, `main-jobs`, `main-transfers`, `tenant-<id>`,
+  a named datasource), `tesseraql/stack-framework` for the stack's pool,
+  `tesseraql/<app>/job-run` for `tesseraql job run`, and `tesseraql/tool` for the other CLI and
+  Maven plugin commands. Non-ASCII is percent-encoded, and the value is cut at PostgreSQL's 63
+  bytes. A `jdbcUrl` that declares its own `ApplicationName` keeps it.
+  `docs/connection-liveness.md` decision 1; `docs/deployment.md` "Connection pools".
+
 - **The stack surface has a scrape, and it reports the sign-in pool.** `metrics:` in
   `tesseraql-stack.yml` configures the surface's scrape with the keys an application uses under
   `tesseraql.metrics` (`enabled`, `unauthenticated`), because the surface is bundled and has no

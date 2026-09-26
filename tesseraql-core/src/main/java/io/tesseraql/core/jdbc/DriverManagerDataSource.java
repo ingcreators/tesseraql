@@ -19,11 +19,28 @@ public final class DriverManagerDataSource implements DataSource {
     private final String url;
     private final String user;
     private final String password;
+    /** Who a connection says it is on PostgreSQL (docs/connection-liveness.md decision 1). */
+    private final String label;
 
     public DriverManagerDataSource(String url, String user, String password) {
+        this(url, user, password, PostgresProperties.TOOL);
+    }
+
+    /**
+     * As {@link #DriverManagerDataSource(String, String, String)}, labelling each connection
+     * {@code label} on PostgreSQL — {@code tesseraql job run}'s, which an external scheduler may
+     * keep running for hours, says whose job it is.
+     */
+    public DriverManagerDataSource(String url, String user, String password, String label) {
         this.url = url;
         this.user = user;
         this.password = password;
+        this.label = label;
+    }
+
+    /** This datasource, its connections labelled {@code label} on PostgreSQL. */
+    public DriverManagerDataSource labelled(String label) {
+        return new DriverManagerDataSource(url, user, password, label);
     }
 
     /** The JDBC URL this datasource connects with. */
@@ -38,12 +55,22 @@ public final class DriverManagerDataSource implements DataSource {
 
     @Override
     public Connection getConnection() throws SQLException {
-        return DriverManager.getConnection(url, user, password);
+        return getConnection(user, password);
     }
 
     @Override
     public Connection getConnection(String username, String pwd) throws SQLException {
-        return DriverManager.getConnection(url, username, pwd);
+        // As DriverManager.getConnection(url, user, password) builds them: an absent identity is
+        // not passed, so a URL that carries one keeps it.
+        java.util.Properties info = new java.util.Properties();
+        if (username != null) {
+            info.setProperty("user", username);
+        }
+        if (pwd != null) {
+            info.setProperty("password", pwd);
+        }
+        PostgresProperties.apply(url, label, info::setProperty);
+        return DriverManager.getConnection(url, info);
     }
 
     @Override
