@@ -3,8 +3,8 @@ package io.tesseraql.runtime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.zaxxer.hikari.HikariDataSource;
+import io.tesseraql.core.jdbc.ConnectionProperties;
 import io.tesseraql.core.jdbc.DriverManagerDataSource;
-import io.tesseraql.core.jdbc.PostgresProperties;
 import io.tesseraql.pipeline.tenant.PoolRole;
 import io.tesseraql.yaml.config.AppConfig;
 import java.sql.Connection;
@@ -93,7 +93,7 @@ class ConnectionIdentityIntegrationTest {
         DriverManagerDataSource tool = new DriverManagerDataSource(POSTGRES.getJdbcUrl(),
                 POSTGRES.getUsername(), POSTGRES.getPassword());
         assertThat(applicationName(tool)).isEqualTo("tesseraql/tool");
-        assertThat(applicationName(tool.labelled(PostgresProperties.jobRunLabel("orders"))))
+        assertThat(applicationName(tool.labelled(ConnectionProperties.jobRunLabel("orders"))))
                 .isEqualTo("tesseraql/orders/job-run");
     }
 

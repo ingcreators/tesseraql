@@ -324,16 +324,17 @@ public final class DataSources {
     }
 
     /**
-     * Who the pool's connections are, on PostgreSQL (docs/connection-liveness.md decision 1):
-     * {@code tesseraql/<app>/<pool>}, or {@code tesseraql/<pool>} for a pool the stack owns,
-     * whose configuration names no application. A URL's own {@code ApplicationName} wins.
+     * Who the pool's connections are, and how they keep alive, as the URL's driver allows
+     * (docs/connection-liveness.md decisions 1, 2 and 6): {@code tesseraql/<app>/<pool>}, or
+     * {@code tesseraql/<pool>} for a pool the stack owns, whose configuration names no
+     * application. Nothing the URL declares is added.
      */
     private static void identify(HikariConfig hikari, AppConfig config, String poolName) {
         String app = config == null
                 ? null
                 : io.tesseraql.yaml.app.ApplicationName.ifValid(config).orElse(null);
-        io.tesseraql.core.jdbc.PostgresProperties.apply(hikari.getJdbcUrl(),
-                io.tesseraql.core.jdbc.PostgresProperties.poolLabel(app, poolName),
+        io.tesseraql.core.jdbc.ConnectionProperties.apply(hikari.getJdbcUrl(),
+                io.tesseraql.core.jdbc.ConnectionProperties.poolLabel(app, poolName),
                 hikari::addDataSourceProperty);
     }
 

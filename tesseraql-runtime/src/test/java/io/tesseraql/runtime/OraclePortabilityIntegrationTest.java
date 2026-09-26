@@ -59,6 +59,23 @@ class OraclePortabilityIntegrationTest {
         }
     }
 
+    /**
+     * The runtime's connection says whose it is where Oracle keeps a client's program name, and
+     * it connected carrying TesseraQL's keepalive properties (docs/connection-liveness.md
+     * decision 6).
+     */
+    @Test
+    void aConnectionSaysWhoseItIsOnOracle() throws Exception {
+        try (java.sql.Connection connection = runtime.context()
+                .lookup("main", javax.sql.DataSource.class).getConnection();
+                java.sql.Statement statement = connection.createStatement();
+                java.sql.ResultSet rs = statement.executeQuery(
+                        "select sys_context('USERENV', 'CLIENT_PROGRAM_NAME') from dual")) {
+            rs.next();
+            assertThat(rs.getString(1)).isEqualTo("tesseraql/oracle-demo/main");
+        }
+    }
+
     @Test
     void bootsAndServesAQueryRouteOnOracle() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(

@@ -62,6 +62,21 @@ class SqlServerPortabilityIntegrationTest {
         }
     }
 
+    /**
+     * The runtime's connection says whose it is where SQL Server keeps a client's application
+     * name (docs/connection-liveness.md decision 6). Keepalive is the driver's own.
+     */
+    @Test
+    void aConnectionSaysWhoseItIsOnSqlServer() throws Exception {
+        try (java.sql.Connection connection = runtime.context()
+                .lookup("main", javax.sql.DataSource.class).getConnection();
+                java.sql.Statement statement = connection.createStatement();
+                java.sql.ResultSet rs = statement.executeQuery("select APP_NAME()")) {
+            rs.next();
+            assertThat(rs.getString(1)).isEqualTo("tesseraql/sqlserver-demo/main");
+        }
+    }
+
     @Test
     void bootsAndServesAQueryRouteOnSqlServer() throws Exception {
         HttpResponse<String> response = HttpClient.newHttpClient().send(
