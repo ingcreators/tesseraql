@@ -194,12 +194,10 @@ account holder, after two checks on a Windows machine:
 winget validate --manifest <dir>
 winget settings --enable LocalManifestFiles     # once, as administrator
 winget install --manifest <dir>
-# a new terminal:
-tesseraql --version                              # TesseraQL 0.19.0
-winget uninstall ingcreators.TesseraQL
 ```
 
-Then `komac submit <dir>` with the token of decision 6 in `GITHUB_TOKEN` and
+In a new terminal, `tesseraql --version` answers `TesseraQL 0.19.0`, and `winget uninstall
+ingcreators.TesseraQL` removes it again. Then `komac submit <dir>` with the token of decision 6 in `GITHUB_TOKEN` and
 `KOMAC_FORK_OWNER=ingcreators`, or a pull request made by hand from `ingcreators/winget-pkgs`. A moderator reviews a new package; if a check asks the account to
 agree to a contributor licence agreement, the account holder agrees once.
 
