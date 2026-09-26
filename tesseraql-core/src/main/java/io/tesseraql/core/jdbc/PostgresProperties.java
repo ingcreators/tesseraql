@@ -4,9 +4,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.function.BiConsumer;
 
 /**
- * The driver properties TesseraQL adds to a PostgreSQL connection (docs/connection-liveness.md).
- * The first is who the connection is: {@code ApplicationName}, so {@code pg_stat_activity} can
- * tell one application's pool from another's and a dead node's leftovers can be picked out.
+ * The driver properties TesseraQL adds to a PostgreSQL connection (docs/connection-liveness.md):
+ * who the connection is — {@code ApplicationName}, so {@code pg_stat_activity} can tell one
+ * application's pool from another's and a dead node's leftovers can be picked out — and TCP
+ * keepalive with TesseraQL's timings ({@link KeepaliveSocketFactory}), so a vanished database
+ * host fails a statement in about a minute instead of never.
  *
  * <p>A parameter the JDBC URL declares wins over one passed alongside it — the driver reads the
  * URL last — so whatever an operator wrote in {@code jdbcUrl} stands, and nothing here has to
@@ -32,13 +34,18 @@ public final class PostgresProperties {
 
     /**
      * Hands {@code sink} the properties for a connection to {@code jdbcUrl} labelled
-     * {@code label}, or nothing when the URL is not PostgreSQL's.
+     * {@code label}, or nothing when the URL is not PostgreSQL's: who the connection is, and TCP
+     * keepalive with TesseraQL's timings (docs/connection-liveness.md decision 2). The driver
+     * sets {@code SO_KEEPALIVE} from {@code tcpKeepAlive} itself, over whatever a factory set, so
+     * both are needed. A URL that names its own {@code socketFactory} keeps it.
      */
     public static void apply(String jdbcUrl, String label, BiConsumer<String, String> sink) {
         if (!applies(jdbcUrl)) {
             return;
         }
         sink.accept("ApplicationName", applicationName(label));
+        sink.accept("tcpKeepAlive", "true");
+        sink.accept("socketFactory", KeepaliveSocketFactory.class.getName());
     }
 
     /**

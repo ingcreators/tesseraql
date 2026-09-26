@@ -50,6 +50,8 @@ class PostgresPropertiesTest {
 
         PostgresProperties.apply("jdbc:postgresql://db:5432/app", "tesseraql/orders/main",
                 given::put);
-        assertThat(given).containsExactly(Map.entry("ApplicationName", "tesseraql/orders/main"));
+        assertThat(given).containsExactly(Map.entry("ApplicationName", "tesseraql/orders/main"),
+                Map.entry("tcpKeepAlive", "true"),
+                Map.entry("socketFactory", KeepaliveSocketFactory.class.getName()));
     }
 }

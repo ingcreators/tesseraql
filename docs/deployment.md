@@ -267,9 +267,9 @@ Each datasource takes its pool settings under `tesseraql.datasources.<name>`:
 | `maximumPoolSize` | 10 | Connections this datasource may open |
 | `connectionTimeoutMillis` | 30000 | How long a borrower waits before failing |
 | `minimumIdle` | pool size | Connections kept open when idle |
-| `idleTimeoutMillis` | Hikari's | When a surplus idle connection is retired |
-| `maxLifetimeMillis` | Hikari's | When a connection is retired regardless of use |
-| `keepaliveTimeMillis` | Hikari's | How often an idle connection is probed |
+| `idleTimeoutMillis` | Hikari's, 10 minutes | When a surplus idle connection is retired |
+| `maxLifetimeMillis` | Hikari's, 30 minutes | When a connection is retired regardless of use |
+| `keepaliveTimeMillis` | Hikari's, 2 minutes | How often the pool pings a connection waiting in it; one in use is covered by TCP keepalive ([dead connections](#dead-connections)) |
 | `leakDetectionThresholdMillis` | off | Logs a stack trace for a connection held this long |
 
 The first two are TesseraQL's own defaults rather than the driver pool's, so they cannot
@@ -588,6 +588,58 @@ url-encoded and multipart POST spools through it, sign-in included, so a runtime
 write there can answer no form at all. Under `tesseraql host` this stops the whole stack, not
 one member. The upload subtree stays node-local even where the `file` store points at shared
 storage, because every form post stats it from the event loop.
+
+## Dead connections
+
+A connection can die at either end without a word. The database host crashes, or the network
+drops packets in the middle of a statement. Or a TesseraQL node is killed without closing its
+pools. Each end has its own defence.
+
+**TesseraQL's end.** On PostgreSQL, every connection runs TCP keepalive with TesseraQL's own
+timings. After 30 s with no traffic the kernel probes the database host, and three unanswered
+probes 10 s apart reset the socket. So a statement whose host has gone fails in about a minute,
+and the pool drops the connection, where the request used to wait on a read forever. A
+statement that is long and silent but alive is never cut, because the host's kernel answers the
+probes while the backend works. HikariCP covers the connections waiting in the pool: one idle
+for more than half a second is validated when borrowed, and an idle one is pinged every
+`keepaliveTimeMillis`.
+
+A `jdbcUrl` can change this. `socketFactory=` names another factory, such as a cloud provider's
+connector, and `tcpKeepAlive=false` turns keepalive off. Where the JDK cannot set the timings on
+the platform, the operating system's apply, and the log says so once. Data the driver sent that
+the host never acknowledged is bounded by TCP retransmission instead: up to about 15 minutes on
+Linux.
+
+**The database's end.** When a node dies without closing its pools, each backend it held stays
+until the server notices. With the operating system's defaults, that takes more than two hours.
+Meanwhile the backend holds a connection slot, and one inside a transaction holds its locks.
+These server settings shorten that:
+
+| Setting | What it does | A starting value |
+| --- | --- | --- |
+| `tcp_keepalives_idle`, `tcp_keepalives_interval`, `tcp_keepalives_count` | The server probes an idle client and ends the backend of one that has gone, freeing its slot and its locks | 60 s, 10 s, 6: about two minutes |
+| `idle_in_transaction_session_timeout` | Ends a session that sits inside a transaction doing nothing. TesseraQL does not idle inside a transaction, so any value longer than the longest gap between two statements of one transaction is safe | 10 min |
+| `client_connection_check_interval` | PostgreSQL 14 and later, on Linux: a query whose client has gone is cancelled rather than run to completion | 10 s |
+
+They are the database's parameters, so TesseraQL does not set them per session. On a managed
+database they are set in its parameter group or equivalent.
+
+Every connection says whose it is ([connection pools](#connection-pools)), so a query lists what
+each node holds, and ends a dead node's leftovers:
+
+```sql
+select pid, application_name, client_addr, state, state_change
+from pg_stat_activity
+where application_name like 'tesseraql/%'
+order by client_addr, application_name;
+
+select pg_terminate_backend(pid)
+from pg_stat_activity
+where application_name like 'tesseraql/%' and client_addr = '10.0.3.17';
+```
+
+Behind a pooler such as PgBouncer, each keepalive runs between its own two ends, `client_addr`
+is the pooler's, and the pooler has settings of its own for both.
 
 ## Framework datasource
 

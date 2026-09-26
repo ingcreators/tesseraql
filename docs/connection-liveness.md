@@ -19,7 +19,11 @@
 > **S2 (a vanished peer).** Every such connection runs TCP keepalive with TesseraQL's own
 > timings, so a statement whose database host has gone fails in about a minute instead of
 > waiting forever. [deployment.md](deployment.md) documents the server settings that end the
-> backends a vanished TesseraQL node leaves behind.
+> backends a vanished TesseraQL node leaves behind. **Shipped, #1470**, as designed, and with it
+> the campaign is complete. The test reads the driver's own socket for a pooled connection and for
+> a tool's, and a revert probe that stopped naming the factory turned both red. deployment.md's
+> pool-keys table now states HikariCP's actual defaults (10 min, 30 min, 2 min) instead of
+> "Hikari's".
 >
 > **One recommendation changed while designing.** In conversation, S2 was a network timeout per
 > statement plus the driver's `tcpKeepAlive`, whose timings are the operating system's (two hours
