@@ -181,7 +181,7 @@
          this version (surfaced to the CLI through a build-filtered resource). -->
     <zonky.embedded.postgres.version>2.2.2</zonky.embedded.postgres.version>
     <zonky.postgres.binaries.version>17.11.0</zonky.postgres.binaries.version>
-    <spotless.version>3.9.0</spotless.version>
+    <spotless.version>3.10.2</spotless.version>
     <maven.pmd.plugin.version>3.28.0</maven.pmd.plugin.version>
     <!-- The plugin's bundled PMD lags; the analyzer version is pinned here so Java language
          support is chosen deliberately (7.16 is where Java 25 landed). -->
