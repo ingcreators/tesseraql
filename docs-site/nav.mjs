@@ -386,4 +386,8 @@ export const EXCLUDED = [
   // Connection liveness: a PostgreSQL connection says whose it is, a vanished database host is
   // noticed in about a minute, and the server's side is documented - designed 2026-09-26.
   'connection-liveness.md',
+  // Deployment decisions: a new application cannot reach production on its development secret,
+  // declares its time and language, and its production profile turns operations on - designed
+  // 2026-09-26.
+  'deployment-decisions.md',
 ];
