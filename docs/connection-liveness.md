@@ -7,7 +7,7 @@
 > The gaps are one layer down, in the PostgreSQL driver's defaults and in the server's. They
 > chose every recommendation.
 >
-> There are two slices:
+> There are three slices. S3 was added after S2:
 >
 > **S1 (whose connection).** Every PostgreSQL connection TesseraQL opens carries an
 > `application_name` naming the application and the pool, so `pg_stat_activity` can tell them
@@ -20,7 +20,7 @@
 > timings, so a statement whose database host has gone fails in about a minute instead of
 > waiting forever. [deployment.md](deployment.md) documents the server settings that end the
 > backends a vanished TesseraQL node leaves behind. **Shipped, #1470**, as designed, and with it
-> the campaign is complete. The test reads the driver's own socket for a pooled connection and for
+> the first design is complete. The test reads the driver's own socket for a pooled connection and for
 > a tool's, and a revert probe that stopped naming the factory turned both red. deployment.md's
 > pool-keys table now states HikariCP's actual defaults (10 min, 30 min, 2 min) instead of
 > "Hikari's".
@@ -31,6 +31,15 @@
 > through a factory, and a factory can set the timings per socket. That needs no operating
 > system tuning, and it never cuts a statement that is long and silent but alive. The network
 > timeout is refused below (decision 4).
+>
+> **Amended 2026-09-26, after S2: decision 6 is new, with slice S3.** The maintainer asked about
+> the other databases TesseraQL runs on. Reading their drivers answered it (rows 10-16). SQL
+> Server's driver already keeps alive with short timings of its own. Oracle's and MariaDB's take
+> the timings as plain connection properties. MySQL's keeps alive with the operating system's
+> timings and offers no property for them. Every driver has a place for a name. One more thing
+> the reading found: MySQL's and SQL Server's drivers let a passed property override the URL's.
+> So TesseraQL now adds nothing a URL declares, for every driver. They chose every
+> recommendation.
 
 ## What is true today
 
@@ -45,6 +54,20 @@
 | 7 | Nothing says whose a connection is | `application_name` is the driver's "PostgreSQL JDBC Driver" for every pool of every application. So `pg_stat_activity` cannot say which application, pool or role a backend serves, and an operator cannot pick out a dead node's leftovers to end them. PostgreSQL takes `application_name` as printable ASCII of at most 63 bytes and replaces anything else. An application's name may be Unicode ([router-unicode-names.md](router-unicode-names.md)). |
 | 8 | Keepalive timings per socket | The JDK's `jdk.net.ExtendedSocketOptions` `TCP_KEEPIDLE`, `TCP_KEEPINTERVAL` and `TCP_KEEPCOUNT` set them on one socket. Checked on JDK 25 on Linux, they can be set before the socket connects. The driver creates its socket unconnected through the `SocketFactory` its `socketFactory` property names, then connects it with `connectTimeout` (`PGStream.createSocket`). It loads that class driver-first, trying a `Properties`, a `String` and a no-argument constructor (`ObjectFactory`). The jlinked images already carry `jdk.net` (`jpackage.yml`, held by `check-image-modules.sh`). |
 | 9 | Where connections are opened | Every runtime and host pool goes through `DataSources`: an application's pools, main's role pools, the tenant pools, the stack framework pool and the migration pools. The CLI's and the Maven plugin's one-shot commands go through core's `DriverManagerDataSource`. Among them is `tesseraql job run`, which an external scheduler may keep running for hours (`JobCommand.java:426`). |
+
+### Amended facts (2026-09-26, after S2)
+
+Read from the drivers the build manages (`pom.xml`), with `javap` and `jshell`, except row 16.
+
+| # | Subject | Finding |
+| --- | --- | --- |
+| 10 | SQL Server (mssql-jdbc 13.6.0) | The name is `applicationName`, which defaults to the driver's own. `socketTimeout` is 0. **The driver turns keepalive on itself** and sets `TCP_KEEPIDLE` 30 s and `TCP_KEEPINTERVAL` 1 s on every socket (`TDSChannel.setSocketOptions`). The count is the operating system's, 9 on Linux, so a vanished server is noticed in about 40 s. A property passed to the driver overrides the same one in the URL (`getPropertyInfo`, checked). |
+| 11 | Oracle (ojdbc11 23.26.3.0.0) | The name is `v$session.program`, which defaults to the driver's own. `oracle.net.keepAlive` defaults to false. `oracle.net.TCP_KEEPIDLE`, `oracle.net.TCP_KEEPINTERVAL` and `oracle.net.TCP_KEEPCOUNT` default to −1, the operating system's, and are applied through `ExtendedSocketOptions` (`TcpNTAdapter`), so they are seconds. `oracle.jdbc.ReadTimeout` is unset, so a read waits forever. Which of a URL and a passed property wins could not be checked without a server, and decision 6's rule makes it moot. |
+| 12 | MariaDB (mariadb-java-client 3.5.10) | The name goes in `connectionAttributes`, as `program_name`. `tcpKeepAlive` defaults to true. `tcpKeepIdle`, `tcpKeepInterval` and `tcpKeepCount` default to 0, the operating system's, and are applied through `ExtendedSocketOptions` (`SocketHelper`, Java 11 and later), so they are seconds. `socketTimeout` is 0. The URL overrides a passed property (checked). |
+| 13 | MySQL (Connector/J 26.7.0) | The name goes in `connectionAttributes`, as `program_name`, and shows in `performance_schema.session_connect_attrs`, not in `SHOW PROCESSLIST`. `tcpKeepAlive` defaults to true, with the operating system's timings, and **no property sets them**. `socketFactory` names a `com.mysql.cj.protocol.SocketFactory`, the driver's own interface. A TesseraQL factory would therefore need Connector/J at compile time, and a driver loaded through an application's modules ([module-scope.md](module-scope.md)) could not see it. `socketTimeout` and `connectTimeout` are 0. A passed property overrides the URL's (checked). |
+| 14 | Application names | Only segment safety is enforced (`ApplicationName.segmentViolation`), so a name may contain `:` and `,`. `connectionAttributes` uses both as separators. |
+| 15 | Where these are tested | MySQL and MariaDB containers run on every pull request (`MySqlPortabilityIntegrationTest`, `StreamingProfileDriverIntegrationTest`). Oracle and SQL Server run in the gated dialect suite (`dialects.yml`, `-Dtesseraql.dialect.its=true`), weekly and on dispatch. |
+| 16 | The servers' side (vendor documentation, not read from code) | SQL Server probes idle clients itself (the TCP/IP "Keep Alive" setting, 30 s by default). Oracle's Dead Connection Detection (`SQLNET.EXPIRE_TIME`) is off by default. MySQL ends a session idle for `wait_timeout`, 8 hours by default, and has no timeout for a session idle inside a transaction. MariaDB adds `idle_transaction_timeout`. |
 
 ## The decisions
 
@@ -119,7 +142,9 @@ parameters, and a managed database may refuse them.
 | A network timeout per statement, or a default `socketTimeout` | It cuts a statement that is silent but alive at a fixed number. A per-statement timeout would have to know every statement's bound, including the stores' untimed ones. Keepalive tells silent from gone | Hangs observed on a platform where per-socket keepalive is unavailable |
 | Bounding unacknowledged data (`TCP_USER_TIMEOUT`) | Java exposes no such option | A JDK that exposes it |
 | Setting the server's parameters per session (`options=-c ...`) | They are the database administrator's, and would override theirs | A deployment with no access to the database's configuration asking for it |
-| The same for other databases' drivers | Each has its own properties for both, and the driver the distributions bundle is PostgreSQL's | A deployment on another database reporting a hang or unidentifiable sessions |
+| ~~The same for other databases' drivers~~ **Superseded by decision 6** | Each has its own properties for both, and the driver the distributions bundle is PostgreSQL's | The maintainer asked about them after S2 |
+| A TesseraQL socket factory for MySQL's driver (decision 6) | It implements the driver's own interface: a compile-time dependency on a driver the distributions do not bundle, which a driver loaded through an application's modules could not see (row 13) | Connector/J gaining properties for the timings, or a MySQL deployment whose hosts' settings cannot be changed reporting a hang |
+| Merging TesseraQL's `program_name` into a URL's own `connectionAttributes` | One owner per key keeps the rule a URL declares and TesseraQL stays out | An operator needing both their attributes and TesseraQL's name |
 | Leak detection on by default | A debugging aid whose log volume is the operator's decision ([deployment.md](deployment.md)) | None |
 | The node's identity in `application_name` | `client_addr` identifies it, and the 63 bytes are better spent on the application and the pool | A pooler hiding `client_addr` in a deployment that needs it |
 
@@ -130,6 +155,34 @@ parameters, and a managed database may refuse them.
 - **S2:** [deployment.md](deployment.md) gains the dead-connections section (decision 3), and its
   pool-keys table says what `keepaliveTimeMillis` covers and what the TCP probes cover. CHANGELOG
   under Added.
+- **S3:** [deployment.md](deployment.md)'s connection-pool section says where each database
+  shows the name. Its dead-connections section gains what each driver does at TesseraQL's end,
+  the host settings for MySQL, and each database's own settings for its end. CHANGELOG under
+  Added.
+
+### 6 — Every networked database's connection says whose it is, and each keeps alive as its driver allows (amended)
+
+Core's `PostgresProperties` becomes `ConnectionProperties`, and it chooses by the URL's driver:
+
+| URL | The name | Keepalive at TesseraQL's end |
+| --- | --- | --- |
+| `jdbc:postgresql:` | `ApplicationName` | `tcpKeepAlive=true` and TesseraQL's socket factory (decision 2) |
+| `jdbc:sqlserver:` | `applicationName` | The driver's own, 30 s idle and 1 s apart (row 10). Nothing is added |
+| `jdbc:oracle:` | `v$session.program` | `oracle.net.keepAlive=true`, and `oracle.net.TCP_KEEPIDLE` 30, `TCP_KEEPINTERVAL` 10, `TCP_KEEPCOUNT` 3 |
+| `jdbc:mariadb:` | `connectionAttributes=program_name:<label>` | `tcpKeepIdle` 30, `tcpKeepInterval` 10, `tcpKeepCount` 3 (keepalive is already on) |
+| `jdbc:mysql:` | `connectionAttributes=program_name:<label>` | The operating system's timings (keepalive is already on). [deployment.md](deployment.md) gives the host settings |
+
+- **One label everywhere,** decision 1's form, at most 63 bytes. It also percent-encodes `:`
+  and `,` (row 14), so it can stand as a `connectionAttributes` value. A PostgreSQL label changes
+  only for a name that contains one of them.
+- **A URL's own always wins.** TesseraQL adds no property whose key the URL declares as a `?`, `&`
+  or `;` parameter. That matters for MySQL's and SQL Server's drivers, which would let a passed
+  property override the URL's (rows 10 and 13). A URL that declares its own `connectionAttributes`
+  keeps them whole.
+- **No embedded database.** H2 serves development and tests, and DuckDB runs inside the process.
+- **The servers' side is documented,** from each vendor's documentation (row 16): Oracle's Dead
+  Connection Detection, MySQL's and MariaDB's `wait_timeout` and MariaDB's
+  `idle_transaction_timeout`. SQL Server needs nothing.
 
 ## What this breaks
 
@@ -140,6 +193,10 @@ parameters, and a managed database may refuse them.
 - **A statement whose database host vanished now fails in about a minute,** where it waited
   forever.
 - **Each idle connection exchanges a TCP probe every 30 s.**
+- **On SQL Server, Oracle, MySQL and MariaDB, sessions carry `tesseraql/...` too (S3),** where
+  each showed its driver's name. Oracle's and MariaDB's idle connections exchange a probe every
+  30 s.
+- **A label for a name containing `:` or `,` percent-encodes them (S3),** on PostgreSQL too.
 
 ## The slices
 
@@ -172,3 +229,21 @@ Decisions 2 and 3.
     proxy, whose kernel answers the probes, so the test holds the configuration and the kernel
     holds the behaviour.
 - **Docs:** as decision 5 lists for S2.
+
+### S3 — the other databases (M)
+
+Decision 6.
+
+- **Tests:**
+  - A unit test gives each driver its properties. A key the URL declares (SQL Server's
+    `;applicationName=`, MySQL's `?connectionAttributes=`, Oracle's `?oracle.net.keepAlive=`)
+    suppresses that key alone. H2 and DuckDB get none, and `:` and `,` are encoded.
+  - On every pull request: MySQL's and MariaDB's containers read `program_name` back from
+    `performance_schema.session_connect_attrs` for the test's own connection. MariaDB's socket,
+    read through the driver, carries the three timings.
+  - In the gated dialect suite: SQL Server's `program_name` and Oracle's program
+    (`sys_context('USERENV', 'CLIENT_PROGRAM_NAME')`) are read back, and Oracle connects with the
+    keepalive properties. The suite runs locally before the pull request and is dispatched on
+    the branch.
+  - A revert probe that stops naming a driver's key turns that driver's test red.
+- **Docs:** as decision 5 lists for S3.
