@@ -636,7 +636,7 @@ final class ErrorIndex {
             "caching.md", "deployment-maturity.md", "procurement-documents-and-edi.md",
             "list-export.md", "job-inbox.md", "host-development.md", "jackson-3.md",
             "gateway-performance.md", "capacity-defaults.md", "connection-liveness.md",
-            "deployment-decisions.md");
+            "deployment-decisions.md", "winget-distribution.md");
 
     /** Whether {@code name} is an internal planning document; shared with the config index. */
     static boolean isInternalDoc(String name) {

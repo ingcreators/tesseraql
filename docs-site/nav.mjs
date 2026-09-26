@@ -390,4 +390,7 @@ export const EXCLUDED = [
   // declares its time and language, and its production profile turns operations on - designed
   // 2026-09-26.
   'deployment-decisions.md',
+  // WinGet distribution: the CLI installs with `winget install ingcreators.TesseraQL`, and every
+  // release updates it - designed 2026-09-26.
+  'winget-distribution.md',
 ];
