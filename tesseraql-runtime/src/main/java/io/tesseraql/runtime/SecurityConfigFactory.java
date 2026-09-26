@@ -224,10 +224,34 @@ public final class SecurityConfigFactory {
     private static final io.tesseraql.core.error.TqlErrorCode JWT_AUDIENCE_MISSING = new io.tesseraql.core.error.TqlErrorCode(
             io.tesseraql.core.error.TqlDomain.SEC, 4048);
 
+    /** TQL-SEC-4154: the scaffold's published development JWT secret under a named profile. */
+    private static final io.tesseraql.core.error.TqlErrorCode DEVELOPMENT_SECRET = new io.tesseraql.core.error.TqlErrorCode(
+            io.tesseraql.core.error.TqlDomain.SEC, 4154);
+
+    /**
+     * Refuses the scaffold's published development secret under a named profile
+     * (docs/deployment-decisions.md decision 1). A profile is what marks a deployment, and the
+     * development loop runs without one; the secret is in the framework's own template, so a
+     * deployment on it accepts a token anyone can mint.
+     */
+    static void requireNotTheDevelopmentSecret(String secret, String profile) {
+        if (profile != null && io.tesseraql.yaml.scaffold.AppScaffolder.DEVELOPMENT_JWT_SECRET
+                .equals(secret)) {
+            throw new io.tesseraql.core.error.TqlException(DEVELOPMENT_SECRET,
+                    "tesseraql.security.jwt.secret is the development secret the scaffold"
+                            + " publishes, and the '" + profile + "' profile is active, so anyone"
+                            + " could mint a token this application accepts. Supply the secret"
+                            + " for this environment in JWT_SECRET, or declare"
+                            + " tesseraql.security.jwt.secret in config/env/" + profile + ".yml");
+        }
+    }
+
     private static JwtConfig parseJwt(AppConfig config) {
         // JWT auth is enabled by an HS256 secret or any RS256 key source (publicKey/jwksUri); the
         // jwt block existing on its own is not enough, so an app without bearer auth binds nothing.
         String secret = config.getString("tesseraql.security.jwt.secret").orElse(null);
+        requireNotTheDevelopmentSecret(secret,
+                io.tesseraql.yaml.manifest.ManifestLoader.activeProfile());
         String publicKey = config.getString("tesseraql.security.jwt.publicKey").orElse(null);
         String jwksUri = config.getString("tesseraql.security.jwt.jwksUri").orElse(null);
         if (secret == null && publicKey == null && jwksUri == null) {

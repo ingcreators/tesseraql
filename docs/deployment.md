@@ -444,6 +444,12 @@ credentials, because a role pool takes main's coordinate. The base configuration
 `tesseraql dev` runs, keeps one pool. With both files present the application declares its
 environments, so a profile it has no file for refuses to start.
 
+The profiles also take the JWT secret from `JWT_SECRET`, with no fallback. The base
+configuration falls back to a development secret that the framework's own template publishes,
+so anyone could mint a token with it. A profile started without `JWT_SECRET` refuses to start
+with `TQL-YAML-1101`, naming it. An application generated earlier, whose profile still inherits
+the fallback, is refused under any named profile with `TQL-SEC-4154`.
+
 ## Business-route audit log and error pages
 
 Opt in with `tesseraql.audit.routes.enabled: true`: every compiled route invocation lands one

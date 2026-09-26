@@ -130,6 +130,23 @@ class AppScaffolderTest {
         }
     }
 
+    /**
+     * Production cannot run on the development secret (docs/deployment-decisions.md decision 1):
+     * the deployed profiles take it from {@code JWT_SECRET} with no fallback, and only the base
+     * configuration, which the development loop runs, falls back to the published one.
+     */
+    @Test
+    void theDeployedProfilesTakeTheJwtSecretWithNoFallback() {
+        List<ScaffoldedFile> files = scaffolder.scaffold("demo-app");
+        for (String profile : List.of("config/env/prod.yml", "config/env/staging.yml")) {
+            assertThat(content(files, profile)).as(profile)
+                    .contains("secret: ${JWT_SECRET}")
+                    .doesNotContain(AppScaffolder.DEVELOPMENT_JWT_SECRET);
+        }
+        assertThat(content(files, "config/tesseraql.yml"))
+                .contains("secret: ${JWT_SECRET:" + AppScaffolder.DEVELOPMENT_JWT_SECRET + "}");
+    }
+
     /** A profile without its leading comment block: the configuration it carries. */
     private static String layout(String profile) {
         return profile.substring(profile.indexOf("tesseraql:"));

@@ -28,6 +28,13 @@ import java.util.regex.Pattern;
 public final class AppScaffolder {
 
     private static final TqlErrorCode INVALID_TARGET = new TqlErrorCode(TqlDomain.APP, 5203);
+
+    /**
+     * The JWT secret the skeleton's base configuration falls back to when {@code JWT_SECRET} is
+     * unset — published here, so anyone can mint a token with it. Development runs on it; under a
+     * named profile the runtime refuses it (docs/deployment-decisions.md decision 1).
+     */
+    public static final String DEVELOPMENT_JWT_SECRET = "dev-only-secret-change-me-in-production";
     private static final Pattern APP_NAME = Pattern.compile("[a-z][a-z0-9-]{0,63}");
 
     /** Generates the skeleton file set for {@code appName} (paths relative to the app home). */
@@ -41,7 +48,8 @@ public final class AppScaffolder {
                 new ScaffoldedFile("config/application.yml",
                         APPLICATION_YML.replace("__APP_DB__", dbName)),
                 new ScaffoldedFile("config/tesseraql.yml",
-                        TESSERAQL_YML.replace("__APP_NAME__", appName)),
+                        TESSERAQL_YML.replace("__APP_NAME__", appName)
+                                .replace("__DEVELOPMENT_JWT_SECRET__", DEVELOPMENT_JWT_SECRET)),
                 // The deployed environments separate their pools; the development loop runs
                 // the base configuration's one pool (docs/capacity-defaults.md decision 7).
                 new ScaffoldedFile("config/env/prod.yml", PROD_YML),
@@ -266,11 +274,16 @@ public final class AppScaffolder {
             """;
 
     /**
-     * The pool layout both deployed profiles carry (docs/capacity-defaults.md decision 7):
-     * requests keep main, and the two role pools hold nothing while idle.
+     * What both deployed profiles carry: the pool layout (docs/capacity-defaults.md decision 7),
+     * where requests keep main and the two role pools hold nothing while idle, and the JWT secret
+     * from {@code JWT_SECRET} with no fallback (docs/deployment-decisions.md decision 1), so a
+     * deployment that forgets it refuses to start rather than running on the development secret.
      */
-    private static final String PROFILE_POOLS = """
+    private static final String PROFILE_LAYOUT = """
             tesseraql:
+              security:
+                jwt:
+                  secret: ${JWT_SECRET}                 # no fallback: set it for this environment
               datasources:
                 main:                                   # online: requests
                   maximumPoolSize: ${db.main.maximumPoolSize:10}
@@ -293,14 +306,14 @@ public final class AppScaffolder {
             # standing number: per node, every pool of every member, plus the stack's own. Keep it under the
             # database's max_connections (PostgreSQL's default is 100). docs/capacity.md has the arithmetic.
             """
-            + PROFILE_POOLS;
+            + PROFILE_LAYOUT;
 
     private static final String STAGING_YML = """
             # The staging profile: selected by TESSERAQL_ENV=staging. Staging rehearses production
             # (docs/promotion.md), so it carries production's pool layout. The connection budget is the
             # same standing number: docs/capacity.md has the arithmetic.
             """
-            + PROFILE_POOLS;
+            + PROFILE_LAYOUT;
 
     private static final String TESSERAQL_YML = """
             tesseraql:
@@ -361,7 +374,7 @@ public final class AppScaffolder {
                   Referrer-Policy: no-referrer
 
                 jwt:
-                  secret: ${JWT_SECRET:dev-only-secret-change-me-in-production}
+                  secret: ${JWT_SECRET:__DEVELOPMENT_JWT_SECRET__}
                   # Which tokens are for this application. Without it, any token the issuer
                   # minted for any other relying party would be accepted (TQL-SEC-4048).
                   audience:

@@ -364,6 +364,16 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **Production cannot start on the development JWT secret.** A generated application's
+  configuration falls back to a development secret that the framework's own template publishes,
+  and its production and staging profiles inherited it. A deployment that forgot `JWT_SECRET`
+  accepted tokens anyone could mint, and nothing refused it. The generated profiles now take the
+  secret from `JWT_SECRET` with no fallback, so a missing secret refuses the start with
+  `TQL-YAML-1101`. Under any named profile, the runtime refuses the published secret itself with
+  `TQL-SEC-4154`, which also covers applications generated before this change. The development
+  loop runs without a profile and keeps its fallback. `docs/deployment-decisions.md`
+  decision 1; `docs/deployment.md` "Environment profiles".
+
 - **The front door admits what a member admits.** Under `tesseraql host`,
   `tesseraql.gateway.maxConcurrentPerMember` defaults to 40, the number a member's own
   `maxInFlight` admits by default. It used to be the stack's `workerThreads` (10), from when a

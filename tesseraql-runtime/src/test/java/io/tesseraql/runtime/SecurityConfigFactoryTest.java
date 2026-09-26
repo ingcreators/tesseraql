@@ -144,4 +144,44 @@ class SecurityConfigFactoryTest {
                 .hasMessageContaining("TQL-SEC-4066")
                 .hasMessageContaining("sanDns/sanUri/sanEmail/sanIp");
     }
+
+    /**
+     * The scaffold's published development secret is refused under a named profile
+     * (docs/deployment-decisions.md decision 1): a profile marks a deployment, and the secret is
+     * in the framework's own template. Development runs without a profile and keeps it.
+     */
+    @Test
+    void theDevelopmentSecretIsRefusedOnlyUnderANamedProfile() {
+        String development = io.tesseraql.yaml.scaffold.AppScaffolder.DEVELOPMENT_JWT_SECRET;
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> SecurityConfigFactory
+                        .requireNotTheDevelopmentSecret(development, "prod"))
+                .isInstanceOf(io.tesseraql.core.error.TqlException.class)
+                .hasMessageContaining("TQL-SEC-4154")
+                .hasMessageContaining("JWT_SECRET")
+                .hasMessageContaining("config/env/prod.yml");
+
+        SecurityConfigFactory.requireNotTheDevelopmentSecret(development, null);
+        SecurityConfigFactory.requireNotTheDevelopmentSecret("a-secret-for-prod-only", "prod");
+    }
+
+    /** Built under a profile, a configuration on the development secret does not start. */
+    @Test
+    void buildingUnderAProfileOnTheDevelopmentSecretIsRefused() {
+        AppConfig config = new AppConfig(Map.of("tesseraql", Map.of("security", Map.of("jwt",
+                Map.of("secret", io.tesseraql.yaml.scaffold.AppScaffolder.DEVELOPMENT_JWT_SECRET,
+                        "audience", List.of("https://app.example.com"))))));
+        assertThat(SecurityConfigFactory.build(config).jwt()).as("no profile: development")
+                .isNotNull();
+
+        System.setProperty("tesseraql.env", "staging");
+        try {
+            org.assertj.core.api.Assertions
+                    .assertThatThrownBy(() -> SecurityConfigFactory.build(config))
+                    .hasMessageContaining("TQL-SEC-4154")
+                    .hasMessageContaining("'staging' profile");
+        } finally {
+            System.clearProperty("tesseraql.env");
+        }
+    }
 }
