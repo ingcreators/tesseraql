@@ -138,7 +138,7 @@
          Version-managed only: the framework never depends on it. -->
     <mariadb.version>3.5.10</mariadb.version>
     <picocli.version>4.7.7</picocli.version>
-    <slf4j.version>2.0.19</slf4j.version>
+    <slf4j.version>2.0.20</slf4j.version>
     <!-- Test-only: an in-process SFTP server for the Phase 26 poll-trigger integration test. -->
     <sshd.version>2.19.0</sshd.version>
     <!-- Test-only: an in-process FTPS server, so the ftps poll source is exercised for real
@@ -159,14 +159,14 @@
     <hypermedia-components.version>0.4.2</hypermedia-components.version>
     <hypermedia-editor-kit.version>0.2.0</hypermedia-editor-kit.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
-    <webjars-locator.version>1.1.4</webjars-locator.version>
+    <webjars-locator.version>1.1.5</webjars-locator.version>
     <flyway.version>13.7.0</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
     <openhtmltopdf.version>1.1.86</openhtmltopdf.version>
     <pdfbox.version>3.0.8</pdfbox.version>
-    <awssdk.version>2.55.2</awssdk.version>
+    <awssdk.version>2.55.3</awssdk.version>
     <s3mock.version>5.2.3</s3mock.version>
     <ojdbc.version>23.26.3.0.0</ojdbc.version>
     <mssql-jdbc.version>13.6.0.jre11</mssql-jdbc.version>
@@ -174,14 +174,14 @@
          bundles per-platform native libraries and never ships in the CLI fat jar. -->
     <duckdb.version>1.3.1.0</duckdb.version>
     <greenmail.version>2.1.14</greenmail.version>
-    <h2.version>2.4.240</h2.version>
+    <h2.version>2.5.250</h2.version>
     <!-- Embedded PostgreSQL for the serve embedded-db option (run a tqlapp with no external DB).
          The lib is a small pure-Java process supervisor; the platform-specific postgres binary is
          NOT a dependency — it is resolved on demand via the CLI's ShrinkWrap resolver, pinned to
          this version (surfaced to the CLI through a build-filtered resource). -->
     <zonky.embedded.postgres.version>2.2.2</zonky.embedded.postgres.version>
     <zonky.postgres.binaries.version>17.11.0</zonky.postgres.binaries.version>
-    <spotless.version>3.9.0</spotless.version>
+    <spotless.version>3.10.2</spotless.version>
     <maven.pmd.plugin.version>3.28.0</maven.pmd.plugin.version>
     <!-- The plugin's bundled PMD lags; the analyzer version is pinned here so Java language
          support is chosen deliberately (7.16 is where Java 25 landed). -->
