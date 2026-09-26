@@ -228,6 +228,21 @@ class ScaffoldedCrudIntegrationTest {
         assertThat(lockValue(gone)).isEmpty();
     }
 
+    /**
+     * The development configuration keeps one idle connection on main
+     * (docs/deployment-decisions.md decision 4): the pool still grows to its size under load and
+     * retires the surplus after HikariCP's idle timeout, so a development stack of several
+     * applications does not hold ten each.
+     */
+    @Test
+    @Order(5)
+    void developmentHoldsOneIdleConnectionOnMain() {
+        com.zaxxer.hikari.HikariDataSource main = runtime.context().lookup("main",
+                com.zaxxer.hikari.HikariDataSource.class);
+        assertThat(main.getMaximumPoolSize()).isEqualTo(10);
+        assertThat(main.getMinimumIdle()).isEqualTo(1);
+    }
+
     /** The first rendered {@code _lock} value in the given markup. */
     private static String lockValue(String markup) {
         java.util.regex.Matcher field = java.util.regex.Pattern

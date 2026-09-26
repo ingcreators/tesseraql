@@ -54,6 +54,13 @@ public final class ScaffoldedConfigKeys {
                     "tesseraql-runtime/src/main/java/io/tesseraql/runtime/DataSources.java"),
             Map.entry("tesseraql.datasources.main.maximumPoolSize",
                     "tesseraql-runtime/src/main/java/io/tesseraql/runtime/DataSources.java"),
+            Map.entry("tesseraql.datasources.main.minimumIdle",
+                    "tesseraql-runtime/src/main/java/io/tesseraql/runtime/DataSources.java"),
+            // The deployed profiles' operations (docs/deployment-decisions.md decision 3).
+            Map.entry("tesseraql.metrics.enabled",
+                    "tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java"),
+            Map.entry("tesseraql.retention.sweep",
+                    "tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java"),
             // The deployed profiles (config/env/prod.yml, staging.yml). A role block is read by
             // MainRoles, and its sizing keys by DataSources, at the end of that chain.
             Map.entry("tesseraql.datasources.main.connectionTimeoutMillis",

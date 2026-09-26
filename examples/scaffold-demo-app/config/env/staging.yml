@@ -5,9 +5,25 @@ tesseraql:
   security:
     jwt:
       secret: ${JWT_SECRET}                 # no fallback: set it for this environment
+    policies:
+      ops.metrics.view:                     # who may read /_tesseraql/metrics
+        anyOf:
+          - role: OPS
+  metrics:
+    enabled: true                           # /_tesseraql/metrics, for a bearer holding ops.metrics.view
+  retention:
+    sweep: 1h                               # removes the outbox after 30 days and job history after 90
+                                            # (tesseraql.retention.outbox / .jobs change them)
+  # Yours to decide: how long produced files are kept, and where alerts go.
+  # transfers:
+  #   retentionDays: 30
+  # notifications:
+  #   alerts:
+  #     channel: ops-mail                   # a channel declared under tesseraql.notifications.channels
   datasources:
     main:                                   # online: requests
       maximumPoolSize: ${db.main.maximumPoolSize:10}
+      minimumIdle: ${db.main.maximumPoolSize:10}  # fixed: the base configuration's 1 is development's
       connectionTimeoutMillis: 10000        # a request that waited 10 s has lost its reader
       fileTransferPool:                     # the online batch: a list page's export, My exports,
         maximumPoolSize: 5                  # a CSV import. Its size is how many run at once

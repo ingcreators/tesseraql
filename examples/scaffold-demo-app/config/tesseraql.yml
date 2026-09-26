@@ -23,6 +23,10 @@ tesseraql:
       username: ${db.main.username}
       password: ${db.main.password}
       maximumPoolSize: ${db.main.maximumPoolSize:10}
+      # One connection held while idle, the rest retired after 10 minutes unused, so
+      # a development stack of several applications does not hold ten each. The
+      # deployed profiles keep main fixed at its size.
+      minimumIdle: 1
 
   identity:
     defaultRealm: local

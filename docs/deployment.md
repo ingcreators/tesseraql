@@ -441,8 +441,30 @@ and keep secrets in real environment variables or the secret provider as before.
 `jobPool` of 3 hold nothing while idle
 ([role pools](#role-pools-jobs-and-file-transfers-off-the-online-pool)). The files repeat no
 credentials, because a role pool takes main's coordinate. The base configuration, which
-`tesseraql dev` runs, keeps one pool. With both files present the application declares its
-environments, so a profile it has no file for refuses to start.
+`tesseraql dev` runs, keeps one pool, and `main` holds one connection while idle
+(`minimumIdle: 1`). The rest are retired after 10 minutes unused, so a development stack of
+several applications does not hold ten each. The profiles declare `main`'s `minimumIdle` as its
+size, so production and staging stay fixed. With both files present the application declares
+its environments, so a profile it has no file for refuses to start.
+
+The profiles also turn on what a deployment needs whatever its business:
+
+| Key | Set to | What it does |
+| --- | --- | --- |
+| `tesseraql.metrics.enabled` | `true` | Serves [`/_tesseraql/metrics`](#metrics-prometheus) to a bearer that passes `ops.metrics.view` |
+| `tesseraql.security.policies.ops.metrics.view` | `role: OPS` | Who may read the metrics; it merges beside the application's own policies |
+| `tesseraql.retention.sweep` | `1h` | Removes delivered outbox events after 30 days and finished job history after 90 (`tesseraql.retention.outbox`, `.jobs`) |
+
+Two choices are left for the owner to make, and each profile names them in a comment:
+
+- **`tesseraql.transfers.retentionDays`**: how long produced files are kept. Undeclared, they
+  are never removed.
+- **`tesseraql.notifications.alerts.channel`**: where alerts go. It must name a channel declared
+  under `tesseraql.notifications.channels`, so the profile cannot set it for you.
+
+The [route audit log](#business-route-audit-log-and-error-pages) and the
+[access log](#logging) stay off. Each depends on the business: what compliance asks for, and the
+log volume the operator will carry.
 
 The profiles also take the JWT secret from `JWT_SECRET`, with no fallback. The base
 configuration falls back to a development secret that the framework's own template publishes,
@@ -736,7 +758,8 @@ deliberately ignore this key.
 ## Metrics (Prometheus)
 
 Opt in with `tesseraql.metrics.enabled: true` and scrape `GET /_tesseraql/metrics`
-(text format 0.0.4). The exposition is fed by a JDK-only in-process aggregator that is always
+(text format 0.0.4). The production and staging profiles that `tesseraql new` writes opt in, and
+let a bearer holding `OPS` read it ([environment profiles](#environment-profiles)). The exposition is fed by a JDK-only in-process aggregator that is always
 recording — per-route invocation counters (`tesseraql_route_invocations_total`), an
 outcome-classed error counter (`tesseraql_route_errors_total`), and latency histograms in
 seconds (`tesseraql_route_duration_seconds_*`) labelled `routeId`/`method`/`outcome`.

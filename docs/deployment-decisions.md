@@ -32,6 +32,11 @@
 > **S3 (operations, and the development pool).** The generated production and staging profiles
 > turn metrics and the retention sweep on and name the choices left to the owner. The base
 > configuration's `main` keeps one idle connection, and the profiles keep theirs fixed.
+> **Shipped, #1476**, as designed. The generated application booted under `prod` refuses a scrape
+> with no bearer (401) or without `OPS` (403) and answers one holding it. The gallery application,
+> booted without a profile, holds `minimumIdle` 1 on `main`. A revert probe that turned the
+> profile's metrics off, and one that dropped the base configuration's `minimumIdle`, each turned
+> its test red.
 
 ## What is true today
 
