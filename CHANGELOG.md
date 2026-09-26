@@ -8,6 +8,17 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A new application's production profile turns operations on, and its development pool holds
+  one idle connection.** Metrics, retention and alerting were all off unless declared, and a
+  generated application declared none of them. The `prod.yml` and `staging.yml` that
+  `tesseraql new` writes now set `tesseraql.metrics.enabled: true`, with an `ops.metrics.view`
+  policy for the role `OPS`, and `tesseraql.retention.sweep: 1h`. They name
+  `tesseraql.transfers.retentionDays` and `tesseraql.notifications.alerts.channel` in comments
+  for the owner to decide. The base configuration's `main` declares `minimumIdle: 1`, so a
+  development stack of several applications holds one connection per application while idle
+  rather than ten. The profiles declare `main`'s size as its `minimumIdle`, so production stays
+  fixed-size, and the framework's own default is unchanged. `docs/deployment-decisions.md`
+  decisions 3 and 4; `docs/deployment.md` "Environment profiles".
 - **A new application declares its time and language, and exports that leave dates to the JVM
   are warned about.** An export's dates and times, and the hours in a role grant's conditions,
   followed the JVM's zone unless declared. That is the developer's machine's in development and

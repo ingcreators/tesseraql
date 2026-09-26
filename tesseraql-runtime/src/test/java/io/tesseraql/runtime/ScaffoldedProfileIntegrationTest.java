@@ -8,23 +8,34 @@ import io.tesseraql.pipeline.tenant.MainRolePools;
 import io.tesseraql.pipeline.tenant.PoolRole;
 import io.tesseraql.yaml.scaffold.AppScaffolder;
 import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The production profile a new application carries (docs/capacity-defaults.md decision 7), booted
  * as {@code tesseraql new} writes it: under {@code TESSERAQL_ENV=prod}, {@code main} is fixed at
- * 10 and waits 10 s, the two role pools hold nothing while idle, and a job runs on the job pool.
+ * 10 and waits 10 s, the two role pools hold nothing while idle, a job runs on the job pool, and
+ * the metrics scrape answers a bearer holding {@code OPS} (docs/deployment-decisions.md).
  *
  * <p>The application is generated here rather than copied from the gallery, so the test reads the
  * generator's own output. Only {@code db.main}'s coordinate is pointed at the container, and one
@@ -35,6 +46,11 @@ class ScaffoldedProfileIntegrationTest {
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:16-alpine");
+
+    /** The secret this environment supplies, as a deployment would in {@code JWT_SECRET}. */
+    private static final String JWT_SECRET = "profile-it-secret-for-this-environment-only";
+
+    private static final ObjectMapper MAPPER = io.tesseraql.yaml.JsonMappers.constrained();
 
     static Path root;
     static TesseraqlRuntime runtime;
@@ -122,6 +138,46 @@ class ScaffoldedProfileIntegrationTest {
                 .hasMessageContaining("JWT_SECRET");
     }
 
+    /**
+     * The generated profile turns metrics on behind the gate the member's scrape already has
+     * (docs/deployment-decisions.md decision 3): a request with no bearer is refused, and so is a
+     * bearer without {@code OPS}, which the profile's {@code ops.metrics.view} names.
+     */
+    @Test
+    void theScrapeIsOnAndAnswersOnlyABearerHoldingOps() throws Exception {
+        assertThat(scrape(null).statusCode()).isEqualTo(401);
+        assertThat(scrape(token(List.of("APP_READ"))).statusCode()).isEqualTo(403);
+
+        HttpResponse<String> scrape = scrape(token(List.of("OPS")));
+        assertThat(scrape.statusCode()).isEqualTo(200);
+        assertThat(scrape.body()).contains("tesseraql_pool_");
+    }
+
+    private static HttpResponse<String> scrape(String bearer) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(
+                URI.create("http://localhost:" + runtime.port() + "/_tesseraql/metrics"));
+        if (bearer != null) {
+            request.header("Authorization", "Bearer " + bearer);
+        }
+        return HttpClient.newHttpClient().send(request.build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
+    /** A token for the generated application, signed with the secret the test supplies. */
+    private static String token(List<String> roles) throws Exception {
+        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
+        String header = encoder
+                .encodeToString("{\"alg\":\"HS256\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = encoder.encodeToString(MAPPER.writeValueAsBytes(TestClaims.addressed(
+                Map.of("sub", "ops-scraper", "roles", roles,
+                        "aud", List.of("https://profile-it.example.com")))));
+        Mac mac = Mac.getInstance("HmacSHA256");
+        mac.init(new SecretKeySpec(JWT_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        String signature = encoder.encodeToString(
+                mac.doFinal((header + "." + payload).getBytes(StandardCharsets.UTF_8)));
+        return header + "." + payload + "." + signature;
+    }
+
     private static HikariDataSource role(PoolRole role) {
         MainRolePools roles = runtime.context().lookup(TesseraqlProperties.MAIN_ROLE_POOLS_BEAN,
                 MainRolePools.class);
@@ -155,7 +211,7 @@ class ScaffoldedProfileIntegrationTest {
                 .contains(POSTGRES.getJdbcUrl())
                 .doesNotContain("${DB_USER");
         if (withSecret) {
-            pointed += "\nJWT_SECRET: profile-it-secret-for-this-environment-only\n";
+            pointed += "\nJWT_SECRET: " + JWT_SECRET + "\n";
         }
         Files.writeString(application, pointed);
         assertThat(home.resolve("config/env/prod.yml")).isRegularFile();

@@ -275,18 +275,36 @@ public final class AppScaffolder {
 
     /**
      * What both deployed profiles carry: the pool layout (docs/capacity-defaults.md decision 7),
-     * where requests keep main and the two role pools hold nothing while idle, and the JWT secret
-     * from {@code JWT_SECRET} with no fallback (docs/deployment-decisions.md decision 1), so a
-     * deployment that forgets it refuses to start rather than running on the development secret.
+     * where requests keep main fixed and the two role pools hold nothing while idle; the JWT
+     * secret from {@code JWT_SECRET} with no fallback (docs/deployment-decisions.md decision 1),
+     * so a deployment that forgets it refuses to start rather than running on the development
+     * secret; and the operations a deployment needs on whatever its business (decision 3), with
+     * the two choices that depend on the business named but not made.
      */
     private static final String PROFILE_LAYOUT = """
             tesseraql:
               security:
                 jwt:
                   secret: ${JWT_SECRET}                 # no fallback: set it for this environment
+                policies:
+                  ops.metrics.view:                     # who may read /_tesseraql/metrics
+                    anyOf:
+                      - role: OPS
+              metrics:
+                enabled: true                           # /_tesseraql/metrics, for a bearer holding ops.metrics.view
+              retention:
+                sweep: 1h                               # removes the outbox after 30 days and job history after 90
+                                                        # (tesseraql.retention.outbox / .jobs change them)
+              # Yours to decide: how long produced files are kept, and where alerts go.
+              # transfers:
+              #   retentionDays: 30
+              # notifications:
+              #   alerts:
+              #     channel: ops-mail                   # a channel declared under tesseraql.notifications.channels
               datasources:
                 main:                                   # online: requests
                   maximumPoolSize: ${db.main.maximumPoolSize:10}
+                  minimumIdle: ${db.main.maximumPoolSize:10}  # fixed: the base configuration's 1 is development's
                   connectionTimeoutMillis: 10000        # a request that waited 10 s has lost its reader
                   fileTransferPool:                     # the online batch: a list page's export, My exports,
                     maximumPoolSize: 5                  # a CSV import. Its size is how many run at once
@@ -341,6 +359,10 @@ public final class AppScaffolder {
                   username: ${db.main.username}
                   password: ${db.main.password}
                   maximumPoolSize: ${db.main.maximumPoolSize:10}
+                  # One connection held while idle, the rest retired after 10 minutes unused, so
+                  # a development stack of several applications does not hold ten each. The
+                  # deployed profiles keep main fixed at its size.
+                  minimumIdle: 1
 
               identity:
                 defaultRealm: local

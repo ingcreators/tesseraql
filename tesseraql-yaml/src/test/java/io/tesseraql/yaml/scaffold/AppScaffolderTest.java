@@ -100,7 +100,8 @@ class AppScaffolderTest {
     /**
      * The deployed profiles separate the pools (docs/capacity-defaults.md decision 7): prod and
      * staging carry one layout, and the base configuration the development loop runs has none of
-     * it.
+     * it. The base keeps one idle connection on main, and the profiles keep main fixed
+     * (docs/deployment-decisions.md decision 4).
      */
     @Test
     void theDeployedProfilesSeparateThePoolsAndTheBaseDoesNot(@TempDir Path target) {
@@ -111,14 +112,17 @@ class AppScaffolderTest {
         assertThat(staging).contains("TESSERAQL_ENV=staging");
         assertThat(layout(staging)).as("staging rehearses production").isEqualTo(layout(prod));
         assertThat(content(files, "config/tesseraql.yml"))
-                .doesNotContain("jobPool", "fileTransferPool", "minimumIdle");
+                .doesNotContain("jobPool", "fileTransferPool");
 
         scaffolder.writeNew(target, files);
+        String main = "tesseraql.datasources.main.";
+        assertThat(new ManifestLoader().load(target).config().getString(main + "minimumIdle"))
+                .as("development holds one idle connection").hasValue("1");
         System.setProperty("tesseraql.env", "prod");
         try {
             io.tesseraql.yaml.config.AppConfig config = new ManifestLoader().load(target).config();
-            String main = "tesseraql.datasources.main.";
             assertThat(config.getString(main + "maximumPoolSize")).hasValue("10");
+            assertThat(config.getString(main + "minimumIdle")).as("fixed-size").hasValue("10");
             assertThat(config.getString(main + "connectionTimeoutMillis")).hasValue("10000");
             assertThat(config.getString(main + "jobPool.maximumPoolSize")).hasValue("3");
             assertThat(config.getString(main + "jobPool.minimumIdle")).hasValue("0");
@@ -145,6 +149,39 @@ class AppScaffolderTest {
         }
         assertThat(content(files, "config/tesseraql.yml"))
                 .contains("secret: ${JWT_SECRET:" + AppScaffolder.DEVELOPMENT_JWT_SECRET + "}");
+    }
+
+    /**
+     * The deployed profiles turn operations on and name the owner's choices
+     * (docs/deployment-decisions.md decision 3): metrics behind {@code ops.metrics.view}, which
+     * merges beside the application's own policies, and the retention sweep; file retention and
+     * the alert channel are named in comments, not set. The development loop has none of it.
+     */
+    @Test
+    void theDeployedProfilesTurnOperationsOnAndNameTheOwnersChoices(@TempDir Path target) {
+        List<ScaffoldedFile> files = scaffolder.scaffold("demo-app");
+        assertThat(content(files, "config/env/prod.yml"))
+                .contains("# transfers:", "#   retentionDays: 30", "#     channel: ops-mail");
+
+        scaffolder.writeNew(target, files);
+        io.tesseraql.yaml.config.AppConfig base = new ManifestLoader().load(target).config();
+        assertThat(base.getString("tesseraql.metrics.enabled")).isEmpty();
+        assertThat(base.getString("tesseraql.retention.sweep")).isEmpty();
+        System.setProperty("tesseraql.env", "prod");
+        try {
+            io.tesseraql.yaml.config.AppConfig config = new ManifestLoader().load(target).config();
+            assertThat(config.getString("tesseraql.metrics.enabled")).hasValue("true");
+            assertThat(config.getString("tesseraql.retention.sweep")).hasValue("1h");
+            assertThat(config.getString("tesseraql.transfers.retentionDays")).isEmpty();
+            assertThat(config.getString("tesseraql.notifications.alerts.channel")).isEmpty();
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> policies = (java.util.Map<String, Object>) config
+                    .navigate("tesseraql.security.policies");
+            assertThat(policies.keySet())
+                    .containsExactlyInAnyOrder("app.read", "app.write", "ops.metrics.view");
+        } finally {
+            System.clearProperty("tesseraql.env");
+        }
     }
 
     /** A profile without its leading comment block: the configuration it carries. */
