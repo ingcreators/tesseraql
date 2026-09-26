@@ -22,7 +22,12 @@
 >
 > **S2 (time and language).** The generated configuration declares the export zone and locale,
 > the zone access conditions are judged in, and the default language. A lint warns when an export
-> formats dates in the JVM's zone.
+> formats dates in the JVM's zone. **Shipped, #1475**, with one widening. A workbook's grid or
+> placement renders every date and time cell in the zone, typed or not, so an `excel` export warns
+> without a typed column. A jxls report hands its template raw values and stays silent. The
+> procurement demo declares `Asia/Tokyo`, the zone its documents and EDI files are read in. Two
+> CLI tests that appended their own `files:` block to a fresh application now replace the
+> declared values. A revert probe that silenced the warning turned three lint tests red.
 >
 > **S3 (operations, and the development pool).** The generated production and staging profiles
 > turn metrics and the retention sweep on and name the choices left to the owner. The base

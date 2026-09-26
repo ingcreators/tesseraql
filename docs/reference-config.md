@@ -143,8 +143,8 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.files.locale` | [FileDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java) | [file-transfers](file-transfers.md), [jobs](jobs.md) |
-| `tesseraql.files.timezone` | [FileDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java) | [file-transfers](file-transfers.md), [jobs](jobs.md) |
+| `tesseraql.files.locale` | [FileDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java) | [deployment](deployment.md), [file-transfers](file-transfers.md), [jobs](jobs.md) |
+| `tesseraql.files.timezone` | [ExportDeclarations.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/app/ExportDeclarations.java), [FileDefaults.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java) | [deployment](deployment.md), [file-transfers](file-transfers.md), [jobs](jobs.md) |
 
 ## tesseraql.framework
 
@@ -195,7 +195,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 
 | Key | Read by | Documented in |
 | --- | --- | --- |
-| `tesseraql.i18n.defaultLocale` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [I18nRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/I18nRules.java) | — |
+| `tesseraql.i18n.defaultLocale` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java), [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [I18nRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/I18nRules.java) | [deployment](deployment.md) |
 | `tesseraql.i18n.locales` | [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java), [I18nRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/I18nRules.java) | [internationalization](internationalization.md) |
 | `tesseraql.i18n.preference` | [I18nSettings.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/i18n/I18nSettings.java) | — |
 
@@ -419,7 +419,7 @@ Keys are declared in `config/application.yml` and `config/tesseraql.yml`, overri
 | `tesseraql.security.apiKeys` | [ApiKeyConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ApiKeyConfigRules.java) | [authentication](authentication.md) |
 | `tesseraql.security.apiKeys.clients` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java), [ApiKeyConfigRules.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/lint/ApiKeyConfigRules.java) | — |
 | `tesseraql.security.apiKeys.header` | [SecurityConfigFactory.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/SecurityConfigFactory.java) | — |
-| `tesseraql.security.conditions.zone` | [ConditionZone.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/ConditionZone.java) | [iam-admin](iam-admin.md) |
+| `tesseraql.security.conditions.zone` | [ConditionZone.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/ConditionZone.java) | [deployment](deployment.md), [iam-admin](iam-admin.md) |
 | `tesseraql.security.credentialThrottle.addressAttempts` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 | `tesseraql.security.credentialThrottle.addressWindow` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |
 | `tesseraql.security.credentialThrottle.enabled` | [TesseraqlRuntime.java](https://github.com/ingcreators/tesseraql/blob/main/tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java) | — |

@@ -321,6 +321,16 @@ public final class AppScaffolder {
                 name: __APP_NAME__
                 work: ${TESSERAQL_WORK_HOME:${TESSERAQL_APP_HOME}/work}
 
+              # Time and language are this application's to decide. Undeclared, exports and the
+              # hours in role conditions follow the JVM's zone and locale: the developer's in
+              # development and UTC in the container image, so one export would differ between
+              # the two. Set your business's, e.g. Asia/Tokyo and ja (docs/deployment.md).
+              files:
+                timezone: UTC
+                locale: en
+              i18n:
+                defaultLocale: en
+
               # Environment profiles overlay this file from config/env/<profile>.yml, selected
               # by TESSERAQL_ENV (or -Dtesseraql.env) — see docs/deployment.md. prod and staging
               # are declared, so any other profile refuses to start.
@@ -372,6 +382,10 @@ public final class AppScaffolder {
                   X-Content-Type-Options: nosniff
                   X-Frame-Options: DENY
                   Referrer-Policy: no-referrer
+                # The zone a role grant's hours condition is judged in (docs/access-governance.md),
+                # declared for the reason files.timezone is.
+                conditions:
+                  zone: UTC
 
                 jwt:
                   secret: ${JWT_SECRET:__DEVELOPMENT_JWT_SECRET__}

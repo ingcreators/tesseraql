@@ -450,6 +450,22 @@ so anyone could mint a token with it. A profile started without `JWT_SECRET` ref
 with `TQL-YAML-1101`, naming it. An application generated earlier, whose profile still inherits
 the fallback, is refused under any named profile with `TQL-SEC-4154`.
 
+## Time and language
+
+Three things follow the JVM's zone or locale unless the application declares its own:
+
+| Key | What it decides | Undeclared |
+| --- | --- | --- |
+| `tesseraql.files.timezone`, `tesseraql.files.locale` | How an export renders dates, times and numbers: every temporal cell of a workbook, and the columns typed `date`, `datetime` or `number` on csv and pdf. An export's own `timezone:` and `locale:` win | The JVM's |
+| `tesseraql.security.conditions.zone` | The zone a role grant's `hours` condition is judged in | The JVM's |
+| `tesseraql.i18n.defaultLocale` | The language messages fall back to | `en` |
+
+The JVM's zone is the developer's machine's in development, and UTC in the container image,
+which sets no `TZ`. So an application that leaves the zone to the JVM exports different times
+in development and in production, and judges business hours in UTC. `tesseraql new` declares
+all four keys (UTC, `en`) for its owner to change. A lint warns (`TQL-YAML-1116`) about an
+export that renders dates with neither zone declared.
+
 ## Business-route audit log and error pages
 
 Opt in with `tesseraql.audit.routes.enabled: true`: every compiled route invocation lands one

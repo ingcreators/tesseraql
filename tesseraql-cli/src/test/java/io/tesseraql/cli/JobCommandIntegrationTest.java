@@ -390,15 +390,25 @@ class JobCommandIntegrationTest {
                 "tesseraql:\n  temp:\n    store: " + store + "\n"));
     }
 
-    /** Sets the app-wide {@code tesseraql.files.*} keys of a freshly scaffolded app. */
+    /** Replaces the app-wide {@code tesseraql.files.*} keys a fresh scaffold declares. */
     private static void writeFilesDefaults(Path app, String zone, String locale)
             throws Exception {
+        writeFilesKey(app, "timezone", zone);
+        writeFilesKey(app, "locale", locale);
+    }
+
+    /**
+     * Replaces one {@code tesseraql.files.*} key of the scaffolded app — a fresh scaffold
+     * declares both (docs/deployment-decisions.md decision 2).
+     */
+    private static void writeFilesKey(Path app, String key, String value) throws Exception {
         Path config = app.resolve("config/tesseraql.yml");
         String text = Files.readString(config);
-        assertThat(text).as("a fresh scaffold declares no files: block")
-                .doesNotContain("\n  files:\n");
-        Files.writeString(config, text.replaceFirst("^tesseraql:\n",
-                "tesseraql:\n  files:\n    timezone: " + zone + "\n    locale: " + locale + "\n"));
+        java.util.regex.Matcher declared = java.util.regex.Pattern.compile(
+                "(?m)^(  files:\\n(?:    .*\\n)*?    " + key + ": ).*$").matcher(text);
+        assertThat(declared.find()).as("the scaffold declares tesseraql.files." + key).isTrue();
+        Files.writeString(config,
+                text.substring(0, declared.end(1)) + value + text.substring(declared.end()));
     }
 
     /** The spool URI of the newest transfer a job step wrote, or null before any. */
@@ -418,19 +428,9 @@ class JobCommandIntegrationTest {
         }
     }
 
-    /** Sets (or replaces) the app-wide {@code tesseraql.files.timezone} of the scaffolded app. */
+    /** Replaces the app-wide {@code tesseraql.files.timezone} of the scaffolded app. */
     private static void writeFilesTimezone(Path app, String zone) throws Exception {
-        Path config = app.resolve("config/tesseraql.yml");
-        String text = Files.readString(config);
-        String block = "tesseraql:\n  files:\n    timezone: ";
-        int at = text.indexOf(block);
-        if (at >= 0) {
-            int end = text.indexOf('\n', at + block.length());
-            text = text.substring(0, at + block.length()) + zone + text.substring(end);
-        } else {
-            text = text.replaceFirst("^tesseraql:\n", block + zone + "\n");
-        }
-        Files.writeString(config, text);
+        writeFilesKey(app, "timezone", zone);
     }
 
     private static void writeReportJob(Path app, String exportTail) throws Exception {

@@ -36,6 +36,16 @@ public final class ScaffoldedConfigKeys {
                     "tesseraql-compiler/src/main/java/io/tesseraql/compiler/RouteCompiler.java"),
             Map.entry("tesseraql.app.work",
                     "tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/WorkHome.java"),
+            // Time and language, declared so the JVM's zone and locale never decide them
+            // (docs/deployment-decisions.md decision 2).
+            Map.entry("tesseraql.files.timezone",
+                    "tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java"),
+            Map.entry("tesseraql.files.locale",
+                    "tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/FileDefaults.java"),
+            Map.entry("tesseraql.security.conditions.zone",
+                    "tesseraql-yaml/src/main/java/io/tesseraql/yaml/config/ConditionZone.java"),
+            Map.entry("tesseraql.i18n.defaultLocale",
+                    "tesseraql-runtime/src/main/java/io/tesseraql/runtime/TesseraqlRuntime.java"),
             Map.entry("tesseraql.datasources.main.jdbcUrl",
                     "tesseraql-runtime/src/main/java/io/tesseraql/runtime/DataSources.java"),
             Map.entry("tesseraql.datasources.main.username",
