@@ -138,7 +138,7 @@
          Version-managed only: the framework never depends on it. -->
     <mariadb.version>3.5.10</mariadb.version>
     <picocli.version>4.7.7</picocli.version>
-    <slf4j.version>2.0.19</slf4j.version>
+    <slf4j.version>2.0.20</slf4j.version>
     <!-- Test-only: an in-process SFTP server for the Phase 26 poll-trigger integration test. -->
     <sshd.version>2.19.0</sshd.version>
     <!-- Test-only: an in-process FTPS server, so the ftps poll source is exercised for real
