@@ -4,7 +4,14 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.19.1 - 2026-09-26
+
+A patch release for one defect in the downloadable app images, found while preparing the CLI's
+WinGet package. Every image shipped a class-data archive written during its own build. Where
+an install did not keep file times, as a WinGet install does not, the JVM refused that archive
+at every start and printed the refusal on stdout. The images now ship none, and their launchers
+keep the JVM's logging off stdout. Nothing else changes: the Maven artifacts differ from
+0.19.0's only in their version, and there are no breaking changes.
 
 ### Fixed
 
