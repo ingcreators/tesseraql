@@ -425,12 +425,17 @@ final class JobCommand implements Callable<Integer> {
                         + "' declares no " + prefix + ".jdbcUrl."));
         return new DriverManagerDataSource(url,
                 manifest.config().getString(prefix + ".username").orElse(null),
-                manifest.config().getString(prefix + ".password").orElse(null));
+                manifest.config().getString(prefix + ".password").orElse(null),
+                io.tesseraql.core.jdbc.PostgresProperties.jobRunLabel(wiring.appName()));
     }
 
     /** The in-process wiring `dev` boots, reduced to what a single run needs. */
     private Wiring wire(AppManifest manifest) throws Exception {
-        DriverManagerDataSource main = datasource.resolve(manifest.config(), app);
+        // A run an external scheduler may keep going for hours says whose it is on the server
+        // (docs/connection-liveness.md decision 1).
+        DriverManagerDataSource main = datasource.resolve(manifest.config(), app)
+                .labelled(io.tesseraql.core.jdbc.PostgresProperties.jobRunLabel(
+                        io.tesseraql.yaml.app.ApplicationName.of(manifest.config())));
         // The versioned operations migration runs first, exactly as a runtime boot does. The
         // stores' ensureSchema below is idempotent only through tolerated duplicate errors that
         // Flyway does not use, so a database whose first contact is this bootstrap could never

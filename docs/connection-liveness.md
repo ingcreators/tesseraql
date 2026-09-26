@@ -11,7 +11,10 @@
 >
 > **S1 (whose connection).** Every PostgreSQL connection TesseraQL opens carries an
 > `application_name` naming the application and the pool, so `pg_stat_activity` can tell them
-> apart.
+> apart. **Shipped, #1469**, as designed. The label and the encoding live in core
+> (`PostgresProperties`), so the runtime's pools and the CLI's `DriverManagerDataSource` share
+> them. The server accepted a Japanese application name in its percent-encoded form. A revert
+> probe that dropped the naming from the common pool builder turned three cases red.
 >
 > **S2 (a vanished peer).** Every such connection runs TCP keepalive with TesseraQL's own
 > timings, so a statement whose database host has gone fails in about a minute instead of
