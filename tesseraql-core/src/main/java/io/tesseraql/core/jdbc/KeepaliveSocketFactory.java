@@ -22,7 +22,10 @@ import jdk.net.ExtendedSocketOptions;
  * <p>The timings are per socket, so they need no operating system tuning. Where the JDK cannot
  * set them on the platform, the socket keeps alive with the operating system's timings, and one
  * warning says so. The driver sets {@code SO_KEEPALIVE} from its own {@code tcpKeepAlive} after
- * this factory returns, so {@link PostgresProperties} turns that on too.
+ * this factory returns, so {@link ConnectionProperties} turns that on too.
+ *
+ * <p>These are TesseraQL's timings for every driver that lets them be set: Oracle's and MariaDB's
+ * take the same three numbers as connection properties ({@link ConnectionProperties}).
  */
 public final class KeepaliveSocketFactory extends SocketFactory {
 

@@ -283,18 +283,27 @@ The stack's framework pool takes the same keys, with the same defaults, under
 `framework.datasource` in `tesseraql-stack.yml`
 ([hosting](hosting.md#the-stacks-own-settings--tesseraql-stackyml)).
 
-On PostgreSQL, every connection says whose it is in `application_name`, so
-`pg_stat_activity` tells the pools apart:
+Every connection says whose it is, so the database's session views tell the pools apart:
 
-| Opened by | `application_name` |
+| Opened by | Its name |
 | --- | --- |
 | An application's pool | `tesseraql/<app>/<pool>`: `main`, `main-jobs`, `main-transfers`, `tenant-<id>`, or a named datasource's name |
 | The stack's framework pool | `tesseraql/stack-framework` |
 | `tesseraql job run` | `tesseraql/<app>/job-run` |
 | Any other CLI or Maven plugin command | `tesseraql/tool` |
 
-A character outside printable ASCII is percent-encoded, and the value is cut at PostgreSQL's 63
-bytes. A `jdbcUrl` that declares its own `ApplicationName` keeps it.
+Each database keeps the name in its own place:
+
+| Database | The driver property TesseraQL sets | Where the name shows |
+| --- | --- | --- |
+| PostgreSQL | `ApplicationName` | `pg_stat_activity.application_name` |
+| SQL Server | `applicationName` | `sys.dm_exec_sessions.program_name`, `APP_NAME()` |
+| Oracle | `v$session.program` | `v$session.program` |
+| MySQL, MariaDB | `connectionAttributes` (`program_name`) | `performance_schema.session_connect_attrs`, which MariaDB keeps only with the Performance Schema on |
+
+A character outside printable ASCII is percent-encoded, as are `:` and `,`, and the value is cut
+at 63 bytes, so the same name fits every database. A `jdbcUrl` that declares the property keeps
+its own value. TesseraQL adds nothing a URL declares, for any database.
 
 Background work — [jobs](jobs.md), [file transfers](file-transfers.md), streams — borrows from
 these same pools by default. Contention then shows up as request latency you can measure. Jobs
@@ -610,10 +619,32 @@ the platform, the operating system's apply, and the log says so once. Data the d
 the host never acknowledged is bounded by TCP retransmission instead: up to about 15 minutes on
 Linux.
 
+The other databases' drivers keep alive as each allows:
+
+| Database | TesseraQL's end |
+| --- | --- |
+| SQL Server | The driver turns keepalive on itself, with 30 s idle and probes 1 s apart. TesseraQL adds nothing |
+| Oracle | TesseraQL sets `oracle.net.keepAlive` and the same timings: `oracle.net.TCP_KEEPIDLE` 30, `oracle.net.TCP_KEEPINTERVAL` 10, `oracle.net.TCP_KEEPCOUNT` 3 |
+| MariaDB | Keepalive is on by default. TesseraQL sets the timings: `tcpKeepIdle` 30, `tcpKeepInterval` 10, `tcpKeepCount` 3 |
+| MySQL | Keepalive is on by default, with the operating system's timings, because the driver has no property for them. Set them on the host that runs TesseraQL |
+
+For MySQL, these host settings give the same minute:
+
+```
+net.ipv4.tcp_keepalive_time = 30
+net.ipv4.tcp_keepalive_intvl = 10
+net.ipv4.tcp_keepalive_probes = 3
+```
+
+On a machine they go in `/etc/sysctl.d/`. On Kubernetes they go in the pod's
+`securityContext.sysctls`: each network namespace has its own, recent versions accept these
+three as safe, and older ones need them allowed on the kubelet. A per-socket timing, as on
+PostgreSQL, Oracle and MariaDB, overrides them.
+
 **The database's end.** When a node dies without closing its pools, each backend it held stays
 until the server notices. With the operating system's defaults, that takes more than two hours.
 Meanwhile the backend holds a connection slot, and one inside a transaction holds its locks.
-These server settings shorten that:
+On PostgreSQL, these server settings shorten that:
 
 | Setting | What it does | A starting value |
 | --- | --- | --- |
@@ -621,11 +652,20 @@ These server settings shorten that:
 | `idle_in_transaction_session_timeout` | Ends a session that sits inside a transaction doing nothing. TesseraQL does not idle inside a transaction, so any value longer than the longest gap between two statements of one transaction is safe | 10 min |
 | `client_connection_check_interval` | PostgreSQL 14 and later, on Linux: a query whose client has gone is cancelled rather than run to completion | 10 s |
 
+On the other databases:
+
+| Database | Setting | What it does |
+| --- | --- | --- |
+| SQL Server | None needed | It probes idle clients itself (the TCP/IP "Keep Alive" setting, 30 s by default) and ends a vanished client's session |
+| Oracle | `SQLNET.EXPIRE_TIME` in the server's `sqlnet.ora` | Dead Connection Detection: the server probes an idle client every that many minutes. It is off by default, and 1 to 10 is a start |
+| MySQL, MariaDB | `wait_timeout` | Ends a session idle this long, 8 hours by default. HikariCP pings its idle connections every 2 minutes, so any value above that leaves the pool alone. 10 min is a start |
+| MariaDB | `idle_transaction_timeout` | Ends a session that sits inside a transaction doing nothing, as PostgreSQL's does |
+
 They are the database's parameters, so TesseraQL does not set them per session. On a managed
 database they are set in its parameter group or equivalent.
 
 Every connection says whose it is ([connection pools](#connection-pools)), so a query lists what
-each node holds, and ends a dead node's leftovers:
+each node holds, and ends a dead node's leftovers. On PostgreSQL:
 
 ```sql
 select pid, application_name, client_addr, state, state_change
@@ -637,6 +677,10 @@ select pg_terminate_backend(pid)
 from pg_stat_activity
 where application_name like 'tesseraql/%' and client_addr = '10.0.3.17';
 ```
+
+On the other databases, the views in the connection-pools table find them by the same name:
+`sys.dm_exec_sessions` and `KILL` on SQL Server, `v$session` and `ALTER SYSTEM KILL SESSION` on
+Oracle, `performance_schema.session_connect_attrs` and `KILL` on MySQL and MariaDB.
 
 Behind a pooler such as PgBouncer, each keepalive runs between its own two ends, `client_addr`
 is the pooler's, and the pooler has settings of its own for both.

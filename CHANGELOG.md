@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **SQL Server, Oracle, MySQL and MariaDB connections say whose they are, and keep alive as each
+  driver allows.** Every connection carries the same `tesseraql/<app>/<pool>` name as on
+  PostgreSQL: `applicationName` on SQL Server, `v$session.program` on Oracle, and
+  `connectionAttributes` (`program_name`) on MySQL and MariaDB. Oracle's and MariaDB's drivers
+  now keep alive with TesseraQL's timings (30 s idle, three probes 10 s apart). Oracle's had
+  keepalive off and read without a timeout, and MariaDB's used the operating system's two hours.
+  SQL Server's driver already sets 30 s and 1 s itself, so nothing is added there. MySQL's driver
+  has no property for the timings, so `docs/deployment.md` gives the host settings. It also gives
+  each database's own settings for the sessions a vanished node leaves behind. TesseraQL now adds
+  nothing a `jdbcUrl` declares, for every driver. MySQL's and SQL Server's drivers would otherwise
+  let a passed property override the URL's. A name containing `:` or `,` percent-encodes them.
+  `docs/connection-liveness.md` decision 6.
+
 - **A vanished database host fails a statement in about a minute.** The PostgreSQL driver left
   TCP keepalive off and read without a timeout, so when the database host crashed or the network
   dropped packets mid-statement, the request waited forever. It held its admission permit and a

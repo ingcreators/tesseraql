@@ -40,6 +40,13 @@
 > the reading found: MySQL's and SQL Server's drivers let a passed property override the URL's.
 > So TesseraQL now adds nothing a URL declares, for every driver. They chose every
 > recommendation.
+>
+> **S3 (the other databases).** **Shipped, #1472**, as designed, and with it the campaign is
+> complete. Each database returned the name: MySQL 8.0 and MariaDB 11.4 (per pull request, from
+> `session_connect_attrs`), and SQL Server (`APP_NAME()`) and Oracle 23 Free (`CLIENT_PROGRAM_NAME`)
+> in the gated suite, run locally before the pull request. Oracle connected with the keepalive
+> properties, and MariaDB's own socket carries the three timings. A revert probe that dropped
+> MySQL's name and MariaDB's idle timing turned both per-PR cases red.
 
 ## What is true today
 
