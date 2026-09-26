@@ -7,14 +7,15 @@
 > 0.19.0 first so that the first listed version carries the release's fixes. This resumes
 > [Phase 38](roadmap.md#phase-38--cli-distribution-and-upgrade-delivery)'s Tier 2 for WinGet alone.
 > Everything below was read in the code, in the 0.19.0 release asset, or in WinGet's own source
-> and manifests (rows 1-9).
+> and manifests (rows 1-9). The maintainer chose every recommendation but one: the token that
+> submits updates is issued on the maintainer's own account rather than a machine account, and
+> decision 6 records the limits that choice is kept within.
 >
 > There are two slices:
 >
 > **S1 (the first submission).** The three manifests below, for 0.19.0, are validated and
-> installed on Windows, then submitted to `microsoft/winget-pkgs` from the account decision 6
-> names. It has no framework change; the record gains its status line when the package is
-> merged.
+> installed on Windows, then submitted to `microsoft/winget-pkgs` from the maintainer's account.
+> It has no framework change; the record gains its status line when the package is merged.
 >
 > **S2 (every release after).** `release.yml` submits each new version the way it bumps
 > Homebrew and Scoop, and the documentation and the update hint name WinGet.
@@ -168,8 +169,9 @@ A `bump-winget` job in `release.yml`, beside `bump-package-managers`, on `ubuntu
   <release url> --submit`, with the token from the environment, never on the command line.
   komac carries every other field over from the version before; S2 proves it does for the
   nested file and `ArchiveBinariesDependOnPath` before the job is wired.
-- Without the `WINGET_TOKEN` secret it says so and skips, as the Homebrew and Scoop bump does
-  without the App's credentials.
+- It runs in the `winget` environment, the only place `WINGET_TOKEN` lives (decision 6). Without
+  the secret it says so and skips, as the Homebrew and Scoop bump does without the App's
+  credentials.
 
 It is a job of its own, not a step of `bump-package-managers`, so an expired token turns one job
 red and leaves Homebrew and Scoop bumped. The release itself is already published when it runs.
@@ -193,21 +195,29 @@ tesseraql --version                              # TesseraQL 0.19.0
 winget uninstall ingcreators.TesseraQL
 ```
 
-Then `komac submit <dir> --token …` from the account decision 6 names, or a pull request made by
-hand from that account's fork. A moderator reviews a new package; if a check asks the account to
+Then `komac submit <dir>` with the token of decision 6 in `GITHUB_TOKEN`, or a pull request made
+by hand from the maintainer's fork. A moderator reviews a new package; if a check asks the account to
 agree to a contributor licence agreement, the account holder agrees once.
 
-### 6 — The token belongs to an account that holds nothing else
+### 6 — The token is the maintainer's, and only a release tag can read it
 
-A classic token reaches every public repository its owner can write to (row 8). On the
-maintainer's own account, a leaked `WINGET_TOKEN` could push to this repository past its branch
-protection. So the token belongs to a machine account — GitHub's terms allow one, operated by a
-person, for automated tasks — that owns its fork of `microsoft/winget-pkgs` and is a member of
-nothing. The token has `public_repo` alone, an expiry, and a reminder to renew it. Its worst
-case is a pull request opened under the machine account's name.
+The maintainer's choice, between two: the token is issued on the maintainer's own account, one
+account fewer to keep. The fork of `microsoft/winget-pkgs` it submits from is that account's.
 
-The maintainer decides this: the alternative is the personal account's token, one account fewer
-to keep.
+A classic token reaches every public repository its owner can write to (row 8), so a leaked
+`WINGET_TOKEN` could push to this repository past its branch protection. The recommendation was
+a machine account that holds only its fork, whose worst case is a pull request under its own
+name; decision 8 keeps it, with its trigger. The token is kept within these limits instead:
+
+- **Scope and life:** `public_repo` alone, and an expiry, with a reminder to renew it before it
+  lapses. An expired token turns `bump-winget` red, nothing else (decision 4).
+- **Who can read it:** the secret lives in a GitHub environment, `winget`, whose deployment rule
+  admits only `v*` tags, and `bump-winget` is the one job that names the environment. A branch's
+  workflow, a pull request's, or another release job cannot read it; the repository-level
+  secrets hold no copy. Re-running a tag's failed `bump-winget` keeps the tag's ref, so the rule
+  admits it; `release.yml` dispatched from `main` does not, and the job skips there.
+- **What receives it:** komac alone, the version pinned and verified against its published
+  checksum before it runs (decision 4), and through the environment, never on the command line.
 
 ### 7 — What the user is told
 
@@ -233,6 +243,7 @@ to keep.
 | An Arm64 Windows build | Nothing builds one; x64 runs under emulation | A Windows on Arm user reporting that it does not |
 | A hint that names only the channel that installed the CLI | Three commands on one line are still one line | Users reporting the hint as noise |
 | WinGet Releaser | The `workflow` scope, and a release event our release never emits (row 7) | The release created by a token whose events start workflows |
+| A machine account for the token | The maintainer's choice: one account fewer to keep, within decision 6's limits | A second maintainer, or the maintainer's account gaining reach the token would carry |
 
 ## What this changes
 
@@ -245,8 +256,8 @@ their bumps stay as they are. A release gains one job, which skips without its s
 
 Decisions 1-3, 5 and 6.
 
-- The account of decision 6 exists, holds its fork of `microsoft/winget-pkgs`, and has a
-  classic token with `public_repo`.
+- The maintainer's account holds a fork of `microsoft/winget-pkgs` and a classic token with
+  `public_repo` alone and an expiry.
 - The three manifests of decision 3 pass `winget validate`, install from the manifest on
   Windows, answer `tesseraql --version` with `TesseraQL 0.19.0` in a new terminal, and uninstall.
 - The pull request to `microsoft/winget-pkgs` is merged, and `winget install
@@ -263,5 +274,7 @@ Decisions 4 and 7.
   the first two from the zip).
 - `WorkflowLedgerTest` passes with the new job: pinned actions, a timeout, a checkout before the
   script, the checksum.
-- The `WINGET_TOKEN` secret is set by the maintainer. The job's first real run is the 0.20.0 tag.
+- The maintainer creates the `winget` environment (deployment rule: `v*` tags) and sets
+  `WINGET_TOKEN` in it, not at the repository level. The job's first real run is the 0.20.0
+  tag.
 - **Docs:** decision 7's pages, the update hint and its test, and the CHANGELOG under Added.
