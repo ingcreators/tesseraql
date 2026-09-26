@@ -59,7 +59,9 @@
      `komac update <id> --version <v> --urls <url> --submit`, with `--dry-run` and `--output`.
      It needs the token even for a dry run: without one it reaches for the OS keyring and fails in
      a container. `komac analyze` reads our zip as `Architecture: neutral` and names no nested
-     executable, so the first manifest must state both.
+     executable, so the first manifest must state both. It submits from the fork owned by
+     `KOMAC_FORK_OWNER`, or by the token's user without it (`get_username`), and creates the
+     branch at `microsoft/winget-pkgs`' head commit, so the fork need not be synced first.
    - **wingetcreate** is Microsoft's, and runs on Windows only.
    - **WinGet Releaser** (an Action over komac) also needs the `workflow` scope, and starts on a
      published release, an event our release never emits: `release.yml` creates the release with
@@ -166,7 +168,9 @@ A `bump-winget` job in `release.yml`, beside `bump-package-managers`, on `ubuntu
 - It fetches komac by version and verifies it against the release's `SHA256SUMS`, pinned in the
   workflow, as the Maven distribution is fetched against its checksum.
 - It runs `komac update ingcreators.TesseraQL --version <v> --urls <zip url> --release-notes-url
-  <release url> --submit`, with the token from the environment, never on the command line.
+  <release url> --submit` with `KOMAC_FORK_OWNER=ingcreators` and the token from the
+  environment, never on the command line, then `komac cleanup --only-merged` so the fork keeps
+  no branch whose pull request has merged.
   komac carries every other field over from the version before; S2 proves it does for the
   nested file and `ArchiveBinariesDependOnPath` before the job is wired.
 - It runs in the `winget` environment, the only place `WINGET_TOKEN` lives (decision 6). Without
@@ -195,14 +199,18 @@ tesseraql --version                              # TesseraQL 0.19.0
 winget uninstall ingcreators.TesseraQL
 ```
 
-Then `komac submit <dir>` with the token of decision 6 in `GITHUB_TOKEN`, or a pull request made
-by hand from the maintainer's fork. A moderator reviews a new package; if a check asks the account to
+Then `komac submit <dir>` with the token of decision 6 in `GITHUB_TOKEN` and
+`KOMAC_FORK_OWNER=ingcreators`, or a pull request made by hand from `ingcreators/winget-pkgs`. A moderator reviews a new package; if a check asks the account to
 agree to a contributor licence agreement, the account holder agrees once.
 
 ### 6 — The token is the maintainer's, and only a release tag can read it
 
 The maintainer's choice, between two: the token is issued on the maintainer's own account, one
-account fewer to keep. The fork of `microsoft/winget-pkgs` it submits from is that account's.
+account fewer to keep. The fork it submits from is the organisation's,
+[`ingcreators/winget-pkgs`](https://github.com/ingcreators/winget-pkgs) (forked 2026-09-26), so
+every pull request comes from `ingcreators:<branch>`; komac is pointed at it with
+`KOMAC_FORK_OWNER=ingcreators` (row 7), and the token writes to it through the maintainer's
+membership.
 
 A classic token reaches every public repository its owner can write to (row 8), so a leaked
 `WINGET_TOKEN` could push to this repository past its branch protection. The recommendation was
@@ -256,8 +264,9 @@ their bumps stay as they are. A release gains one job, which skips without its s
 
 Decisions 1-3, 5 and 6.
 
-- The maintainer's account holds a fork of `microsoft/winget-pkgs` and a classic token with
-  `public_repo` alone and an expiry.
+- `ingcreators/winget-pkgs` exists (done 2026-09-26), and the maintainer holds a classic token
+  with `public_repo` alone and an expiry. If the organisation refuses classic tokens, its
+  personal-access-token setting admits them.
 - The three manifests of decision 3 pass `winget validate`, install from the manifest on
   Windows, answer `tesseraql --version` with `TesseraQL 0.19.0` in a new terminal, and uninstall.
 - The pull request to `microsoft/winget-pkgs` is merged, and `winget install
