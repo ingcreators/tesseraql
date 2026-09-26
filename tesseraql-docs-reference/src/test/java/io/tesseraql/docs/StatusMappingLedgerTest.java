@@ -93,6 +93,9 @@ class StatusMappingLedgerTest {
             // Content-Disposition built from a placeholder — docs/audit-low-leads.md slice 9),
             // never answered on the wire.
             "TQL-SEC-4152", "TQL-SEC-4153",
+            // 4154: the development JWT secret under a named profile — a boot refusal
+            // (docs/deployment-decisions.md decision 1), never answered on the wire.
+            "TQL-SEC-4154",
             // Studio server-side failures: an unreadable doc or catalog, and the copilot's
             // unconfigured-or-failed model endpoint — not the caller's input.
             "TQL-STUDIO-4041", "TQL-STUDIO-4235", "TQL-STUDIO-4242",

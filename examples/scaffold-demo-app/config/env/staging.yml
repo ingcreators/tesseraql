@@ -2,6 +2,9 @@
 # (docs/promotion.md), so it carries production's pool layout. The connection budget is the
 # same standing number: docs/capacity.md has the arithmetic.
 tesseraql:
+  security:
+    jwt:
+      secret: ${JWT_SECRET}                 # no fallback: set it for this environment
   datasources:
     main:                                   # online: requests
       maximumPoolSize: ${db.main.maximumPoolSize:10}

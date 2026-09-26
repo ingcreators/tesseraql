@@ -14,7 +14,11 @@
 >
 > **S1 (the development secret).** A generated production or staging profile takes the JWT
 > secret from `JWT_SECRET` with no fallback. Under any named profile, the runtime refuses the
-> scaffold's published development secret.
+> scaffold's published development secret. **Shipped, #1474**, as designed. The literal is now
+> `AppScaffolder.DEVELOPMENT_JWT_SECRET`, templated into the base configuration and read by the
+> refusal, so the two cannot drift. The generated application boots under `prod` with the secret
+> supplied, and refuses with `TQL-YAML-1101` without it. A revert probe that dropped the refusal's
+> call turned its wiring test red.
 >
 > **S2 (time and language).** The generated configuration declares the export zone and locale,
 > the zone access conditions are judged in, and the default language. A lint warns when an export

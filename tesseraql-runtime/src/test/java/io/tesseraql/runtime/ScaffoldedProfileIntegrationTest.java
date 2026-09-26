@@ -108,6 +108,20 @@ class ScaffoldedProfileIntegrationTest {
         assertThat(run.get().status().name()).isEqualTo("COMPLETED");
     }
 
+    /**
+     * The generated profile takes the JWT secret from {@code JWT_SECRET} with no fallback
+     * (docs/deployment-decisions.md decision 1): without it, production refuses to start, naming
+     * it, instead of running on the development secret the base configuration falls back to.
+     */
+    @Test
+    void withoutJwtSecretTheProfileRefusesToStart() throws Exception {
+        Path appHome = generate(root.resolve("no-secret"), false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> TesseraqlRuntime.start(appHome, 0))
+                .hasMessageContaining("TQL-YAML-1101")
+                .hasMessageContaining("JWT_SECRET");
+    }
+
     private static HikariDataSource role(PoolRole role) {
         MainRolePools roles = runtime.context().lookup(TesseraqlProperties.MAIN_ROLE_POOLS_BEAN,
                 MainRolePools.class);
@@ -118,6 +132,16 @@ class ScaffoldedProfileIntegrationTest {
 
     /** The skeleton as {@code tesseraql new} writes it, pointed at the container, plus a job. */
     private static Path generate(Path home) throws IOException {
+        return generate(home, true);
+    }
+
+    /**
+     * The skeleton as {@code tesseraql new} writes it, pointed at the container, plus a job. The
+     * generated profile takes {@code ${JWT_SECRET}} with no fallback; {@code withSecret} supplies
+     * it as the configuration key of that name, which the placeholder resolves after the
+     * environment.
+     */
+    private static Path generate(Path home, boolean withSecret) throws IOException {
         AppScaffolder scaffolder = new AppScaffolder();
         scaffolder.writeNew(home, scaffolder.scaffold("profile-it"));
 
@@ -130,6 +154,9 @@ class ScaffoldedProfileIntegrationTest {
         assertThat(pointed).as("the generated coordinate was found and replaced")
                 .contains(POSTGRES.getJdbcUrl())
                 .doesNotContain("${DB_USER");
+        if (withSecret) {
+            pointed += "\nJWT_SECRET: profile-it-secret-for-this-environment-only\n";
+        }
         Files.writeString(application, pointed);
         assertThat(home.resolve("config/env/prod.yml")).isRegularFile();
 
