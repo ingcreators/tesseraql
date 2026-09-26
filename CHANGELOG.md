@@ -8,6 +8,19 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A vanished database host fails a statement in about a minute.** The PostgreSQL driver left
+  TCP keepalive off and read without a timeout, so when the database host crashed or the network
+  dropped packets mid-statement, the request waited forever. It held its admission permit and a
+  pooled connection until the process restarted. The statement timeout's cancel travels on a
+  second connection, which could not reach the host either. Every PostgreSQL connection now runs
+  TCP keepalive with TesseraQL's own timings (30 s idle, three probes 10 s apart), set per socket
+  by a socket factory, so no operating system tuning is needed. A statement that is long and
+  silent but alive is never cut, because the host's kernel answers the probes. A `jdbcUrl` that
+  names its own `socketFactory` keeps it. `docs/deployment.md` gains "Dead connections", with the
+  server settings that end what a vanished TesseraQL node leaves behind: `tcp_keepalives_*`,
+  `idle_in_transaction_session_timeout` and `client_connection_check_interval`.
+  `docs/connection-liveness.md` decisions 2-3.
+
 - **Every PostgreSQL connection says whose it is.** Its `application_name` was the driver's
   "PostgreSQL JDBC Driver" for every pool of every application, so `pg_stat_activity` could not
   say which application or pool a backend served, and a dead node's leftovers could not be picked
