@@ -110,6 +110,16 @@
         "security": {
           "type": "object",
           "properties": {
+            "conditions": {
+              "type": "object",
+              "properties": {
+                "zone": {
+                  "type": "string",
+                  "description": "The zone a role grant's hours condition is judged in, e.g. Asia/Tokyo. Undeclared, the JVM's: UTC in the container image."
+                }
+              },
+              "additionalProperties": true
+            },
             "defaults": {
               "type": "object",
               "properties": {
@@ -265,6 +275,20 @@
                 }
               },
               "additionalProperties": true
+            }
+          },
+          "additionalProperties": true
+        },
+        "files": {
+          "type": "object",
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "The zone a typed date or datetime export column is rendered in, e.g. Asia/Tokyo. Undeclared, the JVM's: the developer's in development and UTC in the container image. An export's own timezone: wins."
+            },
+            "locale": {
+              "type": "string",
+              "description": "The BCP-47 locale a typed export column is formatted in, e.g. ja. Undeclared, the JVM's. An export's own locale: wins."
             }
           },
           "additionalProperties": true

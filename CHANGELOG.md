@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Added
 
+- **A new application declares its time and language, and exports that leave dates to the JVM
+  are warned about.** An export's dates and times, and the hours in a role grant's conditions,
+  followed the JVM's zone unless declared. That is the developer's machine's in development and
+  UTC in the container image, so one export differed between the two. `tesseraql new` now
+  declares `tesseraql.files.timezone` (UTC), `tesseraql.files.locale` (en),
+  `tesseraql.security.conditions.zone` (UTC) and `tesseraql.i18n.defaultLocale` (en), with a
+  comment asking the owner to set the business's own. A new lint warning, `TQL-YAML-1116`, names
+  an export that renders dates with neither its own `timezone:` nor `tesseraql.files.timezone`:
+  every temporal cell of a workbook, or a column typed `date` or `datetime` on csv or pdf. The
+  procurement example now declares `Asia/Tokyo`. `docs/deployment-decisions.md` decision 2;
+  `docs/deployment.md` "Time and language".
+
 - **SQL Server, Oracle, MySQL and MariaDB connections say whose they are, and keep alive as each
   driver allows.** Every connection carries the same `tesseraql/<app>/<pool>` name as on
   PostgreSQL: `applicationName` on SQL Server, `v$session.program` on Oracle, and

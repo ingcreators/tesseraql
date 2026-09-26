@@ -79,6 +79,12 @@ public final class ExportDeclarations {
     /** TQL-YAML-1006: the export names a template that is not there, or the wrong kind of file for the format. */
     public static final TqlErrorCode UNUSABLE_TEMPLATE = new TqlErrorCode(TqlDomain.YAML, 1006);
 
+    /**
+     * TQL-YAML-1116: an export renders dates and times with no declared zone, so the JVM's
+     * applies — a lint warning (docs/deployment-decisions.md decision 2).
+     */
+    public static final TqlErrorCode UNDECLARED_ZONE = new TqlErrorCode(TqlDomain.YAML, 1116);
+
     /** The app-wide export defaults; literals, judged like a route's own declaration. */
     public static final List<String> CONFIG_KEYS = List.of("tesseraql.files.locale",
             "tesseraql.files.timezone");
@@ -464,6 +470,71 @@ public final class ExportDeclarations {
             out.addAll(configViolations(app, key, value));
         }
         return out;
+    }
+
+    /**
+     * The warning an export earns when it renders dates and times in the JVM's zone
+     * (docs/deployment-decisions.md decision 2): neither its own {@code timezone:} nor
+     * {@code tesseraql.files.timezone} is declared, and the zone reaches a cell — every temporal
+     * cell of a grid or placement workbook, or a column typed {@code date} or {@code datetime}
+     * on csv or pdf. The JVM's zone is the developer's in development and UTC in the container
+     * image, so the same export differs between the two. A jxls report hands its template raw
+     * values and earns none; neither does a module codec's format, which this cannot judge. A
+     * placeholder in the app-wide key is the deployment's to supply, and counts as declared.
+     */
+    public static List<Violation> zoneWarnings(Site site, ExportSpec spec, AppConfig config) {
+        List<Violation> out = new ArrayList<>();
+        if (spec == null || (spec.timezone() != null && !spec.timezone().isBlank())
+                || appZoneDeclared(config)) {
+            return out;
+        }
+        String format = spec.format() == null || spec.format().isBlank()
+                ? "csv"
+                : spec.format().toLowerCase(Locale.ROOT);
+        String reached;
+        String key;
+        if ("excel".equals(format)) {
+            boolean report = spec.template() != null && !spec.template().isBlank()
+                    && (spec.startCell() == null || spec.startCell().isBlank());
+            if (report) {
+                return out;
+            }
+            reached = "every date and time cell of this workbook renders";
+            key = "export.format";
+        } else if ("csv".equals(format) || "pdf".equals(format)) {
+            List<String> dated = spec.columns().stream()
+                    .filter(column -> "date".equals(column.type())
+                            || "datetime".equals(column.type()))
+                    .map(column -> column.name() != null ? column.name() : column.column())
+                    .toList();
+            if (dated.isEmpty()) {
+                return out;
+            }
+            reached = (dated.size() == 1 ? "the column " : "the columns ")
+                    + String.join(", ", dated) + (dated.size() == 1 ? " renders" : " render");
+            key = "export.columns";
+        } else {
+            return out;
+        }
+        out.add(new Violation(UNDECLARED_ZONE, Kind.ADVISORY, key, site.prefix(key)
+                + "no zone is declared - neither this export's timezone: nor"
+                + " tesseraql.files.timezone - so " + reached + " in the JVM's zone: the"
+                + " developer's in development and UTC in the container image. Declare one of"
+                + " them"));
+        return out;
+    }
+
+    /** Whether {@code tesseraql.files.timezone} is declared; an unresolved placeholder counts. */
+    private static boolean appZoneDeclared(AppConfig config) {
+        if (config == null) {
+            return false;
+        }
+        try {
+            return config.getString("tesseraql.files.timezone")
+                    .filter(value -> !value.isBlank()).isPresent();
+        } catch (TqlException unresolved) {
+            return true;
+        }
     }
 
     /** One app-wide key's violations; {@code value} is the resolved literal. */

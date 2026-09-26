@@ -77,6 +77,11 @@ final class ExportRules {
         report(context, job.source(), "export:", ExportDeclarations.violations(
                 ExportDeclarations.Site.step(appName(config), job.definition(), step.id()),
                 export, context.appHome(), job.source().getParent()), source, findings);
+        // The JVM's zone deciding the dates is a warning (docs/deployment-decisions.md
+        // decision 2): lint only, since the runtime cannot know which zone was meant.
+        report(context, job.source(), "export:", ExportDeclarations.zoneWarnings(
+                ExportDeclarations.Site.step(appName(config), job.definition(), step.id()),
+                export, config), source, findings);
         lintExportRowCap(export, "Step '" + step.id() + "': ", source, findings);
         lintExportFilename(export, "Step '" + step.id() + "': ", source, findings);
         lintExportSources(context, export, java.util.Map.of(),
@@ -118,6 +123,9 @@ final class ExportRules {
         report(context, route.source(), "export:",
                 ExportDeclarations.violations(routeSite(config, route), spec,
                         context.appHome(), route.source().getParent()),
+                source, findings);
+        report(context, route.source(), "export:",
+                ExportDeclarations.zoneWarnings(routeSite(config, route), spec, config),
                 source, findings);
     }
 

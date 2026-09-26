@@ -21,6 +21,11 @@ tesseraql:
       - preference.ui.locale
       - principal.claim.locale
 
+  # A Japanese business prints its documents and its EDI files in Japan's time, whatever zone
+  # the JVM runs in (docs/deployment-decisions.md decision 2).
+  files:
+    timezone: Asia/Tokyo
+
   datasources:
     main:
       jdbcUrl: ${db.main.url}
