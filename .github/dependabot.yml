@@ -28,6 +28,12 @@ updates:
         update-types:
           - "version-update:semver-minor"
           - "version-update:semver-major"
+      # htmx stays on 2: the framework's bootstrap and its swap rules are written against htmx
+      # 2's behaviour (docs/hypermedia-ui.md), so a major is a migration decided on its own, not
+      # upkeep. Patch and minor releases of 2 still flow.
+      - dependency-name: "org.webjars.npm:htmx.org"
+        update-types:
+          - "version-update:semver-major"
 
   # The documentation site's JavaScript. Without this entry nothing updates it: the nanoid
   # advisory (GHSA-2v37-7h3g-55p8) sat open because Dependabot was watching Maven, Actions and
