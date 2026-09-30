@@ -152,7 +152,7 @@
     <commons-io.version>2.22.0</commons-io.version>
     <shrinkwrap.resolver.version>3.3.7</shrinkwrap.resolver.version>
     <testcontainers.version>2.0.5</testcontainers.version>
-    <opentelemetry.version>1.65.0</opentelemetry.version>
+    <opentelemetry.version>1.66.0</opentelemetry.version>
     <htmx.version>2.0.10</htmx.version>
     <thymeleaf.version>3.1.5.RELEASE</thymeleaf.version>
     <commonmark.version>0.30.0</commonmark.version>
@@ -160,13 +160,13 @@
     <hypermedia-editor-kit.version>0.2.0</hypermedia-editor-kit.version>
     <observablehq-plot.version>0.6.10</observablehq-plot.version>
     <webjars-locator.version>1.1.5</webjars-locator.version>
-    <flyway.version>13.7.0</flyway.version>
+    <flyway.version>13.8.0</flyway.version>
     <commons-csv.version>1.14.1</commons-csv.version>
     <jxls.version>3.1.0</jxls.version>
     <fastexcel.version>0.20.2</fastexcel.version>
-    <openhtmltopdf.version>1.1.86</openhtmltopdf.version>
+    <openhtmltopdf.version>1.1.87</openhtmltopdf.version>
     <pdfbox.version>3.0.8</pdfbox.version>
-    <awssdk.version>2.55.3</awssdk.version>
+    <awssdk.version>2.55.6</awssdk.version>
     <s3mock.version>5.2.3</s3mock.version>
     <ojdbc.version>23.26.3.0.0</ojdbc.version>
     <mssql-jdbc.version>13.6.0.jre11</mssql-jdbc.version>
@@ -185,7 +185,7 @@
     <maven.pmd.plugin.version>3.28.0</maven.pmd.plugin.version>
     <!-- The plugin's bundled PMD lags; the analyzer version is pinned here so Java language
          support is chosen deliberately (7.16 is where Java 25 landed). -->
-    <pmd.version>7.27.0</pmd.version>
+    <pmd.version>7.28.0</pmd.version>
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.16.0</maven.compiler.plugin.version>
