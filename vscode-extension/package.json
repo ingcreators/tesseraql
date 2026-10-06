@@ -148,7 +148,7 @@
     "package": "pnpm run build && vsce package --no-dependencies"
   },
   "devDependencies": {
-    "@types/node": "^22.20.4",
+    "@types/node": "^22.20.5",
     "@types/vscode": "~1.90.0",
     "@vscode/vsce": "^4.0.0",
     "typescript": "^7.0.2"
