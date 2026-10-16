@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
@@ -114,7 +116,7 @@ class PluginVersionLedgerTest {
         }
         assertThat(bare)
                 .as("scripts invoking a Maven off the PATH rather than ./mvnw; the wrapper pins "
-                        + "3.9.16 and the build now refuses anything older")
+                        + "the build's Maven and the build refuses anything older")
                 .isEmpty();
 
         String dockerfile = Files.readString(REPO.resolve(".devcontainer/Dockerfile"));
@@ -230,6 +232,40 @@ class PluginVersionLedgerTest {
                 .as("a scaffolded application would execute its Maven distribution unverified; "
                         + "derive the digest from the signed distribution, never by copying")
                 .isEqualTo(framework.get("distributionSha256Sum"));
+    }
+
+    /**
+     * The Maven the build runs, the oldest one it accepts, and the oldest one the plugin accepts
+     * are a single version.
+     *
+     * <p>{@code maven-plugin-plugin} derives the plugin descriptor's {@code requiredMavenVersion}
+     * from {@code maven-plugin-api}, so {@code maven.api.version} is the floor every build that
+     * runs {@code tesseraql-maven-plugin} must meet. Dependabot proposes the wrapper and the API as
+     * two pull requests. The API alone would declare a floor no build here runs. The wrapper alone
+     * would leave the plugin claiming a Maven nothing here tests.
+     */
+    @Test
+    void theWrapperTheEnforcerAndThePluginApiNameOneMaven() throws Exception {
+        String url = properties(REPO.resolve(".mvn/wrapper/maven-wrapper.properties"))
+                .get("distributionUrl");
+        Matcher wrapper = Pattern.compile("/apache-maven-([^/]+)-bin\\.zip$").matcher(url);
+        assertThat(wrapper.find())
+                .as("the wrapper's distributionUrl names no Maven version: %s", url)
+                .isTrue();
+        String api = childText(first(parse(REPO.resolve("pom.xml")), "properties"),
+                "maven.api.version");
+        Matcher floor = Pattern
+                .compile("<requireMavenVersion>\\s*<version>\\[([^,\\]]+),\\)</version>")
+                .matcher(Files.readString(REPO.resolve("pom.xml")));
+        assertThat(floor.find()).as("the root requireMavenVersion rule could not be read").isTrue();
+
+        assertThat(api)
+                .as("maven.api.version becomes the plugin's requiredMavenVersion; it must be the "
+                        + "Maven the wrapper runs")
+                .isEqualTo(wrapper.group(1));
+        assertThat(floor.group(1))
+                .as("the enforcer's floor must be the Maven the wrapper runs")
+                .isEqualTo(wrapper.group(1));
     }
 
     /** A properties file as key/value pairs, comments and blanks dropped. */
