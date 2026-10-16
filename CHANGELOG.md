@@ -4,6 +4,22 @@ All notable changes to TesseraQL are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Changed
+
+- **Maven 3.10.0, and the Maven plugin requires it.** The repository's wrapper and the wrapper
+  `tesseraql new` generates now fetch Maven 3.10.0, checked against the same digest, and the build
+  refuses anything older. `tesseraql-maven-plugin` is built against the Maven 3.10.0 API.
+  `maven-plugin-plugin` derives the descriptor's `requiredMavenVersion` from that API, so a Maven
+  older than 3.10.0 refuses to run the plugin. This is a breaking change for a build that runs the
+  plugin on Maven 3.9. Keeping the old floor would have meant declaring support for a Maven the
+  framework no longer tests, which is the gap the scaffolded wrapper's equality guard exists to
+  close. Maven 3.10 resolves through Maven Resolver 2, orders a classpath breadth-first and
+  validates POMs more strictly. The framework's build and the gallery pass under it unchanged.
+  The one source change follows Resolver 2: `tesseraql:package-app` reads a resolved module's
+  location with `getPath()`, because `getFile()` is now deprecated.
+
 ## 0.19.1 - 2026-09-26
 
 A patch release for one defect in the downloadable app images, found while preparing the CLI's

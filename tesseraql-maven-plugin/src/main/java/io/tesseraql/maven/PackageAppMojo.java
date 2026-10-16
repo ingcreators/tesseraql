@@ -129,7 +129,7 @@ public class PackageAppMojo extends AbstractMojo {
             request.setArtifact(new DefaultArtifact(coordinate));
             request.setRepositories(remoteRepositories);
             return repositorySystem.resolveArtifact(repositorySession, request)
-                    .getArtifact().getFile().toPath();
+                    .getArtifact().getPath();
         } catch (ArtifactResolutionException ex) {
             throw new MojoExecutionException("Cannot resolve " + coordinate
                     + " — the lock names it or its ledger checks the lock, so the build cannot"
