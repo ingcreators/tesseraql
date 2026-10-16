@@ -178,7 +178,7 @@ phase_rolling() {
 # window since the install has at most one, there are enough of them to have spanned the
 # rollout, and both replicas' schedulers were running.
 phase_firings() {
-  tql token --app "$APP_DIR" --sub proof --permission tql.app.use.user-admin \
+  tql token --app "$APP_DIR" --env kind --sub proof --permission tql.app.use.user-admin \
     --permission tql.ops.view.user-admin > "$WORK/token"
   printf 'Authorization: Bearer %s\n' "$(cat "$WORK/token")" > "$WORK/auth.hdr"
   curl -sf -H @"$WORK/auth.hdr" "$MEMBER/_tesseraql/ops/batch/executions" \

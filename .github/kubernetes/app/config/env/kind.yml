@@ -3,6 +3,12 @@
 # TESSERAQL_ENV=kind, which the chart hands every member as `profile: kind`; merged over the
 # gallery application's own configuration at boot, a list replacing a list.
 tesseraql:
+  security:
+    jwt:
+      # The proof's own signing key. The gallery application's base configuration falls back to
+      # the scaffold's development secret, which a named profile refuses at boot (TQL-SEC-4154);
+      # the firings phase mints its token under this profile, so both sides read this one.
+      secret: ${JWT_SECRET:probe-only-jwt-secret-for-the-kind-proof}
   metrics:
     enabled: true
   notifications:

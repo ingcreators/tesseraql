@@ -2,6 +2,7 @@ package io.tesseraql.docs;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.tesseraql.yaml.scaffold.AppScaffolder;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -115,6 +116,29 @@ class KubernetesChartLedgerTest {
                 .contains("containerPort: 30080");
         assertThat(Files.readString(REPO.resolve("deploy/helm/tesseraql/templates/service.yaml")))
                 .contains("nodePort: {{ .Values.service.nodePort }}");
+    }
+
+    /**
+     * The probe application boots under the {@code kind} profile, and a named profile refuses the
+     * scaffold's development secret (TQL-SEC-4154), which the gallery application's base
+     * configuration falls back to — both replicas died at boot for three scheduled runs before
+     * the profile declared a key of its own. The firings phase mints its token under the same
+     * profile, or the token would carry the base configuration's key and every replica would
+     * answer 401. The proof itself runs weekly; this runs on every pull request.
+     */
+    @Test
+    void theProbeProfileDeclaresItsOwnKeyAndTheTokenIsMintedUnderIt() throws IOException {
+        String profile = Files.readString(
+                REPO.resolve(".github/kubernetes/app/config/env/kind.yml"));
+        Matcher secret = Pattern
+                .compile("(?m)^  security:\\n    jwt:\\n(?:      #.*\\n)*      secret: (\\S+)$")
+                .matcher(profile);
+        assertThat(secret.find()).as("config/env/kind.yml declares tesseraql.security.jwt.secret")
+                .isTrue();
+        assertThat(secret.group(1))
+                .doesNotContain(AppScaffolder.DEVELOPMENT_JWT_SECRET);
+        assertThat(Files.readString(REPO.resolve(".github/kubernetes/proof.sh")))
+                .contains("tql token --app \"$APP_DIR\" --env kind ");
     }
 
     /**
