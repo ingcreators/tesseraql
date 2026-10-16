@@ -198,7 +198,7 @@ jobs:
 
       - name: Upload the app image
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tesseraql-${{ matrix.os }}
           path: build/jpackage
@@ -232,7 +232,7 @@ jobs:
       # so it holds contents:read. Uploaded on every event, so the handover is exercised by every
       # pull request even though only a tag consumes it.
       - name: Hand the release asset to the attach job
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-asset-${{ matrix.os }}
           path: ${{ env.ASSET }}
@@ -492,7 +492,7 @@ jobs:
 
       - name: Upload the host image
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tesseraql-host-windows
           path: build/jpackage
@@ -500,7 +500,7 @@ jobs:
 
       # As the app-image job: handed over, not attached, so this job keeps contents:read.
       - name: Hand the release asset to the attach job
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-asset-host-windows
           path: ${{ env.ASSET }}
