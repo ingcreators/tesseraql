@@ -104,4 +104,32 @@ class AppConfigTest {
         assertThatThrownBy(() -> config(root, Map.of()).requireString("x"))
                 .isInstanceOf(TqlException.class);
     }
+
+    /**
+     * Read without the environment, a placeholder ignores the variable and the secret it would
+     * have taken. It takes a configuration key of its name or its fallback, or stays unresolved,
+     * and a misspelt secret provider is still refused (docs/deployment-decisions.md S4).
+     */
+    @Test
+    void withoutTheEnvironmentAPlaceholderReadsAsItsDeclaration() {
+        Map<String, Object> root = Map.of(
+                "fromEnv", "${SECRET:declared}",
+                "fromKey", "${SHARED}",
+                "SHARED", "a key",
+                "bare", "${SECRET}",
+                "fromSecret", "${secret.env.SECRET:declared}",
+                "typo", "${secret.vualt.SECRET:declared}");
+        AppConfig config = config(root, Map.of("SECRET", "from the environment"));
+        assertThat(config.getString("fromEnv")).contains("from the environment");
+
+        AppConfig declared = config.withoutEnvironment();
+
+        assertThat(declared.getString("fromEnv")).contains("declared");
+        assertThat(declared.getString("fromKey")).contains("a key");
+        assertThat(declared.getString("fromSecret")).contains("declared");
+        assertThatThrownBy(() -> declared.getString("bare"))
+                .hasMessageContaining("TQL-YAML-1101");
+        assertThatThrownBy(() -> declared.getString("typo"))
+                .hasMessageContaining("TQL-YAML-1209");
+    }
 }

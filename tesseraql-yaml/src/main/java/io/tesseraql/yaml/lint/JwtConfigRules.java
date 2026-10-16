@@ -2,8 +2,11 @@ package io.tesseraql.yaml.lint;
 
 import static io.tesseraql.yaml.lint.LintFinding.Severity.ERROR;
 
+import io.tesseraql.core.error.TqlException;
 import io.tesseraql.yaml.config.AppConfig;
 import io.tesseraql.yaml.manifest.AppManifest;
+import io.tesseraql.yaml.manifest.ManifestLoader;
+import io.tesseraql.yaml.scaffold.AppScaffolder;
 import java.util.List;
 
 /**
@@ -23,12 +26,53 @@ final class JwtConfigRules implements LintRule {
 
     private static final String JWT_AUDIENCE_MISSING = "TQL-SEC-4048";
 
+    private static final String DEVELOPMENT_SECRET = "TQL-SEC-4154";
+
+    private static final String SECRET = "tesseraql.security.jwt.secret";
+
     @Override
     public void lint(LintContext context, AppManifest manifest,
             List<LintFinding> findings) {
         if (manifest.config().navigate("tesseraql.security.jwt") != null) {
             lintJwtConfig(manifest.config(), findings);
+            lintDevelopmentSecret(manifest.config(), ManifestLoader.activeProfile(), findings);
         }
+    }
+
+    /**
+     * The boot's TQL-SEC-4154 before anything is deployed (docs/deployment-decisions.md S4): under
+     * a named profile, a secret that is the development secret the scaffold publishes.
+     *
+     * <p>The boot judges the secret it resolved. The lint judges the declaration, read with
+     * nothing from the environment, so its answer is the same on every machine and never depends
+     * on whether the build happens to hold the deployment's secret. A profile that inherits the
+     * base configuration's {@code ${JWT_SECRET:dev-only-...}} is reported even where the
+     * deployment sets {@code JWT_SECRET}. It still says "the published secret, unless the
+     * environment rescues it", the shape the generated profiles exist to remove. Without a
+     * profile the fallback is the development loop's, and nothing is reported.
+     */
+    void lintDevelopmentSecret(AppConfig config, String profile, List<LintFinding> findings) {
+        if (profile == null) {
+            return;
+        }
+        String declared;
+        try {
+            declared = config.withoutEnvironment().getString(SECRET).orElse(null);
+        } catch (TqlException unresolved) {
+            // ${JWT_SECRET} with no fallback: the secret is the environment's to supply, and the
+            // runtime refuses with TQL-YAML-1101 when it does not.
+            return;
+        }
+        if (!AppScaffolder.DEVELOPMENT_JWT_SECRET.equals(declared)) {
+            return;
+        }
+        // Written like the boot's sentence, which it sits beside in the error-code reference.
+        findings.add(new LintFinding(DEVELOPMENT_SECRET, ERROR, "config",
+                "tesseraql.security.jwt.secret is, or falls back to, the development secret the"
+                        + " scaffold publishes, and the '" + profile + "' profile is active, so"
+                        + " anyone could mint a token this application accepts and the runtime"
+                        + " refuses to start on it. Declare tesseraql.security.jwt.secret in"
+                        + " config/env/" + profile + ".yml as ${JWT_SECRET}, with no fallback"));
     }
 
     void lintJwtConfig(AppConfig config, List<LintFinding> findings) {

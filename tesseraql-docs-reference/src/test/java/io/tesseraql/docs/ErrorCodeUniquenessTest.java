@@ -120,6 +120,10 @@ class ErrorCodeUniquenessTest {
             // The lint reported a transport-owned default per route; the boot refuses the
             // defaults from the same read since docs/audit-low-leads.md slice 9 (DN-02a).
             Map.entry("SEC-4139", "a declared response header the transport owns"),
+            // The boot's refusal first (docs/deployment-decisions.md S1); a lint under the same
+            // profile reports it since S4, reading the declaration rather than the value.
+            Map.entry("SEC-4154", "a named profile whose JWT secret is the scaffold's published"
+                    + " development secret"),
             Map.entry("SQL-2101", "an expression that does not parse"),
             // The lint's own code, refused at the compiler's resolve sites since
             // docs/audit-low-leads.md slice 8: the source read lazily, so a missing statement

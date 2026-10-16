@@ -470,7 +470,10 @@ The profiles also take the JWT secret from `JWT_SECRET`, with no fallback. The b
 configuration falls back to a development secret that the framework's own template publishes,
 so anyone could mint a token with it. A profile started without `JWT_SECRET` refuses to start
 with `TQL-YAML-1101`, naming it. An application generated earlier, whose profile still inherits
-the fallback, is refused under any named profile with `TQL-SEC-4154`.
+the fallback, is refused under any named profile with `TQL-SEC-4154`. `tesseraql lint --env
+<profile>` reports the same code before anything is deployed. It reads the secret as the profile
+declares it, with nothing from the environment, so it reports an inherited fallback even where
+the deployment sets `JWT_SECRET`.
 
 ## Time and language
 

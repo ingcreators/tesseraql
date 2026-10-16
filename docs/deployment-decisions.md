@@ -37,6 +37,15 @@
 > booted without a profile, holds `minimumIdle` 1 on `main`. A revert probe that turned the
 > profile's metrics off, and one that dropped the base configuration's `minimumIdle`, each turned
 > its test red.
+>
+> **S4 (the development secret at lint), added 2026-10-16.** Decision 5 refused a lint because a
+> lint runs without a profile. `tesseraql lint --env <profile>` runs with one. Linted that way,
+> the kind proof's probe application passed while both its replicas refused to start: its `kind`
+> profile inherited the base configuration's fallback (#1507). A lint under a named profile now
+> reports `TQL-SEC-4154` as an error. It reads the secret as the profile declares it, with
+> nothing from the environment. **Shipped, #1511.** Revert probes that dropped the lint,
+> dropped the boot's refusal, or read with the environment each turned a test red. The lint
+> probe also turned red the guard that feeds one profile to both the lint and the boot.
 
 ## What is true today
 
@@ -66,8 +75,17 @@
   covers the applications generated before this design, whose profiles inherit the fallback. A
   named profile is the one signal every deployment path carries and no development path sets
   (row 3).
-- **No lint.** A lint runs without a profile, and there every development configuration carries
-  the fallback on purpose.
+- **A lint under a named profile reports it too (S4).** Without a profile, a lint stays silent:
+  every development configuration carries the fallback on purpose. Under one (`tesseraql lint
+  --env <profile>`, `TESSERAQL_ENV` or `-Dtesseraql.env`), the lint reads the secret as the
+  profile declares it, with no variable and no secret from the environment. A literal
+  development secret is reported as an error with the boot's code, and so is a placeholder that
+  falls back to it. The boot judges the value it resolved. The lint judges the declaration, so its
+  answer is the same on every machine. A profile that inherits `${JWT_SECRET:dev-only-…}` is
+  reported even where the deployment sets `JWT_SECRET`, because the profile still names the
+  published secret as its fallback. The generated profiles exist to remove that shape. This
+  bullet first read "No lint", because a lint was assumed to run without a profile. `--env`
+  gives it one (decision 5).
 
 ### 2 — A new application declares its time and language
 
@@ -144,7 +162,7 @@ The maintainer's choice, among three: the development configuration only.
 
 | Refused | Why | Trigger |
 | --- | --- | --- |
-| A lint of the development secret | A lint runs without a profile, where the fallback is intended (decision 1) | None |
+| ~~A lint of the development secret~~ (reversed by S4) | A lint runs without a profile, where the fallback is intended (decision 1). `lint --env` gives it one | Fired 2026-10-16: the kind proof's probe linted clean under `--env kind` and refused to start (#1507) |
 | Refusing the development secret outside named profiles (under every `host`) | Tests and examples start hosts on it by design. A named profile is what marks a deployment | A deployment path that runs without a profile |
 | Detecting the zone or locale when `new` runs | The generated files would differ by machine, and the gallery is byte-compared | None |
 | A lint of access-condition zones | The conditions are grant data, not YAML (row 5) | Conditions declared in YAML |
@@ -160,6 +178,9 @@ The maintainer's choice, among three: the development configuration only.
   describes them. The CHANGELOG entry goes under Added.
 - **S3:** [deployment.md](deployment.md)'s profile section lists what the profile turns on and
   what it leaves to the owner. The CHANGELOG entry goes under Added.
+- **S4:** [deployment.md](deployment.md)'s environment-profiles section says a lint under the
+  profile reports the secret. The CHANGELOG entry goes under Changed. The error-code reference
+  gains the lint as a source of `TQL-SEC-4154`.
 - The error-code reference is regenerated for `TQL-SEC-4154` and `TQL-YAML-1116`.
 
 ## What this breaks
@@ -172,6 +193,8 @@ The maintainer's choice, among three: the development configuration only.
   (S2). One generated before keeps the JVM's zone and is warned about typed dates.
 - **A generated application's development pool holds one idle connection** (S3). A burst in
   development pays for connection setup.
+- **A lint under a named profile fails when the JWT secret is, or falls back to, the development
+  secret** (S4). It fails even where the deployment supplies `JWT_SECRET`.
 
 ## The slices
 
@@ -211,9 +234,26 @@ Decisions 3 and 4.
   - The gallery is regenerated.
 - **Docs:** as decision 6 lists for S3.
 
+### S4 — the development secret at lint (S)
+
+Decision 1, as amended.
+
+- **Tests:**
+  - Under a named profile, the lint reports `TQL-SEC-4154` as an error in three cases: a profile
+    that inherits the base configuration's fallback, the literal, and a secret provider that falls
+    back to it.
+  - It is silent for `${JWT_SECRET}`, for `${secret.file.jwt}`, for a fallback the profile chose
+    itself, and without a profile.
+  - Read without the environment, a placeholder ignores a variable that is set.
+  - One profile that inherits the fallback is fed to the lint and to the boot, and both refuse it
+    with the code.
+  - Revert probes: dropping the lint, dropping the boot's refusal, and reading with the
+    environment each turn a test red.
+- **Docs:** as decision 6 lists for S4.
+
 ## Error codes
 
 | Code | Slice | Meaning |
 | --- | --- | --- |
-| `TQL-SEC-4154` | S1 | A named profile is active and the JWT secret is the scaffold's published development secret; the runtime refuses to start |
+| `TQL-SEC-4154` | S1, S4 | A named profile is active and the JWT secret is the scaffold's published development secret; the runtime refuses to start, and a lint under the profile reports it as an error |
 | `TQL-YAML-1116` | S2 | An export formats a `date` or `datetime` column with no declared zone, so the JVM's applies; a lint warning |

@@ -58,6 +58,16 @@ public final class AppConfig {
         return root;
     }
 
+    /**
+     * This configuration as it reads where the environment supplies nothing: no variable and no
+     * secret, so a placeholder takes a configuration key of its name or its fallback, or stays
+     * unresolved. A lint reads a declaration this way, so its answer is the same on every
+     * machine (docs/deployment-decisions.md S4).
+     */
+    public AppConfig withoutEnvironment() {
+        return new AppConfig(root, name -> null, secrets.unanswered());
+    }
+
     /** Returns the resolved string value at a dotted path, or empty if the path is absent. */
     public Optional<String> getString(String dottedPath) {
         Object raw = navigate(dottedPath);

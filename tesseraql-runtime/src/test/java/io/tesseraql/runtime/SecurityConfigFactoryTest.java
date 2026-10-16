@@ -4,9 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.tesseraql.security.SecurityConfig;
 import io.tesseraql.yaml.config.AppConfig;
+import io.tesseraql.yaml.lint.AppLinter;
+import io.tesseraql.yaml.lint.LintFinding;
+import io.tesseraql.yaml.manifest.ManifestLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** Policy parsing, incl. the deny-all diagnostic for an unrecognized rule (silent-tolerance O10). */
 class SecurityConfigFactoryTest {
@@ -180,6 +186,42 @@ class SecurityConfigFactoryTest {
                     .assertThatThrownBy(() -> SecurityConfigFactory.build(config))
                     .hasMessageContaining("TQL-SEC-4154")
                     .hasMessageContaining("'staging' profile");
+        } finally {
+            System.clearProperty("tesseraql.env");
+        }
+    }
+
+    /**
+     * One broken profile, both altitudes (docs/deployment-decisions.md S4). A profile that
+     * inherits the base configuration's fallback is reported by the lint with TQL-SEC-4154, and
+     * where the environment supplies no {@code JWT_SECRET} the runtime refuses to start with the
+     * same code. The same variant is fed to both, so a defect they shared could not pass as their
+     * agreement.
+     */
+    @Test
+    void theLintAndTheBootRefuseAnInheritedFallbackWithOneCode(@TempDir Path dir)
+            throws Exception {
+        Files.createDirectories(dir.resolve("config/env"));
+        Files.writeString(dir.resolve("config/tesseraql.yml"), """
+                tesseraql:
+                  app:
+                    name: t
+                  security:
+                    jwt:
+                      secret: ${JWT_SECRET:%s}
+                      audience: https://t.example.com
+                """.formatted(io.tesseraql.yaml.scaffold.AppScaffolder.DEVELOPMENT_JWT_SECRET));
+        Files.writeString(dir.resolve("config/env/staging.yml"), "tesseraql: {}\n");
+        System.setProperty("tesseraql.env", "staging");
+        try {
+            assertThat(new AppLinter().lint(dir)).extracting(LintFinding::code)
+                    .as("the lint").contains("TQL-SEC-4154");
+
+            AppConfig loaded = new ManifestLoader().load(dir).config();
+            AppConfig withoutJwtSecret = new AppConfig(loaded.root(), name -> null);
+            org.assertj.core.api.Assertions
+                    .assertThatThrownBy(() -> SecurityConfigFactory.build(withoutJwtSecret))
+                    .as("the boot").hasMessageContaining("TQL-SEC-4154");
         } finally {
             System.clearProperty("tesseraql.env");
         }
