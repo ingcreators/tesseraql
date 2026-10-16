@@ -8,6 +8,18 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ### Changed
 
+- **A lint under a named profile reports the development JWT secret.** Under a named profile,
+  the runtime refuses to start on the secret the framework's template publishes
+  (`TQL-SEC-4154`), but a lint never said so. The kind proof's probe application passed
+  `tesseraql lint --env kind` while both its replicas refused to start, because its profile
+  inherited the base configuration's fallback. A lint under a named profile now reports the same
+  code as an error. It reads the secret as the profile declares it, with nothing from the
+  environment, so its answer does not depend on the machine. A literal development secret is
+  reported, and so is a placeholder that falls back to it, even where the deployment sets
+  `JWT_SECRET`. Without a profile the lint stays silent, since development keeps its fallback.
+  This is a breaking change for a profile that inherits the fallback.
+  `docs/deployment-decisions.md` S4; `docs/deployment.md` "Environment profiles".
+
 - **Maven 3.10.0, and the Maven plugin requires it.** The repository's wrapper and the wrapper
   `tesseraql new` generates now fetch Maven 3.10.0, checked against the same digest, and the build
   refuses anything older. `tesseraql-maven-plugin` is built against the Maven 3.10.0 API.

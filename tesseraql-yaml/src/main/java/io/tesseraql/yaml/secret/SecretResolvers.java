@@ -43,6 +43,26 @@ public final class SecretResolvers {
     }
 
     /**
+     * The same providers, each holding nothing: a placeholder reads as it does where no secret is
+     * there, so it takes its fallback or stays unresolved. A misspelt provider is still refused.
+     */
+    public SecretResolvers unanswered() {
+        Map<String, SecretResolver> empty = new LinkedHashMap<>();
+        for (String provider : providers.keySet()) {
+            empty.put(provider, new Unanswered(provider));
+        }
+        return new SecretResolvers(empty);
+    }
+
+    private record Unanswered(String provider) implements SecretResolver {
+
+        @Override
+        public String resolve(String name) {
+            return null;
+        }
+    }
+
+    /**
      * Resolves {@code providerAndName} ({@code env.DB_PASSWORD}, {@code file.db_password}):
      * {@code null} when the provider has no such secret; unknown providers fail loudly so a typo
      * never silently falls back to a default.
