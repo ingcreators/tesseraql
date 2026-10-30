@@ -1259,9 +1259,10 @@ JRE prerequisite, built per-OS on `v*` tags). This shapes every channel below.
   4. *Homebrew tap (macOS/Linux) + Scoop/WinGet (Windows)* — payload is the bundled-JVM app-image (no
      JRE prerequisite); the package manager owns `upgrade`; the release workflow bumps the
      formula/manifest. **Shipped (0.7.0):** `brew install ingcreators/tap/tesseraql`,
-     `scoop install tesseraql`, both bumped by `release.yml`. WinGet is designed in
-     [winget-distribution.md](winget-distribution.md) (2026-09-26): the same app image, a first
-     submission by hand, then `release.yml` updates it.
+     `scoop install tesseraql`, both bumped by `release.yml`. **WinGet shipped (0.19.1, first
+     submission merged 2026-10-30):** `winget install ingcreators.TesseraQL`, the same app image,
+     and from 0.20.0 `release.yml`'s `bump-winget` submits each version
+     ([winget-distribution.md](winget-distribution.md)).
 - **Tier 3 — complements / later.**
   5. *install.sh / install.ps1* (`curl … | sh`): detect OS/arch → fetch the latest app-image → unpack
      to `~/.tesseraql` + symlink; re-run to upgrade. Fallback where no package manager exists.

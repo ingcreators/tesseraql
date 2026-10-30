@@ -16,16 +16,24 @@
 > **S1 (the first submission).** The three manifests below, for 0.19.0, are validated and
 > installed on Windows, then submitted to `microsoft/winget-pkgs` from the maintainer's account.
 > It has no framework change; the record gains its status line when the package is merged.
-> **In progress: the first submission is 0.19.1.** Installing 0.19.0 from the manifests found
-> two things. The archive scan refuses the zip (row 10), so decision 5 overrides it, as
-> winget-pkgs' own sandbox test does. And every command the installed CLI ran printed the JVM's
-> refusal of a stale class-data archive on stdout. The image had shipped the archive its build's
-> smoke test wrote, and WinGet's extraction does not keep the jar's time
+> **Done 2026-10-30: 0.19.1 is in WinGet's community source.** Installing 0.19.0 from the
+> manifests found two things. The archive scan refuses the zip (row 10), so decision 5 overrides
+> it, as winget-pkgs' own sandbox test does. And every command the installed CLI ran printed the
+> JVM's refusal of a stale class-data archive on stdout. The image had shipped the archive its
+> build's smoke test wrote, and WinGet's extraction does not keep the jar's time
 > ([jvm-baseline.md](jvm-baseline.md) has the fix). 0.19.1 carries the fix, and decision 3's
-> manifests are submitted with its version, URL, hash and date.
+> manifests were submitted with its version, URL, hash and date
+> ([microsoft/winget-pkgs#441653](https://github.com/microsoft/winget-pkgs/pull/441653), opened
+> 2026-09-26). It passed validation the same day and waited 34 days for a moderator. The
+> moderators' automation then asked for manifest version 1.28.0 (row 11), and the pull request
+> merged ten minutes after the bump. The community index carried the package about two hours
+> later. On a machine that had never seen the manifests, `winget install ingcreators.TesseraQL`
+> put `…\WinGet\Packages\ingcreators.TesseraQL_Microsoft.Winget.Source_8wekyb3d8bbwe\tesseraql\`
+> on `PATH`, and `tesseraql --version` answered `TesseraQL 0.19.1` and nothing else.
 >
 > **S2 (every release after).** `release.yml` submits each new version the way it bumps
-> Homebrew and Scoop, and the documentation and the update hint name WinGet.
+> Homebrew and Scoop, and the documentation and the update hint name WinGet. **Shipped
+> 2026-10-30; its first real run is the 0.20.0 tag.**
 
 ## What is true today
 
@@ -55,14 +63,16 @@
    link to the executable in its links directory, which is on `PATH`. With
    `ArchiveBinariesDependOnPath: true` it skips the link and adds the executable's own directory
    to `PATH` instead, "for portables dependent on binaries that require the install directory".
-   The key exists from manifest schema 1.9.0; the current schema is 1.12.0, and a package already
-   merged with it at the manifest root (`Google.Protobuf` 36.0) is the shape used below. A `PATH`
+   The key exists from manifest schema 1.9.0; the current schema was 1.12.0 (1.28.0 since, row
+   11), and a package already merged with it at the manifest root (`Google.Protobuf` 36.0) is the
+   shape used below. A `PATH`
    change reaches only a terminal opened afterwards. On uninstall, the added directory can stay
    on `PATH` (winget-cli [#6160](https://github.com/microsoft/winget-cli/issues/6160), open,
    reported on 1.28).
 7. **Three tools can submit an update, and each needs a classic personal access token with
    `public_repo`**: fine-grained tokens cannot open the pull request to `microsoft/winget-pkgs`.
-   - **komac** 2.16.0 (Linux, macOS and Windows binaries, a published `SHA256SUMS`):
+   - **komac** 2.16.0, 2.17.1 by S2 (Linux, macOS and Windows binaries, a published
+     `SHA256SUMS`):
      `komac update <id> --version <v> --urls <url> --submit`, with `--dry-run` and `--output`.
      It needs the token even for a dry run: without one it reaches for the OS keyring and fails in
      a container. `komac analyze` reads our zip as `Architecture: neutral` and names no nested
@@ -87,6 +97,17 @@
     `pure` refuses for a directory. Reproduced by compiling `pure` from winget-cli's tree. The scan
     runs only for `--manifest` (`ScanArchiveFromLocalManifest`), never for an install from the
     community source, and winget-pkgs' own `Tools/SandboxTest.ps1` overrides it on every run.
+11. **winget-pkgs now asks for manifest version 1.28.0, and no released tool writes it** (found
+    in S1, 2026-10-30). A moderator's automation labelled #441653 `Manifest-Version-Deprecated`
+    ("Please use version `1.28.0`"), along with some 740 other pull requests waiting in the
+    queue. Schema 1.28.0 only adds to 1.12.0: the installer manifest gains
+    `DesiredStateConfiguration`, and the other two differ only in their version string. komac
+    2.17.1 writes `ManifestVersion: 1.12.0` into all three manifests of an update
+    (`ManifestVersion::DEFAULT` in its `winget-types` 0.5.2), and `komac submit` resets the
+    version and locale manifests to it as well. wingetcreate 1.12.13.0, its latest release,
+    writes 1.12.0 too, and only its unreleased `main` writes 1.28.0. Updates at 1.12.0 from
+    komac 2.17.1 are approved and merged the day they open (#465983-#465985 on 2026-10-30), so the
+    flag fell on submissions in the moderators' queue, not on updates.
 
 ## The decisions
 
@@ -174,23 +195,39 @@ ManifestVersion: 1.12.0
 The description is the Scoop manifest's, so the two channels say the same thing. The moniker
 lets `winget install tesseraql` find the package too.
 
+As merged (S1), the three carry 0.19.1's version, URL, hash and date, and `ManifestVersion:
+1.28.0` with the matching `$schema` comments, which the moderators asked for (row 11). Nothing
+else changed.
+
 ### 4 — Every later version is komac's update, in its own job
 
 A `bump-winget` job in `release.yml`, beside `bump-package-managers`, on `ubuntu-latest`:
 
 - It checks out the tag (it runs a repository script) and waits for the Windows zip through
-  `await-release-assets.sh`, as the Scoop bump does. It carries no polling loop of its own.
-- It fetches komac by version and verifies it against the release's `SHA256SUMS`, pinned in the
-  workflow, as the Maven distribution is fetched against its checksum.
+  `await-release-assets.sh`, as the Scoop bump does. It carries no polling loop of its own. The
+  checkout keeps no token (`persist-credentials: false`), and the job's own `permissions:` grant
+  reads only, because a downloaded binary runs in it.
+- It fetches komac 2.17.1 and checks the archive against the SHA-256 pinned in the workflow, the
+  digest komac's release publishes in its `SHA256SUMS` (it also matched GitHub's digest for the
+  asset and the bytes downloaded). `WorkflowLedgerTest` now holds every tool a job downloads from a
+  release to such a checksum, kubeconform and WinSW included.
 - It runs `komac update ingcreators.TesseraQL --version <v> --urls <zip url> --release-notes-url
   <release url> --submit` with `KOMAC_FORK_OWNER=ingcreators` and the token from the
   environment, never on the command line, then `komac cleanup --only-merged` so the fork keeps
   no branch whose pull request has merged.
-  komac carries every other field over from the version before; S2 proves it does for the
-  nested file and `ArchiveBinariesDependOnPath` before the job is wired.
-- It runs in the `winget` environment, the only place `WINGET_TOKEN` lives (decision 6). Without
-  the secret it says so and skips, as the Homebrew and Scoop bump does without the App's
-  credentials.
+  Read in komac 2.17.1's source: `update` replaces the `Installers` list with what it reads from
+  the new zip and keeps the root of the version before. The architecture comes from the URL's
+  `x86_64`. komac names no nested file, because the zip holds several executables, and an empty
+  value never overwrites a root key (`InstallerManifest::optimize`). So the nested
+  `tesseraql\tesseraql.exe` and `ArchiveBinariesDependOnPath` carry over. With `CI` set, komac
+  never prompts: a pull request already open for the version ends `update` with success, so a
+  re-run submits nothing twice, and `cleanup` deletes without asking.
+- It runs in the `winget` environment, the only place `WINGET_TOKEN` lives (decision 6), and only
+  on the tag push (`if: github.event_name == 'push'`): a dispatch from `main` would be refused by
+  the environment's rule, so the job does not start there. Without the secret it says so and
+  skips, as the Homebrew and Scoop bump does without the App's credentials.
+- Its manifests carry `ManifestVersion: 1.12.0`, komac's default (row 11). Updates at that
+  version are merged today; decision 8 records what happens if that changes.
 
 It is a job of its own, not a step of `bump-package-managers`, so an expired token turns one job
 red and leaves Homebrew and Scoop bumped. The release itself is already published when it runs.
@@ -267,6 +304,7 @@ name; decision 8 keeps it, with its trigger. The token is kept within these limi
 | A hint that names only the channel that installed the CLI | Three commands on one line are still one line | Users reporting the hint as noise |
 | WinGet Releaser | The `workflow` scope, and a release event our release never emits (row 7) | The release created by a token whose events start workflows |
 | A machine account for the token | The maintainer's choice: one account fewer to keep, within decision 6's limits | A second maintainer, or the maintainer's account gaining reach the token would carry |
+| Raising an update's manifests to 1.28.0 in the job | komac writes 1.12.0 and `komac submit` resets it (row 11), so the job would need its own client for winget-pkgs' pull requests; updates at 1.12.0 merge today | One of our update pull requests labelled `Manifest-Version-Deprecated`: raise it on the pull request's branch by hand, as S1 did, and pin the first komac whose default is 1.28.0 |
 
 ## What this changes
 
@@ -297,9 +335,18 @@ Decisions 4 and 7.
   token against the published 0.19.1, writes a manifest with `Architecture: x64`, the nested
   `tesseraql\tesseraql.exe` and `ArchiveBinariesDependOnPath: true` (row 7 says komac cannot infer
   the first two from the zip).
+  **Done 2026-10-30**, with komac 2.17.1 on the maintainer's Windows machine. `--dry-run` prints
+  the manifests and returns before `--output` writes anything, so the printed manifests are the
+  proof. The installer manifest names `Architecture: x64`, `tesseraql\tesseraql.exe` and
+  `ArchiveBinariesDependOnPath: true`, and its `InstallerSha256` (`FF61748F…`) is the merged
+  manifest's. All three carry `ManifestVersion: 1.12.0` (row 11). komac also fills
+  `ReleaseNotes` from the GitHub release's generated notes, which the hand-made manifests left
+  out.
 - `WorkflowLedgerTest` passes with the new job: pinned actions, a timeout, a checkout before the
-  script, the checksum.
+  script, the checksum. **Done**, and the checksum check is a new test the job was red against
+  before its checksum line.
 - The maintainer creates the `winget` environment (deployment rule: `v*` tags) and sets
   `WINGET_TOKEN` in it, not at the repository level. The job's first real run is the 0.20.0
   tag.
 - **Docs:** decision 7's pages, the update hint and its test, and the CHANGELOG under Added.
+  **Done.**

@@ -70,6 +70,9 @@ class UpdateNotifierTest {
         assertThat(capture(notifier))
                 .contains("A newer TesseraQL is available: 0.3.1")
                 .contains("current 0.3.0")
+                .contains("brew upgrade tesseraql")
+                .contains("scoop update tesseraql")
+                .contains("winget upgrade ingcreators.TesseraQL")
                 .contains("releases/latest");
     }
 
