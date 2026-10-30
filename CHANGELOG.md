@@ -6,6 +6,20 @@ All notable changes to TesseraQL are documented here. The format follows
 
 ## Unreleased
 
+### Added
+
+- **The CLI installs with WinGet.** `winget install ingcreators.TesseraQL` installs the Windows
+  app image, the same one Scoop installs, with its bundled Java runtime. WinGet adds the image's
+  directory to `PATH`, because the launcher runs only beside its `app\` and `runtime\`
+  directories. 0.19.1 was submitted by hand and is the first version WinGet carries. From this
+  release on, `release.yml`'s new `bump-winget` job opens the pull request for each version
+  with komac, pinned and checked against its published checksum. It reads its token from a
+  `winget` environment that admits only `v*` tags, and skips when the token is missing. The
+  update hint names `winget upgrade ingcreators.TesseraQL` beside Homebrew and Scoop.
+  `WorkflowLedgerTest` now also requires every tool a job downloads from a release to be checked
+  against a checksum the job pins. `docs/winget-distribution.md` S2; `docs/getting-started.md`
+  "Install the CLI"; `docs/upgrading.md` "Upgrading the CLI".
+
 ### Changed
 
 - **A lint under a named profile reports the development JWT secret.** Under a named profile,

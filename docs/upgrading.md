@@ -36,6 +36,13 @@ There is no self-update command — you upgrade the installation the same way yo
 
 - **Homebrew**: `brew upgrade tesseraql` (the tap's formula is bumped by every release).
 - **Scoop**: `scoop update tesseraql` (the bucket's manifest likewise).
+- **WinGet**: `winget upgrade ingcreators.TesseraQL`. Stop any running `tesseraql` first (a
+  `dev` session, say): it holds the installed files open, and WinGet cannot replace them. Each
+  release opens a pull request to `microsoft/winget-pkgs`, and WinGet offers the new version
+  once that pull request has passed its validation and merged, which can be hours after the
+  release. After `winget uninstall ingcreators.TesseraQL`, the `PATH` entry WinGet added can
+  stay behind ([winget-cli#6160](https://github.com/microsoft/winget-cli/issues/6160)): remove
+  the `…\WinGet\Packages\ingcreators.TesseraQL_…\tesseraql` entry from your user `PATH` by hand.
 - **Distribution archive**: download the new `tesseraql-cli-<version>-dist.zip` (or
   `.tar.gz`), unpack it, and point your `PATH` at the new `bin/`.
 - **App image**: download and replace the jpackage image for your OS.

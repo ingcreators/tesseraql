@@ -499,6 +499,59 @@ class WorkflowLedgerTest {
         assertThat(problems).isEmpty();
     }
 
+    /**
+     * A tool a job downloads from a release is checked against a checksum the job pins.
+     *
+     * <p>A release asset is whatever its publisher last uploaded under that name, and the job runs
+     * it. Two jobs already fetched one and checked it ({@code kubernetes.yml}'s kubeconform,
+     * {@code jpackage.yml}'s WinSW), and {@code release.yml}'s {@code bump-winget} runs komac with
+     * the token that opens pull requests to {@code microsoft/winget-pkgs}
+     * (docs/winget-distribution.md, decision 6). Each fetch has to be matched by a SHA-256 literal
+     * in the same job, so a second download added beside a checked one is caught as well. Verified
+     * red on {@code bump-winget} before its checksum line.
+     */
+    @Test
+    void aDownloadedToolIsCheckedAgainstAPinnedChecksum() throws IOException {
+        List<String> unchecked = new ArrayList<>();
+        int fetching = 0;
+        for (Path workflow : workflows()) {
+            for (JobBody job : bodies(Files.readAllLines(workflow))) {
+                long fetches = job.body().stream().filter(WorkflowLedgerTest::fetchesAReleaseAsset)
+                        .count();
+                if (fetches == 0) {
+                    continue;
+                }
+                fetching++;
+                long checksums = job.body().stream()
+                        .filter(text -> !text.stripLeading().startsWith("#"))
+                        .filter(text -> SHA256.matcher(text).find()).count();
+                if (checksums < fetches) {
+                    unchecked.add(name(workflow) + ":" + job.job().line() + " " + job.job().id()
+                            + " (" + fetches + " downloads, " + checksums + " checksums)");
+                }
+            }
+        }
+
+        assertThat(fetching).as("the walk finds jobs that download a release asset")
+                .isGreaterThanOrEqualTo(3);
+        assertThat(unchecked)
+                .as("jobs that download a tool from a release without checking it against a "
+                        + "SHA-256 the job pins; verify the bytes before running them, as "
+                        + "kubernetes.yml does for kubeconform")
+                .isEmpty();
+    }
+
+    /** A SHA-256 as a hex literal: sixty-four digits, never a forty-digit action pin. */
+    private static final Pattern SHA256 = Pattern.compile("\\b[0-9a-fA-F]{64}\\b");
+
+    /** Whether a line downloads a release asset: a fetch command naming a release download URL. */
+    private static boolean fetchesAReleaseAsset(String text) {
+        String code = text.stripLeading();
+        return !code.startsWith("#") && code.contains("/releases/download/")
+                && (code.contains("curl ") || code.contains("wget ")
+                        || code.contains("Invoke-WebRequest"));
+    }
+
     /** The entries of the first {@code permissions:} block at the given indent, stripped. */
     private static List<String> permissions(List<String> lines, int indent) {
         List<String> entries = new ArrayList<>();

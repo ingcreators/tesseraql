@@ -246,6 +246,88 @@ jobs:
             git push
           fi
 
+  # Keep WinGet's ingcreators.TesseraQL at this release (docs/winget-distribution.md, decision
+  # 4). komac reads the version before from microsoft/winget-pkgs, swaps in this release's
+  # Windows zip and opens the pull request from the organisation's fork, ingcreators/winget-pkgs.
+  # A job of its own, so an expired token turns this job red and leaves Homebrew and Scoop
+  # bumped. WINGET_TOKEN lives only in the winget environment, whose deployment rule admits v*
+  # tags alone (decision 6), so the job runs on the tag push and never on a dispatch.
+  # Soft-skips while the secret is not configured.
+  bump-winget:
+    name: Submit the WinGet update
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    needs: release
+    if: github.event_name == 'push'
+    environment: winget
+    permissions:
+      contents: read
+
+    steps:
+      # Reads .github/scripts/await-release-assets.sh, as bump-package-managers does. komac is a
+      # downloaded binary that runs in this job, so the checkout leaves no token in .git/config.
+      - name: Checkout the release sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check for the WinGet token
+        id: token
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then
+            echo "WINGET_TOKEN is not configured in the winget environment - skipping the WinGet update." >&2
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Wait for the Windows app image
+        if: steps.token.outputs.present == 'true'
+        id: assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          bash .github/scripts/await-release-assets.sh "$RELEASE_TAG" "tesseraql-${VERSION}-windows-x86_64.zip" > /dev/null
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # The version is pinned here and the archive is checked against the digest komac's release
+      # publishes in its SHA256SUMS, before it is given the token.
+      - name: Install komac
+        if: steps.token.outputs.present == 'true'
+        run: |
+          curl -sSLO https://github.com/russellbanks/Komac/releases/download/v2.17.1/komac-2.17.1-x86_64-unknown-linux-gnu.tar.gz
+          echo "e694e79cd451afabf47bead66ed34586fef4814f7b94e4b61a098f419978d5d7  komac-2.17.1-x86_64-unknown-linux-gnu.tar.gz" | sha256sum -c -
+          tar -xzf komac-2.17.1-x86_64-unknown-linux-gnu.tar.gz komac
+          sudo install -m 0755 komac /usr/local/bin/komac
+          komac --version
+
+      # komac carries every field it does not derive from the zip over from the version before:
+      # the nested tesseraql\tesseraql.exe and ArchiveBinariesDependOnPath among them. With CI set
+      # it never prompts, and a pull request already open for this version ends the step green,
+      # so a re-run submits nothing twice.
+      - name: Submit the update
+        if: steps.token.outputs.present == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          KOMAC_FORK_OWNER: ingcreators
+          VERSION: ${{ steps.assets.outputs.version }}
+        run: |
+          komac update ingcreators.TesseraQL --version "$VERSION" \
+            --urls "https://github.com/ingcreators/tesseraql/releases/download/v${VERSION}/tesseraql-${VERSION}-windows-x86_64.zip" \
+            --release-notes-url "https://github.com/ingcreators/tesseraql/releases/tag/v${VERSION}" \
+            --submit
+
+      - name: Delete the fork's merged branches
+        if: steps.token.outputs.present == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          KOMAC_FORK_OWNER: ingcreators
+        run: komac cleanup --only-merged
+
   # A prebuilt demo image so the five-minute demo is one docker run, no source
   # build: ghcr.io/<owner>/tesseraql-demo:{version,latest}. Rebuilds from the tag
   # inside Docker (Dockerfile.demo is multi-stage), so it needs nothing from the

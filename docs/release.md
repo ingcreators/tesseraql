@@ -186,16 +186,23 @@ git's hint suggests `git pull`; that advice is wrong in this worktree. Fix the r
    normally, and Maven Central never un-publishes. The cost of getting this wrong is a burned
    version number.
 
-   **What the tag sets in motion.** `release.yml` runs four jobs: `release` re-verifies the tag,
+   **What the tag sets in motion.** `release.yml` runs seven jobs: `release` re-verifies the tag,
    checks the reactor version against it, builds the CLI dist archives (`-Pdist package`) and
    creates the GitHub release with them;
    `central-publish` rebuilds from the tag and uploads the signed bundle to Maven Central;
-   `bump-package-managers` commits to the `homebrew-tap` and `scoop-bucket` repositories; and
-   `demo-image` pushes `ghcr.io/ingcreators/tesseraql-demo` at `:<version>` and `:latest`.
+   `bump-package-managers` commits to the `homebrew-tap` and `scoop-bucket` repositories;
+   `bump-winget` opens the pull request that adds the version to `microsoft/winget-pkgs`
+   ([winget-distribution.md](winget-distribution.md), decision 4);
+   `demo-image` pushes `ghcr.io/ingcreators/tesseraql-demo` at `:<version>` and `:latest`;
+   `host-image` pushes `ghcr.io/ingcreators/tesseraql-host`; and `chart` pushes the Helm chart
+   to `oci://ghcr.io/ingcreators/charts`.
    `jpackage.yml` fires on the same tag and attaches the per-OS app images. The release is not
    finished when the `release` job goes green: `bump-package-managers` polls the release for the
-   CLI tarball and jpackage's Windows zip for up to twenty minutes and fails if either never
-   arrives, so a releaser who walks away can find a red workflow later.
+   CLI tarball and jpackage's Windows zip, and `bump-winget` for the Windows zip, each for up to
+   forty minutes (`.github/scripts/await-release-assets.sh`), and fails if one never arrives, so
+   a releaser who walks away can find a red workflow later. `bump-winget` reads `WINGET_TOKEN`
+   from the `winget` environment, which admits `v*` tags only, and skips without it. A WinGet
+   user sees the version only after winget-pkgs' validation has merged that pull request.
 
    Both pushes to `main` report the ruleset bypass named in the preconditions:
 
