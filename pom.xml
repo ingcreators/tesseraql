@@ -97,7 +97,7 @@
       standing rule outlives the alignment: track this against the CXF advisory list at every
       slice rather than pinning and forgetting it — the 2026 OAuth2 advisory batch is why.
     -->
-    <cxf.version>4.2.3</cxf.version>
+    <cxf.version>4.2.4</cxf.version>
     <!--
       Vert.x is the runtime's own now: the HTTP server and router it serves on (docs/http-edge.md
       decision 1), the gateway's relay (docs/stack-architecture.md decision 13), and the web layer
