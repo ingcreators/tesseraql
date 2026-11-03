@@ -189,9 +189,9 @@
 
     <!-- Build plugin versions -->
     <maven.compiler.plugin.version>3.16.0</maven.compiler.plugin.version>
-    <maven.enforcer.plugin.version>3.6.3</maven.enforcer.plugin.version>
-    <maven.surefire.plugin.version>3.6.0</maven.surefire.plugin.version>
-    <maven.failsafe.plugin.version>3.6.0</maven.failsafe.plugin.version>
+    <maven.enforcer.plugin.version>3.7.0</maven.enforcer.plugin.version>
+    <maven.surefire.plugin.version>3.6.1</maven.surefire.plugin.version>
+    <maven.failsafe.plugin.version>3.6.1</maven.failsafe.plugin.version>
     <!--
       The archiver that has to honour project.build.outputTimestamp. Until now it was whichever
       version the running Maven's default lifecycle bindings supplied, so the one plugin the
